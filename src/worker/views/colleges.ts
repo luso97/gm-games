@@ -2,27 +2,30 @@ import { idb, iterate } from "../db";
 import { g, helpers, processPlayersHallOfFame } from "../util";
 import type { UpdateEvents, Player } from "../../common/types";
 import { bySport } from "../../common";
+import { getValueStatsRow } from "../core/player/checkJerseyNumberRetirement";
 
 type InfoTemp = {
 	numPlayers: number;
 	numActivePlayers: number;
 	numHof: number;
 	gp: number;
+	displayStat: number;
 	valueStat: number;
 	best: {
+		displayStat: number;
 		valueStat: number;
 		p: Player;
 	};
 };
 
-const valueStatNames = bySport({
+const displayStatNames = bySport({
 	basketball: ["ows", "dws"],
 	football: ["av"],
 	hockey: ["ops", "dps", "gps"],
 });
 
 const reducer = (
-	type: "college" | "country" | "jerseyNumbers",
+	type: "college" | "country" | "draftPosition" | "jerseyNumbers",
 	infos: { [key: string]: InfoTemp | undefined },
 	p: Player,
 ) => {
@@ -34,6 +37,8 @@ const reducer = (
 		if (name === undefined) {
 			return;
 		}
+	} else if (type === "draftPosition") {
+		name = p.draft.round > 0 ? `${p.draft.round}-${p.draft.pick}` : "undrafted";
 	} else {
 		name = helpers.getCountry(p.born.loc);
 	}
@@ -44,8 +49,10 @@ const reducer = (
 			numActivePlayers: 0,
 			numHof: 0,
 			gp: 0,
+			displayStat: 0,
 			valueStat: 0,
 			best: {
+				displayStat: -Infinity,
 				valueStat: -Infinity,
 				p,
 			},
@@ -61,33 +68,36 @@ const reducer = (
 		info.numHof += 1;
 	}
 
+	let displayStat = 0;
 	let valueStat = 0;
 	let gp = 0;
 	for (const stats of p.stats) {
-		// No real reason to discard playoff stats. This just makes it consistet with usage of careerStats for the best player
-		if (!stats.playoffs) {
-			gp += stats.gp;
-			for (const valueStatName of valueStatNames) {
-				valueStat += stats[valueStatName];
-			}
+		gp += stats.gp;
+		valueStat += getValueStatsRow(stats);
+		for (const displayStatName of displayStatNames) {
+			displayStat += stats[displayStatName];
 		}
 	}
 
 	info.gp += gp;
 	info.valueStat += valueStat;
+	info.displayStat += displayStat;
 	if (valueStat >= info.best.valueStat) {
 		info.best = {
+			displayStat,
 			p,
 			valueStat,
 		};
 	}
 };
 
-export const genView = (type: "college" | "country" | "jerseyNumbers") => {
+export const genView = (
+	type: "college" | "country" | "draftPosition" | "jerseyNumbers",
+) => {
 	return async (inputs: unknown, updateEvents: UpdateEvents) => {
 		// In theory should update more frequently, but the list is potentially expensive to update and rarely changes
 		if (updateEvents.includes("firstRun")) {
-			const valueStat = bySport({
+			const displayStat = bySport({
 				basketball: "ws",
 				football: "av",
 				hockey: "ps",
@@ -101,6 +111,8 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 					"ast",
 					"per",
 					"ewa",
+					"ows",
+					"dws",
 					"ws",
 					"ws48",
 				],
@@ -129,7 +141,6 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 							"statsTids",
 							"hof",
 							"jerseyNumber",
-							"watch",
 						],
 						ratings: ["ovr", "pos"],
 						stats: ["season", "abbrev", "tid", ...stats],
@@ -142,6 +153,7 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 						numActivePlayers: info.numActivePlayers,
 						numHof: info.numHof,
 						gp: info.gp,
+						displayStat: info.displayStat,
 						valueStat: info.valueStat,
 						p: processPlayersHallOfFame([p])[0],
 					};
@@ -153,7 +165,7 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 				infos,
 				stats,
 				userTid: g.get("userTid"),
-				valueStat,
+				displayStat,
 			};
 		}
 	};

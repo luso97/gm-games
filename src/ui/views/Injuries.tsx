@@ -1,12 +1,13 @@
 import { DataTable, PlayerNameLabels } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
-import { getCols, helpers } from "../util";
+import { getCols, helpers, toWorker } from "../util";
 import type { View } from "../../common/types";
 import { PLAYER } from "../../common";
 
 const Injuries = ({
 	abbrev,
 	challengeNoRatings,
+	godMode,
 	injuries,
 	season,
 	stats,
@@ -18,7 +19,7 @@ const Injuries = ({
 		dropdownFields: { teamsAndAllWatch: abbrev, seasonsAndCurrent: season },
 	});
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Team",
@@ -26,11 +27,11 @@ const Injuries = ({
 		"Ovr",
 		"Pot",
 		...stats.map(stat => `stat:${stat}`),
-		"Type",
+		"TypeInjury",
 		"Games",
 		"Ovr Drop",
 		"Pot Drop",
-	);
+	]);
 
 	const rows = injuries.map((p, i) => {
 		const showRatings = !challengeNoRatings || p.tid === PLAYER.RETIRED;
@@ -38,7 +39,12 @@ const Injuries = ({
 		return {
 			key: season === "current" ? p.pid : i,
 			data: [
-				<PlayerNameLabels pid={p.pid} skills={p.ratings.skills} watch={p.watch}>
+				<PlayerNameLabels
+					pid={p.pid}
+					skills={p.ratings.skills}
+					season={typeof season === "number" ? season : undefined}
+					watch={p.watch}
+				>
 					{p.name}
 				</PlayerNameLabels>,
 				p.ratings.pos,
@@ -76,13 +82,28 @@ const Injuries = ({
 				.
 			</p>
 
-			<DataTable
-				cols={cols}
-				defaultSort={[cols.length - 3, "asc"]}
-				name="Injuries"
-				pagination
-				rows={rows}
-			/>
+			{season === "current" && godMode && rows.length > 0 ? (
+				<button
+					className="btn btn-god-mode mb-3"
+					onClick={async () => {
+						await toWorker("main", "clearInjury", "all");
+					}}
+				>
+					Heal All Injuries
+				</button>
+			) : null}
+
+			{rows.length > 0 ? (
+				<DataTable
+					cols={cols}
+					defaultSort={[cols.length - 3, "asc"]}
+					name="Injuries"
+					pagination
+					rows={rows}
+				/>
+			) : (
+				<p>No injured players found.</p>
+			)}
 		</>
 	);
 };

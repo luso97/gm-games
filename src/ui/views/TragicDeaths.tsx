@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import { DataTable, SafeHtml } from "../components";
@@ -31,7 +30,7 @@ const TragicDeaths = ({ players, stats, userTid }: View<"tragicDeaths">) => {
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Drafted",
@@ -44,11 +43,11 @@ const TragicDeaths = ({ players, stats, userTid }: View<"tragicDeaths">) => {
 		...stats.map(stat => `stat:${stat}`),
 		...stats.map(stat => `stat:${stat}`),
 		"Details",
-	);
+	]);
 
 	const rows = players.map((p, i) => {
-		const lastRatings = p.ratings[p.ratings.length - 1];
-		const lastStats = p.stats[p.stats.length - 1];
+		const lastRatings = p.ratings.at(-1);
+		const lastStats = p.stats.at(-1);
 
 		return {
 			key: i,
@@ -81,7 +80,7 @@ const TragicDeaths = ({ players, stats, userTid }: View<"tragicDeaths">) => {
 				"table-info": p.statsTids
 					.slice(0, p.statsTids.length - 1)
 					.includes(userTid),
-				"table-success": p.statsTids[p.statsTids.length - 1] === userTid,
+				"table-success": p.statsTids.at(-1) === userTid,
 			},
 		};
 	});
@@ -106,12 +105,6 @@ const TragicDeaths = ({ players, stats, userTid }: View<"tragicDeaths">) => {
 			/>
 		</>
 	);
-};
-
-TragicDeaths.propTypes = {
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default TragicDeaths;

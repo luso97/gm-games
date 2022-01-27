@@ -1,5 +1,4 @@
 import orderBy from "lodash-es/orderBy";
-import PropTypes from "prop-types";
 import { useState, FormEvent, ChangeEvent, MouseEvent, ReactNode } from "react";
 import {
 	PHASE,
@@ -9,6 +8,7 @@ import {
 	MOOD_TRAITS,
 	isSport,
 	WEBSITE_ROOT,
+	bySport,
 } from "../../../common";
 import { PlayerPicture, HelpPopover } from "../../components";
 import useTitleBar from "../../hooks/useTitleBar";
@@ -29,12 +29,12 @@ const copyValidValues = (
 	season: number,
 ) => {
 	// Should be true if a player is becoming "active" (moving to a team from a non-team, such as free agent, retired, draft prospect, or new player)
-	// @ts-ignore
-	const activated = source.tid >= 0 && parseInt(target.tid, 10) < 0;
+	// @ts-expect-error
+	const activated = source.tid >= 0 && parseInt(target.tid) < 0;
 
 	for (const attr of ["hgt", "tid", "weight"] as const) {
-		// @ts-ignore
-		const val = parseInt(source[attr], 10);
+		// @ts-expect-error
+		const val = parseInt(source[attr]);
 		if (!Number.isNaN(val)) {
 			target[attr] = val;
 		}
@@ -70,18 +70,17 @@ const copyValidValues = (
 		}
 	}
 	if (target.stats.length > 0 && source.stats.length > 0) {
-		target.stats[target.stats.length - 1].jerseyNumber =
-			source.stats[source.stats.length - 1].jerseyNumber;
-		if (target.stats[target.stats.length - 1].jerseyNumber === "") {
+		target.stats.at(-1).jerseyNumber = source.stats.at(-1).jerseyNumber;
+		if (target.stats.at(-1).jerseyNumber === "") {
 			target.jerseyNumber = undefined;
-			target.stats[target.stats.length - 1].jerseyNumber = undefined;
+			target.stats.at(-1).jerseyNumber = undefined;
 		}
 	}
 
 	let updatedRatingsOrAge = false;
 	{
-		// @ts-ignore
-		const age = parseInt(source.age, 10);
+		// @ts-expect-error
+		const age = parseInt(source.age);
 		if (!Number.isNaN(age)) {
 			const bornYear = season - age;
 			if (bornYear !== target.born.year) {
@@ -96,8 +95,8 @@ const copyValidValues = (
 	target.college = source.college;
 
 	{
-		// @ts-ignore
-		const diedYear = parseInt(source.diedYear, 10);
+		// @ts-expect-error
+		const diedYear = parseInt(source.diedYear);
 		if (!Number.isNaN(diedYear)) {
 			target.diedYear = diedYear;
 		} else {
@@ -105,6 +104,7 @@ const copyValidValues = (
 		}
 	}
 
+	// This preserves contract.rookie
 	const oldContract = {
 		...target.contract,
 	};
@@ -113,7 +113,7 @@ const copyValidValues = (
 
 	{
 		// Allow any value, even above or below normal limits, but round to $10k and convert from M to k
-		// @ts-ignore
+		// @ts-expect-error
 		let amount = Math.round(100 * parseFloat(source.contract.amount)) * 10;
 		if (Number.isNaN(amount)) {
 			amount = minContract;
@@ -126,8 +126,8 @@ const copyValidValues = (
 	}
 
 	{
-		// @ts-ignore
-		let exp = parseInt(source.contract.exp, 10);
+		// @ts-expect-error
+		let exp = parseInt(source.contract.exp);
 		if (!Number.isNaN(exp)) {
 			// No contracts expiring in the past
 			if (exp < season) {
@@ -176,16 +176,33 @@ const copyValidValues = (
 	}
 
 	{
-		// @ts-ignore
-		const draftYear = parseInt(source.draft.year, 10);
-		if (!Number.isNaN(draftYear)) {
-			target.draft.year = draftYear;
+		const prevDraftTid = target.draft.tid;
+
+		const draftInts = ["year", "round", "pick", "tid"] as const;
+		for (const key of draftInts) {
+			const int = parseInt(source.draft[key] as any);
+			console.log(key, int);
+			if (!Number.isNaN(int)) {
+				target.draft[key] = int;
+			}
+		}
+		if (target.draft.tid === PLAYER.UNDRAFTED) {
+			target.draft.round = 0;
+			target.draft.pick = 0;
+		}
+
+		if (prevDraftTid !== target.draft.tid) {
+			// dpid no longer makes sense to store, since player was drafted with a fake pick now
+			delete target.draft.dpid;
+
+			// No UI to set originalTid, yet so always change
+			target.draft.originalTid = target.draft.tid;
 		}
 	}
 
 	{
-		// @ts-ignore
-		let gamesRemaining = parseInt(source.injury.gamesRemaining, 10);
+		// @ts-expect-error
+		let gamesRemaining = parseInt(source.injury.gamesRemaining);
 		if (Number.isNaN(gamesRemaining) || gamesRemaining < 0) {
 			gamesRemaining = 0;
 		}
@@ -203,11 +220,7 @@ const copyValidValues = (
 					target.pos = source.ratings[r].pos; // Keep this way forever because fun
 				}
 			} else if (RATINGS.includes(rating)) {
-				const val = helpers.bound(
-					parseInt(source.ratings[r][rating], 10),
-					0,
-					100,
-				);
+				const val = helpers.bound(parseInt(source.ratings[r][rating]), 0, 100);
 				if (!Number.isNaN(val)) {
 					if (target.ratings[r][rating] !== val) {
 						target.ratings[r][rating] = val;
@@ -220,13 +233,13 @@ const copyValidValues = (
 		}
 	}
 
-	// @ts-ignore
+	// @ts-expect-error
 	target.face = JSON.parse(source.face);
 
 	target.relatives = source.relatives
 		.map(rel => {
-			// @ts-ignore
-			rel.pid = parseInt(rel.pid, 10);
+			// @ts-expect-error
+			rel.pid = parseInt(rel.pid);
 			return rel;
 		})
 		.filter(rel => !Number.isNaN(rel.pid));
@@ -238,10 +251,10 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 	const [state, setState] = useState(() => {
 		const p = helpers.deepCopy(props.p);
 		if (p) {
-			// @ts-ignore
+			// @ts-expect-error
 			p.age = props.season - p.born.year;
 			p.contract.amount /= 1000;
-			// @ts-ignore
+			// @ts-expect-error
 			p.face = JSON.stringify(p.face, null, 2);
 		}
 
@@ -276,14 +289,12 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 		}
 
 		try {
-			const pid = await toWorker(
-				"main",
-				"upsertCustomizedPlayer",
+			const pid = await toWorker("main", "upsertCustomizedPlayer", {
 				p,
-				props.originalTid,
-				props.season,
+				originalTid: props.originalTid,
+				season: props.season,
 				updatedRatingsOrAge,
-			);
+			});
 
 			realtimeUpdate([], helpers.leagueUrl(["player", pid]));
 		} catch (error) {
@@ -312,7 +323,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 			  },
 	) => {
 		const val = event.target.value;
-		// @ts-ignore
+		// @ts-expect-error
 		const checked = event.target.checked;
 
 		setState(prevState => {
@@ -320,10 +331,14 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 
 			if (type === "root") {
 				if (field === "hof") {
-					p[field] = val === "true";
+					if (val === "yes") {
+						p[field] = 1;
+					} else {
+						delete p[field];
+					}
 				} else if (field === "jerseyNumber") {
 					if (p.stats.length > 0) {
-						p.stats[p.stats.length - 1].jerseyNumber = val;
+						p.stats.at(-1).jerseyNumber = val;
 					} else {
 						p.jerseyNumber = val;
 					}
@@ -343,7 +358,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 				p[type][field] = val;
 			} else if (type === "rating") {
 				p.ratings[p.ratings.length - 1] = {
-					...p.ratings[p.ratings.length - 1],
+					...p.ratings.at(-1),
 					[field]: field === "locked" ? checked : val,
 				};
 			} else if (type === "face") {
@@ -385,7 +400,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 		const face = await toWorker("main", "generateFace", p.born.loc);
 
 		setState(prevState => {
-			// @ts-ignore
+			// @ts-expect-error
 			prevState.p.face = JSON.stringify(face, null, 2);
 			return {
 				...prevState,
@@ -394,7 +409,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 		});
 	};
 
-	const { godMode, originalTid, playerMoodTraits, teams } = props;
+	const { challengeNoRatings, godMode, originalTid, playerMoodTraits, teams } =
+		props;
 	const { appearanceOption, p, saving } = state;
 
 	const title = originalTid === undefined ? "Create Player" : "Edit Player";
@@ -405,7 +421,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 
 	let parsedFace;
 	try {
-		// @ts-ignore
+		// @ts-expect-error
 		parsedFace = JSON.parse(p.face);
 	} catch (error) {}
 
@@ -452,8 +468,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 		);
 	} else {
 		pictureDiv = (
-			<div className="form-group">
-				<label>Image URL</label>
+			<div className="mb-3">
+				<label className="form-label">Image URL</label>
 				<input
 					type="text"
 					className="form-control"
@@ -517,6 +533,10 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 		jerseyNumber = "";
 	}
 
+	const draftTeamUndrafted =
+		p.draft.tid === PLAYER.UNDRAFTED ||
+		(p.draft.tid as any) === String(PLAYER.UNDRAFTED);
+
 	return (
 		<>
 			{!godMode ? (
@@ -545,8 +565,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 						<h2>Attributes</h2>
 
 						<div className="row">
-							<div className="col-sm-6 form-group">
-								<label>Name</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">Name</label>
 								<div className="input-group">
 									<input
 										type="text"
@@ -560,40 +580,38 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 										onChange={handleChange.bind(null, "root", "lastName")}
 										value={p.lastName}
 									/>
-									<div className="input-group-append">
-										<button
-											className="btn btn-secondary"
-											type="button"
-											onClick={async event => {
-												event.preventDefault();
+									<button
+										className="btn btn-secondary"
+										type="button"
+										onClick={async event => {
+											event.preventDefault();
 
-												const { firstName, lastName } = await toWorker(
-													"main",
-													"getRandomName",
-													p.born.loc,
-												);
+											const { firstName, lastName } = await toWorker(
+												"main",
+												"getRandomName",
+												p.born.loc,
+											);
 
-												setState(prevState => {
-													const p: any = {
-														...prevState.p,
-														firstName,
-														lastName,
-													};
+											setState(prevState => {
+												const p: any = {
+													...prevState.p,
+													firstName,
+													lastName,
+												};
 
-													return {
-														...prevState,
-														p,
-													};
-												});
-											}}
-										>
-											Random
-										</button>
-									</div>
+												return {
+													...prevState,
+													p,
+												};
+											});
+										}}
+									>
+										Random
+									</button>
 								</div>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Age</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Age</label>
 								<input
 									type="text"
 									className="form-control"
@@ -602,10 +620,10 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									disabled={!godMode}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Team</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Team</label>
 								<select
-									className="form-control"
+									className="form-select"
 									onChange={handleChange.bind(null, "root", "tid")}
 									value={p.tid}
 									disabled={!godMode}
@@ -622,8 +640,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									})}
 								</select>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">
 									Height (inches){" "}
 									<HelpPopover title="Height (inches)">
 										Height (inches) is just for show. The height rating is what
@@ -637,8 +655,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									value={p.hgt}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">
 									Weight (lbs){" "}
 									<HelpPopover title="Weight (lbs)">
 										Weight (lbs) is just for show. The height and strength
@@ -652,30 +670,67 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									value={p.weight}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Position</label>
-								<select
-									className="form-control"
-									onChange={handleChange.bind(null, "rating", "pos")}
-									value={p.ratings[r].pos}
-									disabled={!godMode && p.tid !== PLAYER.RETIRED}
-								>
-									{POSITIONS.filter(pos => {
-										if (isSport("football") && bannedPositions.includes(pos)) {
-											return false;
-										}
-										return true;
-									}).map(pos => {
-										return (
-											<option key={pos} value={pos}>
-												{pos}
-											</option>
-										);
-									})}
-								</select>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Position</label>
+								<div className="input-group">
+									<select
+										className="form-select"
+										onChange={handleChange.bind(null, "rating", "pos")}
+										value={p.ratings[r].pos}
+										disabled={!godMode && p.tid !== PLAYER.RETIRED}
+									>
+										{POSITIONS.filter(pos => {
+											if (
+												isSport("football") &&
+												bannedPositions.includes(pos)
+											) {
+												return false;
+											}
+											return true;
+										}).map(pos => {
+											return (
+												<option key={pos} value={pos}>
+													{pos}
+												</option>
+											);
+										})}
+									</select>
+									<button
+										className="btn btn-secondary"
+										type="button"
+										disabled={!godMode}
+										onClick={async event => {
+											event.preventDefault();
+
+											const pos = await toWorker(
+												"main",
+												"getAutoPos",
+												p.ratings[r],
+											);
+
+											setState(prevState => {
+												const p = {
+													...prevState.p,
+												};
+												p.ratings = [...p.ratings];
+												p.ratings[r] = {
+													...p.ratings[r],
+													pos,
+												};
+
+												return {
+													...prevState,
+													p,
+												};
+											});
+										}}
+									>
+										Auto
+									</button>
+								</div>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Jersey Number</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Jersey Number</label>
 								<input
 									type="text"
 									className="form-control"
@@ -683,8 +738,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									value={jerseyNumber}
 								/>
 							</div>
-							<div className="col-sm-6 form-group">
-								<label>Country</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">Country</label>
 								<div className="input-group">
 									<input
 										type="text"
@@ -693,42 +748,41 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 										value={p.born.loc}
 										disabled={!godMode}
 									/>
-									<div className="input-group-append">
-										<button
-											className="btn btn-secondary"
-											type="button"
-											disabled={!godMode}
-											onClick={async event => {
-												event.preventDefault();
+									<button
+										className="btn btn-secondary"
+										type="button"
+										disabled={!godMode}
+										onClick={async event => {
+											event.preventDefault();
 
-												const country = await toWorker(
-													"main",
-													"getRandomCountry",
-												);
+											const country = await toWorker(
+												"main",
+												"getRandomCountry",
+												undefined,
+											);
 
-												setState(prevState => {
-													const p: any = {
-														...prevState.p,
-														born: {
-															...prevState.p.born,
-															loc: country,
-														},
-													};
+											setState(prevState => {
+												const p: any = {
+													...prevState.p,
+													born: {
+														...prevState.p.born,
+														loc: country,
+													},
+												};
 
-													return {
-														...prevState,
-														p,
-													};
-												});
-											}}
-										>
-											Random
-										</button>
-									</div>
+												return {
+													...prevState,
+													p,
+												};
+											});
+										}}
+									>
+										Random
+									</button>
 								</div>
 							</div>
-							<div className="col-sm-6 form-group">
-								<label>College</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">College</label>
 								<div className="input-group">
 									<input
 										type="text"
@@ -736,38 +790,37 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 										onChange={handleChange.bind(null, "root", "college")}
 										value={p.college}
 									/>
-									<div className="input-group-append">
-										<button
-											className="btn btn-secondary"
-											type="button"
-											onClick={async event => {
-												event.preventDefault();
+									<button
+										className="btn btn-secondary"
+										type="button"
+										onClick={async event => {
+											event.preventDefault();
 
-												const college = await toWorker(
-													"main",
-													"getRandomCollege",
-												);
+											const college = await toWorker(
+												"main",
+												"getRandomCollege",
+												undefined,
+											);
 
-												setState(prevState => {
-													const p: any = {
-														...prevState.p,
-														college,
-													};
+											setState(prevState => {
+												const p: any = {
+													...prevState.p,
+													college,
+												};
 
-													return {
-														...prevState,
-														p,
-													};
-												});
-											}}
-										>
-											Random
-										</button>
-									</div>
+												return {
+													...prevState,
+													p,
+												};
+											});
+										}}
+									>
+										Random
+									</button>
 								</div>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Draft Class</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Draft Class</label>
 								<input
 									type="text"
 									className="form-control"
@@ -776,8 +829,46 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									disabled={!godMode}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Year of Death</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Draft Round</label>
+								<input
+									type="text"
+									className="form-control"
+									onChange={handleChange.bind(null, "draft", "round")}
+									value={draftTeamUndrafted ? 0 : p.draft.round}
+									disabled={!godMode || draftTeamUndrafted}
+								/>
+							</div>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Draft Pick</label>
+								<input
+									type="text"
+									className="form-control"
+									onChange={handleChange.bind(null, "draft", "pick")}
+									value={draftTeamUndrafted ? 0 : p.draft.pick}
+									disabled={!godMode || draftTeamUndrafted}
+								/>
+							</div>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Draft Team</label>
+								<select
+									className="form-select"
+									onChange={handleChange.bind(null, "draft", "tid")}
+									value={p.draft.tid}
+									disabled={!godMode}
+								>
+									<option value={PLAYER.UNDRAFTED}>Undrafted</option>
+									{orderBy(teams, ["text", "tid"]).map(t => {
+										return (
+											<option key={t.tid} value={t.tid}>
+												{t.text}
+											</option>
+										);
+									})}
+								</select>
+							</div>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Year of Death</label>
 								<input
 									type="text"
 									className="form-control"
@@ -786,26 +877,24 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									disabled={!godMode}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Hall of Fame</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Hall of Fame</label>
 								<select
-									className="form-control"
+									className="form-select"
 									onChange={handleChange.bind(null, "root", "hof")}
-									value={String(p.hof)}
+									value={p.hof ? "yes" : "no"}
 									disabled={!godMode}
 								>
-									<option value="true">Yes</option>
-									<option value="false">No</option>
+									<option value="yes">Yes</option>
+									<option value="no">No</option>
 								</select>
 							</div>
 						</div>
 						<div className="row">
-							<div className="col-sm-6 form-group">
-								<label>Contract Amount</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">Contract Amount</label>
 								<div className="input-group">
-									<div className="input-group-prepend">
-										<div className="input-group-text">$</div>
-									</div>
+									<div className="input-group-text">$</div>
 									<input
 										type="text"
 										className="form-control"
@@ -813,13 +902,11 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 										value={p.contract.amount}
 										disabled={!godMode}
 									/>
-									<div className="input-group-append">
-										<div className="input-group-text">M per year</div>
-									</div>
+									<div className="input-group-text">M per year</div>
 								</div>
 							</div>
-							<div className="col-sm-6 form-group">
-								<label>Contract Expiration</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">Contract Expiration</label>
 								<input
 									type="text"
 									className="form-control"
@@ -828,8 +915,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									disabled={!godMode}
 								/>
 							</div>
-							<div className="col-sm-6 form-group">
-								<label>Injury</label>
+							<div className="col-sm-6 mb-3">
+								<label className="form-label">Injury</label>
 								<input
 									type="text"
 									className="form-control"
@@ -838,8 +925,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									disabled={!godMode}
 								/>
 							</div>
-							<div className="col-sm-3 form-group">
-								<label>Games Out</label>
+							<div className="col-sm-3 mb-3">
+								<label className="form-label">Games Out</label>
 								<input
 									type="text"
 									className="form-control"
@@ -849,8 +936,8 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 								/>
 							</div>
 							{playerMoodTraits ? (
-								<div className="col-sm-3 form-group">
-									<label>Mood Traits</label>
+								<div className="col-sm-3 mb-3">
+									<label className="form-label">Mood Traits</label>
 									{helpers.keys(MOOD_TRAITS).map(trait => (
 										<div className="form-check" key={trait}>
 											<label className="form-check-label">
@@ -875,13 +962,13 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 
 						<h2>Appearance</h2>
 
-						<div className="form-group">
-							<label>
+						<div className="mb-3">
+							<label className="form-label">
 								You can either create a cartoon face or specify the URL to an
 								image.
 							</label>
 							<select
-								className="form-control"
+								className="form-select"
 								onChange={handleChangeAppearanceOption}
 								style={{ maxWidth: "150px" }}
 								value={appearanceOption}
@@ -895,7 +982,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 					</div>
 
 					<div className="col-md-5 mb-3">
-						<div className="float-right d-flex flex-column">
+						<div className="float-end d-flex flex-column">
 							<button
 								type="button"
 								className="btn btn-secondary btn-sm mb-1"
@@ -909,10 +996,14 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 									const { hgt, ratings } = await toWorker(
 										"main",
 										"getRandomRatings",
-										(p as any).age,
-										isSport("football") || isSport("hockey")
-											? p.ratings[r].pos
-											: undefined,
+										{
+											age: (p as any).age,
+											pos: bySport({
+												basketball: undefined,
+												football: p.ratings[r].pos,
+												hockey: p.ratings[r].pos,
+											}),
+										},
 									);
 
 									setState(prevState => {
@@ -936,7 +1027,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 								Randomize
 							</button>
 
-							<div className="ml-1 btn-group">
+							<div className="ms-1 btn-group">
 								<button
 									type="button"
 									className="btn btn-secondary btn-sm"
@@ -959,6 +1050,7 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 						<h2>Ratings</h2>
 
 						<RatingsForm
+							challengeNoRatings={challengeNoRatings}
 							godMode={godMode}
 							handleChange={handleChange}
 							ratingsRow={p.ratings[r]}
@@ -986,21 +1078,6 @@ const CustomizePlayer = (props: View<"customizePlayer">) => {
 			</form>
 		</>
 	);
-};
-
-CustomizePlayer.propTypes = {
-	appearanceOption: PropTypes.oneOf(["Cartoon Face", "Image URL"]),
-	originalTid: PropTypes.number,
-	minContract: PropTypes.number,
-	phase: PropTypes.number,
-	p: PropTypes.object,
-	season: PropTypes.number,
-	teams: PropTypes.arrayOf(
-		PropTypes.shape({
-			text: PropTypes.string.isRequired,
-			tid: PropTypes.number.isRequired,
-		}),
-	),
 };
 
 export default CustomizePlayer;

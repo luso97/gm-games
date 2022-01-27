@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import type { SyntheticEvent } from "react";
 import { Dropdown } from "react-bootstrap";
 import { bySport } from "../../../common";
@@ -36,11 +35,23 @@ const Controls = ({
 	searchText: string;
 }) => {
 	const positionFilterText = bySport({
-		basketball:
-			'"WR|TE" under a Position column to display wide receivers and tight ends',
-		football:
-			'"C|PF" under a Position column to display centers and power forwards',
-		hockey: '"C|W" under a Position column to display centers and wingers',
+		basketball: (
+			<>
+				<code>C|PF</code> under a Position column to display centers and power
+				forwards
+			</>
+		),
+		football: (
+			<>
+				<code>WR|TE</code> under a Position column to display wide receivers and
+				tight ends
+			</>
+		),
+		hockey: (
+			<>
+				<code>C|W</code> under a Position column to display centers and wingers
+			</>
+		),
 	});
 
 	return (
@@ -59,13 +70,23 @@ const Controls = ({
 								text below the column headers.
 							</p>
 							<p>
-								For numeric columns, you can enter "&gt;50" to show values
-								greater than or equal to 50, "&lt;50" for the opposite, and
-								"=50" for values exactly equal to 50.
+								For numeric columns, you can enter <code>&gt;50</code> to show
+								values greater than or equal to 50 and <code>&lt;50</code> for
+								the opposite.
 							</p>
 							<p>
-								You can also filter on multiple values at once. For example,
-								enter {positionFilterText}.
+								You can filter on multiple values at once using a logical OR
+								operator. For example, enter {positionFilterText}.
+							</p>
+							<p>
+								You can find all rows not matching a string, like{" "}
+								<code>!CHI</code> will show all players except those on Chicago.
+							</p>
+							<p>
+								You can make a search exact (searches for the full string) by
+								putting it in quotes. For example, <code>2</code> will search
+								for any value containing a 2, while <code>"2"</code> will search
+								only for the number 2 exactly.
 							</p>
 						</HelpPopover>
 					</div>
@@ -82,7 +103,7 @@ const Controls = ({
 					>
 						<span className="glyphicon glyphicon-filter" />
 					</a>
-					<label>
+					<label className="form-label">
 						<input
 							className="form-control form-control-sm"
 							onChange={onSearch}
@@ -93,7 +114,7 @@ const Controls = ({
 					</label>
 				</>
 			) : null}
-			<Dropdown className="float-right">
+			<Dropdown className="float-end">
 				<Dropdown.Toggle
 					as="span"
 					bsPrefix="no-caret"
@@ -120,16 +141,6 @@ const Controls = ({
 			</Dropdown>
 		</div>
 	);
-};
-
-Controls.propTypes = {
-	enableFilters: PropTypes.bool.isRequired,
-	name: PropTypes.string.isRequired,
-	onExportCSV: PropTypes.func.isRequired,
-	onResetTable: PropTypes.func.isRequired,
-	onSearch: PropTypes.func.isRequired,
-	onToggleFilters: PropTypes.func.isRequired,
-	searchText: PropTypes.string.isRequired,
 };
 
 export default Controls;

@@ -195,7 +195,7 @@ const ViewEvent = ({
 
 	if (current.type === "gameAttributes") {
 		return (
-			<table className="table table-nonfluid">
+			<table className="table table-nonfluid table-striped table-sm">
 				<tbody>
 					{Object.entries(current.info).map(([key, value]) => {
 						return (
@@ -208,7 +208,7 @@ const ViewEvent = ({
 										  ))
 										: Array.isArray(value)
 										? JSON.stringify(value)
-										: value}
+										: String(value)}
 								</td>
 							</tr>
 						);
@@ -226,7 +226,7 @@ const ViewEvent = ({
 					current={current}
 					teamInfoCache={teamInfoCache}
 				/>
-				<table className="table table-nonfluid mt-3">
+				<table className="table table-nonfluid table-striped table-sm mt-3">
 					<tbody>
 						{Object.entries(current.info)
 							.filter(([key]) => key !== "tid" && key !== "srID")
@@ -273,8 +273,11 @@ const ScheduledEvents = ({ scheduledEvents }: View<"scheduledEvents">) => {
 		);
 	}
 
-	const cols = getCols("Season", "Type", "");
-	cols[2].width = "100%";
+	const cols = getCols(["Season", "Type", ""], {
+		"": {
+			width: "100%",
+		},
+	});
 
 	const rows = scheduledEvents.map(scheduledEvent => {
 		return {

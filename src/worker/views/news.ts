@@ -123,7 +123,10 @@ export const processEvents = async (
 			break;
 		}
 		if (event.pids && event.pids.length > 0) {
-			const player = await idb.getCopy.players({ pid: event.pids[0] });
+			const player = await idb.getCopy.players(
+				{ pid: event.pids[0] },
+				"noCopyCache",
+			);
 			if (player) {
 				event.p = {
 					imgURL: player.imgURL,
@@ -166,14 +169,18 @@ const updateNews = async (
 		});
 
 		const teams = (
-			await idb.getCopies.teamsPlus({
-				seasonAttrs: ["abbrev", "imgURL", "region"],
-				season: season,
-				addDummySeason: true,
-			})
+			await idb.getCopies.teamsPlus(
+				{
+					seasonAttrs: ["abbrev", "imgURL", "imgURLSmall", "region"],
+					season: season,
+					addDummySeason: true,
+				},
+				"noCopyCache",
+			)
 		).map(t => ({
 			abbrev: t.seasonAttrs.abbrev,
 			imgURL: t.seasonAttrs.imgURL,
+			imgURLSmall: t.seasonAttrs.imgURLSmall,
 			region: t.seasonAttrs.region,
 		}));
 

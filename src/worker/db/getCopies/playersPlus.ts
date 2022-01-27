@@ -1,11 +1,10 @@
-import {
-	PLAYER,
-	PHASE,
-	processPlayerStats as processPlayerStats2,
-	bySport,
-} from "../../../common";
+import { PLAYER, PHASE, bySport } from "../../../common";
 import { player, trade } from "../../core";
-import { g, helpers } from "../../util";
+import {
+	g,
+	helpers,
+	processPlayerStats as processPlayerStats2,
+} from "../../util";
 import type {
 	Player,
 	PlayerFiltered,
@@ -23,6 +22,7 @@ type PlayersPlusOptionsRequired = {
 	regularSeason: boolean;
 	showNoStats: boolean;
 	showRookies: boolean;
+	showDraftProspectRookieRatings: boolean;
 	showRetired: boolean;
 	fuzz: boolean;
 	oldStats: boolean;
@@ -75,9 +75,8 @@ const processAttrs = (
 
 			// Inject abbrevs
 			output.draft.abbrev = g.get("teamInfoCache")[output.draft.tid]?.abbrev;
-			output.draft.originalAbbrev = g.get("teamInfoCache")[
-				output.draft.originalTid
-			]?.abbrev;
+			output.draft.originalAbbrev =
+				g.get("teamInfoCache")[output.draft.originalTid]?.abbrev;
 		} else if (attr === "contract") {
 			if (g.get("season") === season || season === undefined) {
 				output.contract = helpers.deepCopy(p.contract);
@@ -95,6 +94,8 @@ const processAttrs = (
 				1000; // [millions of dollars]
 		} else if (attr === "abbrev") {
 			output.abbrev = helpers.getAbbrev(p.tid);
+		} else if (attr === "hof" || attr === "watch") {
+			output[attr] = !!p[attr];
 		} else if (
 			attr === "injury" &&
 			season !== undefined &&
@@ -147,7 +148,7 @@ const processAttrs = (
 			let transaction;
 			if (p.transactions && p.transactions.length > 0) {
 				if (season === undefined || season >= g.get("season")) {
-					transaction = p.transactions[p.transactions.length - 1];
+					transaction = p.transactions.at(-1);
 				} else {
 					// Iterate over transactions backwards, find most recent one that was before the supplied season
 					for (let i = p.transactions.length - 1; i >= 0; i--) {
@@ -179,13 +180,11 @@ const processAttrs = (
 							  ])}">${transaction.season} draft</a>`;
 
 					output.latestTransaction = `${helpers.ordinal(
-						// @ts-ignore
 						transaction.pickNum,
 					)} pick in the ${draftName}`;
 				} else if (transaction.type === "freeAgent") {
 					output.latestTransaction = `Free agent signing in ${transaction.season}`;
 				} else if (transaction.type === "trade") {
-					// @ts-ignore
 					const abbrev = g.get("teamInfoCache")[transaction.fromTid]?.abbrev;
 					const url =
 						transaction.eid !== undefined
@@ -202,8 +201,7 @@ const processAttrs = (
 			}
 		} else if (attr === "latestTransactionSeason") {
 			if (p.transactions && p.transactions.length > 0) {
-				output.latestTransactionSeason =
-					p.transactions[p.transactions.length - 1].season;
+				output.latestTransactionSeason = p.transactions.at(-1).season;
 			} else {
 				output.latestTransactionSeason = undefined;
 			}
@@ -214,7 +212,7 @@ const processAttrs = (
 				output.jerseyNumber = helpers.getJerseyNumber(p, "mostCommon");
 			} else {
 				// Latest
-				output.jerseyNumber = p.stats[p.stats.length - 1].jerseyNumber;
+				output.jerseyNumber = p.stats.at(-1).jerseyNumber;
 			}
 		} else if (attr === "experience") {
 			const seasons = new Set();
@@ -226,7 +224,7 @@ const processAttrs = (
 			output.experience = seasons.size;
 		} else {
 			// Several other attrs are not primitive types, so deepCopy
-			// @ts-ignore
+			// @ts-expect-error
 			output[attr] = helpers.deepCopy(p[attr]);
 		}
 	}
@@ -238,6 +236,7 @@ const processRatings = (
 	{
 		fuzz,
 		ratings,
+		showDraftProspectRookieRatings,
 		showRetired,
 		stats,
 		season,
@@ -245,6 +244,14 @@ const processRatings = (
 	}: PlayersPlusOptionsRequired,
 ) => {
 	let playerRatings = p.ratings;
+
+	if (
+		showDraftProspectRookieRatings &&
+		p.tid === PLAYER.UNDRAFTED &&
+		season !== undefined
+	) {
+		season = p.draft.year;
+	}
 
 	// If we're returning all seasons for a specific team, filter ratings to match stats
 	if (season === undefined && tid !== undefined) {
@@ -277,7 +284,7 @@ const processRatings = (
 	) {
 		playerRatings = [
 			{
-				...p.ratings[p.ratings.length - 1],
+				...p.ratings.at(-1),
 			},
 		];
 	}
@@ -313,13 +320,15 @@ const processRatings = (
 				// Find the last stats entry for that season, and use that to determine the team. Requires tid to be requested from stats (otherwise, need to refactor stats fetching to happen outside of processStats)
 				if (!stats.includes("tid")) {
 					throw new Error(
-						'Crazy I know, but if you request "abbrev" or "tid" from ratings, you must also request "tid" from stats',
+						'Crazy I know, but if you request "abbrev" or "tid" from ratings, you must also request "tid", "season", and "playoffs" from stats',
 					);
 				}
 
 				let tidTemp;
 
-				for (const ps of output.stats) {
+				for (const ps of Array.isArray(output.stats)
+					? output.stats
+					: [output.stats]) {
 					if (ps.season === pr.season && ps.playoffs === false) {
 						tidTemp = ps.tid;
 					}
@@ -354,7 +363,7 @@ const processRatings = (
 	});
 
 	if (season !== undefined) {
-		output.ratings = output.ratings[output.ratings.length - 1];
+		output.ratings = output.ratings.at(-1);
 
 		if (output.ratings === undefined && showRetired) {
 			const row: any = {};
@@ -365,7 +374,7 @@ const processRatings = (
 				} else if (attr === "age") {
 					row.age = season - p.born.year;
 				} else if (attr === "pos") {
-					row.pos = p.ratings[p.ratings.length - 1].pos;
+					row.pos = p.ratings.at(-1).pos;
 				} else if (attr === "abbrev") {
 					row.abbrev = "";
 				} else {
@@ -378,9 +387,10 @@ const processRatings = (
 	}
 };
 
-const weightByMinutes = bySport({
+export const weightByMinutes = bySport({
 	basketball: [
 		"per",
+		"ws48",
 		"astp",
 		"blkp",
 		"drbp",
@@ -481,8 +491,7 @@ const getPlayerStats = (
 					"jerseyNumber",
 				];
 				const statSums: any = {};
-				const attrs =
-					rowsTemp.length > 0 ? Object.keys(rowsTemp[rowsTemp.length - 1]) : [];
+				const attrs = rowsTemp.length > 0 ? Object.keys(rowsTemp.at(-1)) : [];
 
 				for (const attr of attrs) {
 					if (!ignoredKeys.includes(attr)) {
@@ -503,7 +512,7 @@ const getPlayerStats = (
 
 				// Defaults from latest entry
 				for (const attr of ignoredKeys) {
-					statSums[attr] = rowsTemp[rowsTemp.length - 1][attr];
+					statSums[attr] = rowsTemp.at(-1)[attr];
 				}
 
 				return statSums;
@@ -607,16 +616,13 @@ const processStats = (
 		((playoffs && !regularSeason) || (!playoffs && regularSeason))
 	) {
 		// Take last value, in case player was traded/signed to team twice in a season
-		output.stats = output.stats[output.stats.length - 1];
+		output.stats = output.stats.at(-1);
 	} else if (season === undefined) {
 		// Aggregate annual stats and ignore other things
 		const ignoredKeys = ["season", "tid", "yearsWithTeam", "jerseyNumber"];
 		const statSums: any = {};
 		const statSumsPlayoffs: any = {};
-		const attrs =
-			careerStats.length > 0
-				? Object.keys(careerStats[careerStats.length - 1])
-				: [];
+		const attrs = careerStats.length > 0 ? Object.keys(careerStats.at(-1)) : [];
 
 		for (const attr of attrs) {
 			if (!ignoredKeys.includes(attr)) {
@@ -660,14 +666,8 @@ const processStats = (
 };
 
 const processPlayer = (p: Player, options: PlayersPlusOptionsRequired) => {
-	const {
-		attrs,
-		ratings,
-		season,
-		showNoStats,
-		showRetired,
-		showRookies,
-	} = options;
+	const { attrs, ratings, season, showNoStats, showRetired, showRookies } =
+		options;
 
 	const output: any = {};
 
@@ -758,6 +758,7 @@ const getCopies = async (
 		showNoStats = false,
 		showRookies = false,
 		showRetired = false,
+		showDraftProspectRookieRatings = false,
 		fuzz = false,
 		oldStats = false,
 		numGamesRemaining = 0,
@@ -775,6 +776,7 @@ const getCopies = async (
 		regularSeason,
 		showNoStats,
 		showRookies,
+		showDraftProspectRookieRatings,
 		showRetired,
 		fuzz,
 		oldStats,

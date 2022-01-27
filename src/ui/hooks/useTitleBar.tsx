@@ -1,18 +1,20 @@
 import { useEffect, useLayoutEffect } from "react";
 import { getSortedTeams, getDropdownValue } from "./useDropdownOptions";
 import { localActions, useLocalShallow } from "../util";
-import type { MenuItemHeader } from "../../common/types";
+import type { LocalStateUI, MenuItemHeader } from "../../common/types";
 import { GAME_NAME } from "../../common";
+import { getResponsiveValue } from "../components/Dropdown";
 
-const useTitleBar = ({
+const useTitleBar = <DropdownFields extends Record<string, number | string>>({
 	title,
 	customMenu,
 	hideNewWindow,
 	jumpTo,
 	jumpToSeason,
-	dropdownExtraParam,
+	dropdownCustomOptions,
+	dropdownCustomURL,
 	dropdownView,
-	dropdownFields = {},
+	dropdownFields,
 	moreInfoAbbrev,
 	moreInfoSeason,
 	moreInfoTid,
@@ -21,17 +23,17 @@ const useTitleBar = ({
 	customMenu?: MenuItemHeader;
 	hideNewWindow?: boolean;
 	jumpTo?: boolean;
-	jumpToSeason?: number | "all";
-	dropdownExtraParam?: number | string;
+	jumpToSeason?: number | "all" | "career";
+	dropdownCustomOptions?: LocalStateUI["dropdownCustomOptions"];
+	dropdownCustomURL?: (fields: DropdownFields) => string;
 	dropdownView?: string;
-	dropdownFields?: {
-		[key: string]: number | string;
-	};
+	dropdownFields?: DropdownFields;
 	moreInfoAbbrev?: string;
 	moreInfoSeason?: number;
 	moreInfoTid?: number;
 } = {}) => {
 	const state = useLocalShallow(state2 => ({
+		hideDisabledTeams: state2.hideDisabledTeams,
 		teamInfoCache: state2.teamInfoCache,
 	}));
 
@@ -46,16 +48,18 @@ const useTitleBar = ({
 
 		const sortedTeams = getSortedTeams(state);
 
-		for (const key of Object.values(dropdownFields)) {
-			if (key === "all") {
-				// Not much use showing "All X" in the title, and also this saves us from having to dedupe all the "all|||" keys in getDropdownValue
-				continue;
-			}
+		if (dropdownFields) {
+			for (const key of Object.values(dropdownFields)) {
+				if (key === "all") {
+					// Not much use showing "All X" in the title, and also this saves us from having to dedupe all the "all|||" keys in getDropdownValue
+					continue;
+				}
 
-			const value = getDropdownValue(key, sortedTeams);
+				const value = getDropdownValue(key, sortedTeams);
 
-			if (value !== undefined) {
-				parts.push(value);
+				if (value !== undefined) {
+					parts.push(getResponsiveValue(value, Infinity));
+				}
 			}
 		}
 
@@ -70,7 +74,8 @@ const useTitleBar = ({
 			hideNewWindow,
 			jumpTo,
 			jumpToSeason,
-			dropdownExtraParam,
+			dropdownCustomOptions,
+			dropdownCustomURL: dropdownCustomURL as any,
 			dropdownView,
 			dropdownFields,
 			moreInfoAbbrev,
@@ -83,7 +88,8 @@ const useTitleBar = ({
 		hideNewWindow,
 		jumpTo,
 		jumpToSeason,
-		dropdownExtraParam,
+		dropdownCustomOptions,
+		dropdownCustomURL,
 		dropdownView,
 		dropdownFields,
 		moreInfoAbbrev,

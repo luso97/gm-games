@@ -6,9 +6,12 @@ import { bySport } from "../../common";
 const tragicDeaths = async (inputs: unknown, updateEvents: UpdateEvents) => {
 	// In theory should update more frequently, but the list is potentially expensive to update and rarely changes
 	if (updateEvents.includes("firstRun")) {
-		const events = await idb.getCopies.events({
-			filter: event => event.type === "tragedy",
-		});
+		const events = await idb.getCopies.events(
+			{
+				filter: event => event.type === "tragedy",
+			},
+			"noCopyCache",
+		);
 		const pids: number[] = [];
 
 		for (const event of events) {
@@ -34,16 +37,14 @@ const tragicDeaths = async (inputs: unknown, updateEvents: UpdateEvents) => {
 			hockey: ["keyStats", "ops", "dps", "ps"],
 		});
 		const playersAll = (
-			await Promise.all(
-				pids.map(pid =>
-					idb.getCopy.players({
-						pid,
-					}),
-				),
+			await idb.getCopies.players(
+				{
+					pids,
+				},
+				"noCopyCache",
 			)
 		).filter(p => p !== undefined);
 
-		// @ts-ignore
 		const players = await idb.getCopies.playersPlus(playersAll, {
 			attrs: [
 				"pid",
@@ -63,7 +64,7 @@ const tragicDeaths = async (inputs: unknown, updateEvents: UpdateEvents) => {
 			const event = events.find(
 				event2 => event2.pids && event2.pids.includes(p.pid),
 			);
-			const details = event ? event.text : "";
+			const details = event?.text ?? "";
 			return {
 				...p,
 				details,

@@ -47,13 +47,6 @@ export const setTeamInfo = async (
 			t.imgURL = g.get("teamInfoCache")[t.tid]?.imgURL;
 		}
 	}
-
-	for (const p of t.players) {
-		const p2 = await idb.cache.players.get(p.pid);
-		if (p2) {
-			p.watch = p2.watch;
-		}
-	}
 };
 
 /**
@@ -82,9 +75,12 @@ const boxScore = async (gid: number) => {
 	let allStars: AllStars | undefined;
 
 	if (allStarGame) {
-		allStars = await idb.getCopy.allStars({
-			season: game.season,
-		});
+		allStars = await idb.getCopy.allStars(
+			{
+				season: game.season,
+			},
+			"noCopyCache",
+		);
 
 		if (!allStars) {
 			return { gid: -1 };
@@ -242,7 +238,11 @@ const updateGamesList = async (
 			games = state.gamesList ? state.gamesList.games : [];
 		}
 
-		const newGames = await getProcessedGames(abbrev, season, games);
+		const newGames = await getProcessedGames({
+			abbrev,
+			season,
+			loadedGames: games,
+		});
 
 		if (games.length === 0) {
 			games = newGames;

@@ -44,10 +44,10 @@ const Confirm = confirmable(({ show, proceed, p }: any) => {
 					}}
 				>
 					<div className="d-flex">
-						<div className="flex-grow-1 mr-2">
+						<div className="flex-grow-1 me-2">
 							<select
 								ref={inputRef}
-								className="form-control"
+								className="form-select"
 								onChange={event => {
 									setNumber(event.target.value);
 								}}
@@ -56,7 +56,10 @@ const Confirm = confirmable(({ show, proceed, p }: any) => {
 								{numbers.map(number => (
 									<option key={number} value={number}>
 										#{number} (
-										{helpers.yearRanges(p.retirableJerseyNumbers[number])})
+										{helpers
+											.yearRanges(p.retirableJerseyNumbers[number])
+											.join(", ")}
+										)
 									</option>
 								))}
 							</select>
@@ -75,7 +78,7 @@ const confirmFunction = createConfirmation(Confirm);
 
 // Pass "defaultValue" and it's used as the default value, like window.prompt. Don't pass "defaultValue" and it's like window.confirm.
 const playerRetireJerseyNumberDialog = (p: any): string | undefined => {
-	// @ts-ignore
+	// @ts-expect-error
 	return confirmFunction({
 		p,
 	});

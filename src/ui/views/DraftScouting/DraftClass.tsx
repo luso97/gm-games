@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useState } from "react";
 import {
 	DataTable,
@@ -7,6 +6,7 @@ import {
 } from "../../components";
 import { confirm, downloadFile, getCols, toWorker } from "../../util";
 import type { View } from "../../../common/types";
+import { WEBSITE_ROOT } from "../../../common";
 
 const DraftClass = ({
 	challengeNoRatings,
@@ -24,7 +24,7 @@ const DraftClass = ({
 	const [showImportForm, setShowImportForm] = useState(false);
 	const [status, setStatus] = useState<"exporting" | "loading" | undefined>();
 
-	const cols = getCols("#", "Name", "Pos", "Age", "Ovr", "Pot");
+	const cols = getCols(["#", "Name", "Pos", "Age", "Ovr", "Pot"]);
 
 	const rows = players.map(p => {
 		return {
@@ -33,7 +33,12 @@ const DraftClass = ({
 				p.rank,
 				{
 					value: (
-						<PlayerNameLabels pid={p.pid} skills={p.skills} watch={p.watch}>
+						<PlayerNameLabels
+							pid={p.pid}
+							season={season}
+							skills={p.skills}
+							watch={p.watch}
+						>
 							{p.nameAbbrev}
 						</PlayerNameLabels>
 					),
@@ -79,7 +84,7 @@ const DraftClass = ({
 				</button>
 				{godMode ? (
 					<button
-						className="btn btn-god-mode btn-xs"
+						className="btn btn-outline-god-mode btn-xs"
 						disabled={status === "exporting" || status === "loading"}
 						onClick={async () => {
 							setStatus("loading");
@@ -94,7 +99,7 @@ const DraftClass = ({
 				) : null}
 				{godMode ? (
 					<button
-						className="btn btn-god-mode btn-xs"
+						className="btn btn-outline-god-mode btn-xs"
 						disabled={status === "exporting" || status === "loading"}
 						onClick={async () => {
 							setStatus("loading");
@@ -127,7 +132,7 @@ const DraftClass = ({
 					<p>
 						To replace this draft class with players from a{" "}
 						<a
-							href="https://basketball-gm.com/manual/customization/draft-class/"
+							href={`https://${WEBSITE_ROOT}/manual/customization/draft-class/`}
 							rel="noopener noreferrer"
 							target="_blank"
 						>
@@ -137,20 +142,19 @@ const DraftClass = ({
 					</p>
 					<LeagueFileUpload
 						disabled={status === "exporting"}
+						includePlayersInBasicInfo
 						onLoading={() => {
 							setStatus("loading");
 						}}
-						onDone={async (err, leagueFile) => {
-							if (err) {
+						onDone={async (err, output) => {
+							if (err || !output) {
 								return;
 							}
 
-							await toWorker(
-								"main",
-								"handleUploadedDraftClass",
-								leagueFile,
-								season,
-							);
+							await toWorker("main", "handleUploadedDraftClass", {
+								uploadedFile: output.basicInfo,
+								draftYear: season,
+							});
 
 							setShowImportForm(false);
 							setStatus(undefined);
@@ -168,12 +172,6 @@ const DraftClass = ({
 			/>
 		</>
 	);
-};
-
-DraftClass.propTypes = {
-	offset: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	season: PropTypes.number.isRequired,
 };
 
 export default DraftClass;

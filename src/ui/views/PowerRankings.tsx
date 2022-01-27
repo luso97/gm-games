@@ -1,8 +1,7 @@
-import PropTypes from "prop-types";
 import { useState } from "react";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
-import { DataTable } from "../components";
+import { DataTable, TeamLogoInline } from "../components";
 import type { View } from "../../common/types";
 import { bySport, isSport, POSITIONS, RATINGS } from "../../common";
 import { wrappedMovOrDiff } from "../components/MovOrDiff";
@@ -34,16 +33,22 @@ const PowerRankings = ({
 	confs,
 	currentSeason,
 	divs,
+	playoffs,
 	season,
 	teams,
 	ties,
 	otl,
 	userTid,
 }: View<"powerRankings">) => {
+	const dropdownFields = bySport({
+		basketball: { seasons: season, playoffs },
+		default: { seasons: season },
+	}) as { seasons: number; playoffs: string } | { seasons: number };
+
 	useTitleBar({
 		title: "Power Rankings",
 		dropdownView: "power_rankings",
-		dropdownFields: { seasons: season },
+		dropdownFields,
 	});
 
 	const [showHealthy, setShowHealthy] = useState(true);
@@ -70,7 +75,7 @@ const PowerRankings = ({
 		},
 		{
 			title: "",
-			colspan: 4 + (ties ? 1 : 0) + (otl ? 1 : 0),
+			colspan: 5 + (ties ? 1 : 0) + (otl ? 1 : 0),
 		},
 		{
 			title: (
@@ -78,7 +83,7 @@ const PowerRankings = ({
 					{otherKeysTitle}
 					{currentSeason === season ? (
 						<a
-							className="ml-2"
+							className="ms-2"
 							href=""
 							onClick={event => {
 								event.preventDefault();
@@ -107,10 +112,11 @@ const PowerRankings = ({
 		...(ties ? ["T"] : []),
 		"L10",
 		`stat:${isSport("basketball") ? "mov" : "diff"}`,
+		"AvgAge",
 		...otherKeys.map(key => `${otherKeysPrefix}:${key}`),
 	];
 
-	const cols = getCols(...colNames);
+	const cols = getCols(colNames);
 
 	if (isSport("basketball")) {
 		for (let i = 0; i < colNames.length; i++) {
@@ -128,15 +134,28 @@ const PowerRankings = ({
 			key: t.tid,
 			data: [
 				t.rank,
-				<a
-					href={helpers.leagueUrl([
-						"roster",
-						`${t.seasonAttrs.abbrev}_${t.tid}`,
-						season,
-					])}
-				>
-					{t.seasonAttrs.region} {t.seasonAttrs.name}
-				</a>,
+				{
+					value: (
+						<div className="d-flex align-items-center">
+							<TeamLogoInline
+								imgURL={t.seasonAttrs.imgURL}
+								imgURLSmall={t.seasonAttrs.imgURLSmall}
+							/>
+							<div className="ms-1">
+								<a
+									href={helpers.leagueUrl([
+										"roster",
+										`${t.seasonAttrs.abbrev}_${t.tid}`,
+										season,
+									])}
+								>
+									{t.seasonAttrs.region} {t.seasonAttrs.name}
+								</a>
+							</div>
+						</div>
+					),
+					sortValue: `${t.seasonAttrs.region} ${t.seasonAttrs.name}`,
+				},
 				conf ? conf.name.replace(" Conference", "") : null,
 				div ? div.name : null,
 				!challengeNoRatings ? (
@@ -162,6 +181,7 @@ const PowerRankings = ({
 						: t.stats,
 					isSport("basketball") ? "mov" : "diff",
 				),
+				t.avgAge.toFixed(1),
 				...otherKeys.map(key => ({
 					value: (
 						<Other
@@ -187,41 +207,23 @@ const PowerRankings = ({
 				victory, and team rating. Team rating is based only on the ratings of
 				players on each team.
 			</p>
+			{playoffs === "playoffs" ? (
+				<p>
+					In the playoffs, rotations get shorter and players play harder, so
+					some teams get higher or lower ratings.
+				</p>
+			) : null}
 
 			<DataTable
+				className="align-middle"
 				cols={cols}
 				defaultSort={[0, "asc"]}
 				name="PowerRankings"
-				nonfluid
 				rows={rows}
 				superCols={superCols}
 			/>
 		</>
 	);
-};
-
-PowerRankings.propTypes = {
-	season: PropTypes.number.isRequired,
-	teams: PropTypes.arrayOf(
-		PropTypes.shape({
-			ovr: PropTypes.number.isRequired,
-			ovrCurrent: PropTypes.number.isRequired,
-			rank: PropTypes.number.isRequired,
-			tid: PropTypes.number.isRequired,
-			seasonAttrs: PropTypes.shape({
-				abbrev: PropTypes.string.isRequired,
-				lastTen: PropTypes.string.isRequired,
-				lost: PropTypes.number.isRequired,
-				name: PropTypes.string.isRequired,
-				region: PropTypes.string.isRequired,
-				won: PropTypes.number.isRequired,
-			}),
-			stats: PropTypes.shape({
-				mov: PropTypes.number.isRequired,
-			}),
-		}),
-	).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default PowerRankings;

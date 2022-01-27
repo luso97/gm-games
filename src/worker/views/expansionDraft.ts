@@ -1,4 +1,4 @@
-import { g, helpers } from "../util";
+import { g, helpers, newLeagueGodModeLimits } from "../util";
 import getTeamInfos from "../../common/getTeamInfos";
 import type { ExpansionDraftSetupTeam } from "../../common/types";
 import { idb } from "../db";
@@ -26,7 +26,7 @@ const updateExpansionDraft = async () => {
 	const allAbbrevs = getUnusedAbbrevs(currentTeams);
 
 	const divs = g.get("divs", "current");
-	const div = divs[divs.length - 1];
+	const div = divs.at(-1);
 	const param = allAbbrevs.map(abbrev => ({
 		tid: -1,
 		cid: div.cid,
@@ -40,8 +40,9 @@ const updateExpansionDraft = async () => {
 			region: t.region,
 			name: t.name,
 			imgURL: t.imgURL,
+			imgURLSmall: t.imgURLSmall,
 			colors: t.colors,
-			jersey: DEFAULT_JERSEY,
+			jersey: t.jersey,
 			pop: String(t.pop),
 			stadiumCapacity: String(g.get("defaultStadiumCapacity")),
 			did: String(t.did),
@@ -58,6 +59,7 @@ const updateExpansionDraft = async () => {
 			region: t.region,
 			name: t.name,
 			imgURL: t.imgURL,
+			imgURLSmall: t.imgURLSmall,
 			colors: t.colors,
 			jersey: t.jersey ?? DEFAULT_JERSEY,
 			pop: String(t.pop ?? 1),
@@ -83,21 +85,24 @@ const updateExpansionDraft = async () => {
 			),
 		);
 
+	const godModeLimits = newLeagueGodModeLimits();
+
+	const defaultNumProtectedPlayers = bySport({
+		hockey: Math.max(g.get("minRosterSize") - 4, 0),
+		default: g.get("minRosterSize"),
+	});
+
 	return {
 		builtInTeams: orderBy(builtInTeams, ["region", "name", "tid"]),
 		confs: g.get("confs"),
+		defaultNumProtectedPlayers,
 		divs: g.get("divs"),
 		godMode: g.get("godMode"),
+		godModeLimits,
 		initialTeams,
 		initialNumPerTeam,
 		initialNumProtectedPlayers:
-			expansionDraft.numProtectedPlayers ??
-			String(
-				bySport({
-					hockey: Math.max(g.get("minRosterSize") - 4, 0),
-					default: g.get("minRosterSize"),
-				}),
-			),
+			expansionDraft.numProtectedPlayers ?? String(defaultNumProtectedPlayers),
 		minRosterSize: g.get("minRosterSize"),
 		multiTeamMode: g.get("userTids").length > 1,
 		numActiveTeams: g.get("numActiveTeams"),

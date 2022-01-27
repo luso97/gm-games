@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import {
 	PlayerNameLabels,
 	RatingWithChange,
@@ -17,7 +16,7 @@ const StartingLineup = ({
 	View<"leagueDashboard">,
 	"challengeNoRatings" | "numPlayersOnCourt" | "starters" | "startersStats"
 >) => {
-	const statCols = getCols(...startersStats.map(stat => `stat:${stat}`));
+	const statCols = getCols(startersStats.map(stat => `stat:${stat}`));
 
 	return (
 		<>
@@ -28,7 +27,7 @@ const StartingLineup = ({
 					: "Top Players"}
 			</h2>
 			<ResponsiveTableWrapper nonfluid className="mb-0">
-				<table className="table table-striped table-bordered table-sm">
+				<table className="table table-striped table-sm">
 					<thead>
 						<tr>
 							<th>Name</th>
@@ -92,11 +91,6 @@ const StartingLineup = ({
 			<a href={helpers.leagueUrl(["roster"])}>» Full Roster</a>
 		</>
 	);
-};
-
-StartingLineup.propTypes = {
-	starters: PropTypes.arrayOf(PropTypes.object).isRequired,
-	startersStats: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
 
 export default StartingLineup;

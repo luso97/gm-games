@@ -14,7 +14,7 @@ const Note = ({ note, pid }: { note: Player["note"]; pid: number }) => {
 				className="mt-3"
 				onSubmit={async event => {
 					event.preventDefault();
-					await toWorker("main", "setPlayerNote", pid, editedNote);
+					await toWorker("main", "setPlayerNote", { pid, note: editedNote });
 					setEditing(false);
 				}}
 			>
@@ -28,8 +28,8 @@ const Note = ({ note, pid }: { note: Player["note"]; pid: number }) => {
 					value={editedNote}
 				/>
 
-				<div className="btn-group mt-2">
-					<button type="submit" className="btn btn-primary btn-sm">
+				<div className="mt-2">
+					<button type="submit" className="btn btn-primary btn-sm me-2">
 						Save
 					</button>
 					<button

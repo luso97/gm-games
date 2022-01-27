@@ -1,10 +1,20 @@
-import { g } from "../util";
-import type { GameAttributesLeague, UpdateEvents } from "../../common/types";
+import { defaultInjuries, defaultTragicDeaths, g } from "../util";
+import type {
+	Conf,
+	GameAttributesLeague,
+	GetLeagueOptionsReal,
+	InjuriesSetting,
+	TragicDeaths,
+	UpdateEvents,
+} from "../../common/types";
+import goatFormula from "../util/goatFormula";
 
 const keys = [
 	"godMode",
 	"godModeInPast",
 	"numGames",
+	"numGamesDiv",
+	"numGamesConf",
 	"numActiveTeams",
 	"quarterLength",
 	"maxRosterSize",
@@ -26,7 +36,7 @@ const keys = [
 	"brotherRate",
 	"sonRate",
 	"forceRetireAge",
-	"hardCap",
+	"salaryCapType",
 	"numGamesPlayoffSeries",
 	"numPlayoffByes",
 	"draftType",
@@ -78,11 +88,38 @@ const keys = [
 	"pointsFormula",
 	"equalizeRegions",
 	"realDraftRatings",
+	"hideDisabledTeams",
+	"hofFactor",
+	"injuries",
+	"inflationAvg",
+	"inflationMax",
+	"inflationMin",
+	"inflationStd",
+	"playoffsByConf",
+	"playoffsNumTeamsDiv",
+	"playoffsReseed",
+	"playerBioInfo",
+	"playIn",
+	"numPlayersDunk",
+	"numPlayersThree",
+	"fantasyPoints",
+	"goatFormula",
+	"draftPickAutoContract",
+	"draftPickAutoContractPercent",
+	"draftPickAutoContractRounds",
 ] as const;
 
 export type Settings = Pick<
 	GameAttributesLeague,
-	Exclude<typeof keys[number], "repeatSeason" | "realDraftRatings">
+	Exclude<
+		typeof keys[number],
+		| "repeatSeason"
+		| "realDraftRatings"
+		| "injuries"
+		| "tragicDeaths"
+		| "goatFormula"
+		| "numActiveTeams"
+	>
 > & {
 	repeatSeason: boolean;
 	noStartingInjuries: boolean;
@@ -91,6 +128,14 @@ export type Settings = Pick<
 		undefined
 	>;
 	randomization: "none" | "shuffle" | "debuts" | "debutsForever";
+	realStats: GetLeagueOptionsReal["realStats"];
+	injuries: InjuriesSetting;
+	tragicDeaths: TragicDeaths;
+	goatFormula: string;
+	confs?: Conf[];
+
+	// undefined in DefaultNewLeagueSettings - then it is not possible to validate some settings that depend on it
+	numActiveTeams: number | undefined;
 };
 
 const updateSettings = async (inputs: unknown, updateEvents: UpdateEvents) => {
@@ -98,10 +143,12 @@ const updateSettings = async (inputs: unknown, updateEvents: UpdateEvents) => {
 		updateEvents.includes("firstRun") ||
 		updateEvents.includes("gameAttributes")
 	) {
-		const settings: Settings = {
+		const initialSettings: Settings = {
 			godMode: g.get("godMode"),
 			godModeInPast: g.get("godModeInPast"),
 			numGames: g.get("numGames"),
+			numGamesDiv: g.get("numGamesDiv"),
+			numGamesConf: g.get("numGamesConf"),
 			numActiveTeams: g.get("numActiveTeams"),
 			quarterLength: g.get("quarterLength"),
 			maxRosterSize: g.get("maxRosterSize"),
@@ -123,7 +170,7 @@ const updateSettings = async (inputs: unknown, updateEvents: UpdateEvents) => {
 			brotherRate: g.get("brotherRate"),
 			sonRate: g.get("sonRate"),
 			forceRetireAge: g.get("forceRetireAge"),
-			hardCap: g.get("hardCap"),
+			salaryCapType: g.get("salaryCapType"),
 			numGamesPlayoffSeries: g.get("numGamesPlayoffSeries"),
 			numPlayoffByes: g.get("numPlayoffByes"),
 			draftType: g.get("draftType"),
@@ -174,14 +221,38 @@ const updateSettings = async (inputs: unknown, updateEvents: UpdateEvents) => {
 			tiebreakers: g.get("tiebreakers"),
 			pointsFormula: g.get("pointsFormula"),
 			equalizeRegions: g.get("equalizeRegions"),
+			hideDisabledTeams: g.get("hideDisabledTeams"),
 			noStartingInjuries: false,
+			hofFactor: g.get("hofFactor"),
+			injuries: g.get("injuries") ?? defaultInjuries,
+			inflationAvg: g.get("inflationAvg"),
+			inflationMax: g.get("inflationMax"),
+			inflationMin: g.get("inflationMin"),
+			inflationStd: g.get("inflationStd"),
+			playoffsByConf: g.get("playoffsByConf"),
+			playoffsNumTeamsDiv: g.get("playoffsNumTeamsDiv"),
+			playoffsReseed: g.get("playoffsReseed"),
+			playerBioInfo: g.get("playerBioInfo"),
+			playIn: g.get("playIn"),
+			confs: g.get("confs"),
+			numPlayersDunk: g.get("numPlayersDunk"),
+			numPlayersThree: g.get("numPlayersThree"),
+			fantasyPoints: g.get("fantasyPoints"),
+			tragicDeaths: g.get("tragicDeaths") ?? defaultTragicDeaths,
+			goatFormula: g.get("goatFormula") ?? goatFormula.DEFAULT_FORMULA,
+			draftPickAutoContract: g.get("draftPickAutoContract"),
+			draftPickAutoContractPercent: g.get("draftPickAutoContractPercent"),
+			draftPickAutoContractRounds: g.get("draftPickAutoContractRounds"),
 
 			// Might as well be undefined, because it will never be saved from this form, only the new league form
 			realDraftRatings: g.get("realDraftRatings") ?? "rookie",
 			randomization: "none",
+			realStats: "none",
 		};
 
-		return settings;
+		return {
+			initialSettings,
+		};
 	}
 };
 

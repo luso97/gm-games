@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useCallback, useState } from "react";
 import { PHASE } from "../../common";
 import {
@@ -10,7 +9,7 @@ import {
 	RosterSalarySummary,
 } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
-import { getCols, helpers, useLocalShallow } from "../util";
+import { confirm, getCols, helpers, toWorker, useLocalShallow } from "../util";
 import type { View } from "../../common/types";
 import { dataTableWrappedMood } from "../components/Mood";
 
@@ -18,13 +17,14 @@ const FreeAgents = ({
 	capSpace,
 	challengeNoFreeAgents,
 	challengeNoRatings,
-	hardCap,
+	godMode,
 	maxContract,
 	minContract,
 	numRosterSpots,
 	spectator,
 	phase,
 	players,
+	salaryCapType,
 	stats,
 	userPlayers,
 }: View<"freeAgents">) => {
@@ -73,7 +73,7 @@ const FreeAgents = ({
 		);
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Age",
@@ -84,7 +84,7 @@ const FreeAgents = ({
 		"Asking For",
 		"Exp",
 		"Negotiate",
-	);
+	]);
 
 	const rows = players.map(p => {
 		return {
@@ -114,8 +114,9 @@ const FreeAgents = ({
 				{
 					value: (
 						// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-						// @ts-ignore
+						// @ts-expect-error
 						<NegotiateButtons
+							canGoOverCap={salaryCapType === "none"}
 							capSpace={capSpace}
 							disabled={gameSimInProgress}
 							minContract={minContract}
@@ -132,23 +133,48 @@ const FreeAgents = ({
 
 	return (
 		<>
-			<RosterComposition className="float-right mb-3" players={userPlayers} />
+			<RosterComposition className="float-end mb-3" players={userPlayers} />
 
 			<MoreLinks type="freeAgents" page="free_agents" />
 
 			<RosterSalarySummary
 				capSpace={capSpace}
-				hardCap={hardCap}
+				salaryCapType={salaryCapType}
 				maxContract={maxContract}
 				minContract={minContract}
 				numRosterSpots={numRosterSpots}
 			/>
 
-			<p>
+			<div className="d-sm-flex mb-3">
 				<button className="btn btn-secondary" onClick={showAfforablePlayers}>
 					Show players you can afford now
 				</button>
-			</p>
+
+				<div className="d-block">
+					{godMode ? (
+						<button
+							className="btn btn-god-mode ms-sm-2 mt-2 mt-sm-0"
+							onClick={async () => {
+								const proceed = await confirm(
+									`Are you sure you want to delete all ${players.length} free agents?`,
+									{
+										okText: "Delete Players",
+									},
+								);
+								if (proceed) {
+									await toWorker(
+										"main",
+										"removePlayers",
+										players.map(p => p.pid),
+									);
+								}
+							}}
+						>
+							Delete all players
+						</button>
+					) : null}
+				</div>
+			</div>
 
 			{gameSimInProgress && !spectator ? (
 				<p className="text-danger">Stop game simulation to sign free agents.</p>
@@ -175,23 +201,6 @@ const FreeAgents = ({
 			/>
 		</>
 	);
-};
-
-FreeAgents.propTypes = {
-	capSpace: PropTypes.number.isRequired,
-	hardCap: PropTypes.bool.isRequired,
-	minContract: PropTypes.number.isRequired,
-	numRosterSpots: PropTypes.number.isRequired,
-	phase: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userPlayers: PropTypes.arrayOf(
-		PropTypes.shape({
-			ratings: PropTypes.shape({
-				pos: PropTypes.string,
-			}),
-		}),
-	).isRequired,
 };
 
 export default FreeAgents;

@@ -1,7 +1,7 @@
 import { bySport, PHASE } from "../../../common";
 import { idb } from "../../db";
 import { g, orderTeams } from "../../util";
-import { getDivisionLeaders } from "../../util/orderTeams";
+import { getDivisionRanks } from "../../util/orderTeams";
 import type { DraftPickWithoutKey } from "../../../common/types";
 import { genPlayoffSeriesFromTeams } from "../season/genPlayoffSeries";
 
@@ -15,11 +15,13 @@ import { genPlayoffSeriesFromTeams } from "../season/genPlayoffSeries";
  * - tiebreaker is random - but make it deterministic so it doesn't jump when doing the lottery
  * - 2nd round tiebreaker is opposite of 1st round
  * - 2nd round order is just based on record, no lottery section for non-playoff teams
+ *
  * Football
  * - order is based on playoff results
  * - tiebreaker is different than for playoffs, but i could probably get away with using the same one
  * - tied teams rotate (like 123 -> 231 -> 312 -> 123) in later rounds
  * - besides tiebreakers, order is same in all rounds
+ *
  * Hockey
  * - lottery is like basketball, but sort based on points rather than winp
  * - then: playoff teams that did not win their divisions and did not make the conference finals, sorted by points
@@ -165,7 +167,12 @@ const getTeamsByRound = async (draftPicksIndexed: DraftPickWithoutKey[][]) => {
 		t => t.seasonAttrs.playoffRoundsWon < 0 && !tidPlayoffs.includes(t.tid),
 	);
 	const nonPlayoffTeamsOrdered = (
-		await orderTeams(nonPlayoffTeams, allTeams, orderTeamsSettings)
+		await orderTeams(nonPlayoffTeams, allTeams, {
+			...orderTeamsSettings,
+
+			// If division leaders matter for playoff seeding, then they should not matter here. But for expansion teams, that can cause a problem, if a new division is added at the same time, they will appear as the only member because they have no entry there
+			skipDivisionLeaders: true,
+		})
 	).reverse();
 	checkForTies(nonPlayoffTeamsOrdered, 1);
 	firstRound.push(...nonPlayoffTeamsOrdered);
@@ -208,15 +215,17 @@ const getTeamsByRound = async (draftPicksIndexed: DraftPickWithoutKey[][]) => {
 			}
 		} else {
 			// playoffsHockey
-			const divisionLeaders = new Set(
-				(
-					await getDivisionLeaders(
-						// Pass allTeams rather than teams because there is currently a bug in getDivisionLeaders where only teams in the first arg can be selected. This works around that bug, and also will continue to work after the bug is fixed.
-						allTeams,
-						allTeams,
-					)
-				).values(),
+			const divisionRanks = await getDivisionRanks(
+				// Pass allTeams rather than teams because there is currently a bug in getDivisionLeaders where only teams in the first arg can be selected. This works around that bug, and also will continue to work after the bug is fixed.
+				allTeams,
+				allTeams,
 			);
+			const divisionWinners = new Set<number>();
+			for (const [tid, rank] of divisionRanks) {
+				if (rank === 1) {
+					divisionWinners.add(tid);
+				}
+			}
 
 			const numPlayoffRounds = g.get("numGamesPlayoffSeries", "current").length;
 
@@ -241,7 +250,7 @@ const getTeamsByRound = async (draftPicksIndexed: DraftPickWithoutKey[][]) => {
 					groups[3].push(t);
 				} else if (playoffRoundsWon === numPlayoffRounds - 2) {
 					groups[2].push(t);
-				} else if (divisionLeaders.has(t)) {
+				} else if (divisionWinners.has(t.tid)) {
 					groups[1].push(t);
 				} else {
 					groups[0].push(t);

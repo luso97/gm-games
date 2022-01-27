@@ -1,3 +1,4 @@
+import classNames from "classnames";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
 
 const getValidTeamColors = (t?: { colors: any }) => {
@@ -51,7 +52,7 @@ const JerseyNumber = ({
 	}
 
 	const border = retired
-		? "4px double var(--yellow)"
+		? "4px double var(--bs-yellow)"
 		: `2px solid ${colors[2]}`;
 
 	return (
@@ -60,7 +61,10 @@ const JerseyNumber = ({
 			placement="bottom"
 		>
 			<div
-				className={className}
+				className={classNames(
+					"d-flex align-items-center justify-content-center",
+					className,
+				)}
 				style={{
 					width: 55,
 					height: 50,
@@ -68,8 +72,6 @@ const JerseyNumber = ({
 					backgroundColor: colors[0],
 					color: colors[1],
 					fontSize: 32,
-					textAlign: "center",
-					lineHeight: 1.4,
 				}}
 			>
 				{number}

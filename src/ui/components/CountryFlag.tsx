@@ -1,6 +1,8 @@
 import classNames from "classnames";
-import { helpers } from "../util";
+import type { CSSProperties } from "react";
+import { helpers, useLocal } from "../util";
 
+// https://github.com/lipis/flag-icons/blob/main/country.json with some duplicate names added
 const countryCodes: Record<string, string> = {
 	Afghanistan: "af",
 	"Aland Islands": "ax",
@@ -10,6 +12,7 @@ const countryCodes: Record<string, string> = {
 	Andorra: "ad",
 	Angola: "ao",
 	Anguilla: "ai",
+	Antarctica: "aq",
 	"Antigua and Barbuda": "ag",
 	Argentina: "ar",
 	Armenia: "am",
@@ -31,6 +34,7 @@ const countryCodes: Record<string, string> = {
 	"Bonaire, Sint Eustatius and Saba": "bq",
 	"Bosnia and Herzegovina": "ba",
 	Botswana: "bw",
+	"Bouvet Island": "bv",
 	Brazil: "br",
 	"British Indian Ocean Territory": "io",
 	"Brunei Darussalam": "bn",
@@ -42,6 +46,7 @@ const countryCodes: Record<string, string> = {
 	Cambodia: "kh",
 	Cameroon: "cm",
 	Canada: "ca",
+	Catalonia: "es-ct",
 	"Cayman Islands": "ky",
 	"Central African Republic": "cf",
 	Chad: "td",
@@ -83,7 +88,9 @@ const countryCodes: Record<string, string> = {
 	"French Polynesia": "pf",
 	"French Southern Territories": "tf",
 	Gabon: "ga",
+	Galicia: "es-ga",
 	Gambia: "gm",
+	Georgia: "ge",
 	Germany: "de",
 	Ghana: "gh",
 	Gibraltar: "gi",
@@ -98,6 +105,7 @@ const countryCodes: Record<string, string> = {
 	"Guinea-Bissau": "gw",
 	Guyana: "gy",
 	Haiti: "ht",
+	"Heard Island and McDonald Islands": "hm",
 	"Holy See": "va",
 	Honduras: "hn",
 	"Hong Kong": "hk",
@@ -215,6 +223,7 @@ const countryCodes: Record<string, string> = {
 	Spain: "es",
 	"Sri Lanka": "lk",
 	"State of Palestine": "ps",
+	Palestine: "ps",
 	Sudan: "sd",
 	Suriname: "sr",
 	"Svalbard and Jan Mayen": "sj",
@@ -258,30 +267,47 @@ const countryCodes: Record<string, string> = {
 	Yemen: "ye",
 	Zambia: "zm",
 	Zimbabwe: "zw",
-	// Can't handle this currently
-	// Georgia: "ge",
 };
 
 const CountryFlag = ({
 	className,
 	country,
+	override,
+	style,
 }: {
 	className?: string;
 	country: string;
+	override?: string;
+	style?: CSSProperties;
 }) => {
-	const country2 = countryCodes[country]
-		? country
-		: helpers.getCountry(country);
-	const code = countryCodes[country2];
+	const flagOverrides = useLocal(state => state.flagOverrides);
+
+	const country2 = helpers.getCountry(country);
+
+	const actualOverride =
+		override ?? flagOverrides[country] ?? flagOverrides[country2];
+
+	if (actualOverride === "none") {
+		return null;
+	} else if (actualOverride) {
+		return (
+			<img
+				src={actualOverride}
+				className={classNames("flag-image", className)}
+				alt={flagOverrides[country] ? country : country2}
+				style={style}
+			/>
+		);
+	}
+
+	const code = countryCodes[country] ?? countryCodes[country2];
 	if (code) {
 		return (
 			<span
-				className={classNames(
-					`flag-icon flag-icon-${code}`,
-					className ?? undefined,
-				)}
+				className={classNames(`fi fi-${code}`, className)}
 				data-no-row-highlight="true"
-				title={country2}
+				title={countryCodes[country] ? country : country2}
+				style={style}
 			></span>
 		);
 	}

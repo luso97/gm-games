@@ -1,7 +1,6 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import orderBy from "lodash-es/orderBy";
-import PropTypes from "prop-types";
-import { useCallback, useState, useReducer } from "react";
+import { useState, useReducer, useRef } from "react";
 import {
 	DIFFICULTY,
 	applyRealTeamInfo,
@@ -14,8 +13,16 @@ import {
 	gameAttributesArrayToObject,
 	WEBSITE_ROOT,
 	unwrapGameAttribute,
+	MAX_SUPPORTED_LEAGUE_VERSION,
 } from "../../../common";
-import { LeagueFileUpload, NextPrevButtons, PopText } from "../../components";
+import {
+	ActionButton,
+	LeagueFileUpload,
+	NextPrevButtons,
+	PopText,
+	ProgressBarText,
+} from "../../components";
+import type { LeagueFileUploadOutput } from "../../components/LeagueFileUpload";
 import useTitleBar from "../../hooks/useTitleBar";
 import {
 	confirm,
@@ -24,6 +31,7 @@ import {
 	realtimeUpdate,
 	toWorker,
 	safeLocalStorage,
+	useLocalShallow,
 } from "../../util";
 import type {
 	View,
@@ -40,6 +48,7 @@ import type { LeagueInfo, NewLeagueTeam } from "./types";
 import CustomizeSettings from "./CustomizeSettings";
 import CustomizeTeams from "./CustomizeTeams";
 import type { Settings } from "../../../worker/views/settings";
+import type { BasicInfo } from "../../../worker/api/leagueFileUpload";
 
 const animationVariants = {
 	visible: {
@@ -95,31 +104,15 @@ const teamsDefault: NewLeagueTeam[] = helpers.addPopRank(
 );
 
 const initKeptKeys = ({
-	leagueFile,
 	newAllKeys,
 	oldKeptKeys,
 	oldAllKeys,
-}:
-	| {
-			leagueFile: any;
-			newAllKeys?: undefined;
-			oldKeptKeys?: string[];
-			oldAllKeys?: string[];
-	  }
-	| {
-			leagueFile?: undefined;
-			newAllKeys: string[];
-			oldKeptKeys?: string[];
-			oldAllKeys?: string[];
-	  }) => {
-	let allKeys;
-	if (newAllKeys) {
-		allKeys = newAllKeys;
-	} else {
-		allKeys = leagueFile
-			? Object.keys(leagueFile).filter(key => key !== "version")
-			: [];
-	}
+}: {
+	newAllKeys: string[];
+	oldKeptKeys?: string[];
+	oldAllKeys?: string[];
+}) => {
+	const allKeys = newAllKeys.filter(key => key !== "version" && key !== "meta");
 
 	let keptKeys;
 	if (!oldKeptKeys || !oldAllKeys) {
@@ -142,7 +135,7 @@ const initKeptKeys = ({
 };
 
 const MIN_SEASON = 1947;
-const MAX_SEASON = 2021;
+const MAX_SEASON = 2022;
 
 const seasons: { key: string; value: string }[] = [];
 for (let i = MAX_SEASON; i >= MIN_SEASON; i--) {
@@ -154,38 +147,39 @@ for (let i = MAX_SEASON; i >= MIN_SEASON; i--) {
 
 const legends = [
 	{
-		key: "all",
+		key: "all" as const,
 		value: "All Time",
 	},
 	{
-		key: "2010s",
+		key: "2010s" as const,
 		value: "2010s",
 	},
 	{
-		key: "2000s",
+		key: "2000s" as const,
 		value: "2000s",
 	},
 	{
-		key: "1990s",
+		key: "1990s" as const,
 		value: "1990s",
 	},
 	{
-		key: "1980s",
+		key: "1980s" as const,
 		value: "1980s",
 	},
 	{
-		key: "1970s",
+		key: "1970s" as const,
 		value: "1970s",
 	},
 	{
-		key: "1960s",
+		key: "1960s" as const,
 		value: "1960s",
 	},
 	{
-		key: "1950s",
+		key: "1950s" as const,
 		value: "1950s",
 	},
 ];
+type LegendKey = typeof legends[number]["key"];
 
 const phases = [
 	{
@@ -215,11 +209,15 @@ type State = {
 	customize: "default" | "custom-rosters" | "custom-url" | "legends" | "real";
 	season: number;
 	phase: number;
+	name: string;
 
 	// Why keep difficulty here, rather than just using settings.difficulty? Because then it won't get reset every time settings change (new league file, etc).
 	difficulty: number;
 
-	leagueFile: any;
+	// No "keys" in BasicInfo because we don't use it for anything, so why fake it for situations it doesn't exist, like real players leagues
+	basicInfo: Omit<BasicInfo, "keys"> | undefined;
+	file: File | undefined;
+	url: string | undefined;
 	legend: string;
 	loadingLeagueFile: boolean;
 	teams: NewLeagueTeam[];
@@ -231,6 +229,7 @@ type State = {
 	keptKeys: string[];
 	expandOptions: boolean;
 	settings: Omit<Settings, "numActiveTeams">;
+	rebuildAbbrevPending?: string;
 };
 
 type Action =
@@ -264,6 +263,10 @@ type Action =
 			legend: string;
 	  }
 	| {
+			type: "setName";
+			name: string;
+	  }
+	| {
 			type: "setSeason";
 			season: number;
 	  }
@@ -282,7 +285,10 @@ type Action =
 	  }
 	| {
 			type: "newLeagueFile";
-			leagueFile: any;
+			importing: boolean;
+			basicInfo: BasicInfo;
+			file: File | undefined;
+			url: string | undefined;
 			teams: NewLeagueTeam[];
 			defaultSettings: State["settings"];
 	  }
@@ -292,6 +298,7 @@ type Action =
 			teams: NewLeagueTeam[];
 			gameAttributes: Record<string, unknown>;
 			defaultSettings: State["settings"];
+			startingSeason: number;
 	  }
 	| {
 			type: "toggleExpandOptions";
@@ -321,7 +328,11 @@ const getSettingsFromGameAttributes = (
 
 	if (gameAttributes) {
 		for (const key of helpers.keys(newSettings)) {
-			if (key === "noStartingInjuries" || key === "randomization") {
+			if (
+				key === "noStartingInjuries" ||
+				key === "randomization" ||
+				key === "realStats"
+			) {
 				continue;
 			}
 
@@ -356,7 +367,9 @@ const reducer = (state: State, action: Action): State => {
 		case "clearLeagueFile":
 			return {
 				...state,
-				leagueFile: null,
+				basicInfo: undefined,
+				file: undefined,
+				url: undefined,
 				loadingLeagueFile: false,
 				keptKeys: [],
 				teams: teamsDefault,
@@ -396,19 +409,29 @@ const reducer = (state: State, action: Action): State => {
 				legend: action.legend,
 			};
 
+		case "setName":
+			return {
+				...state,
+				name: action.name,
+			};
+
 		case "setSeason":
 			return {
 				...state,
 				season: action.season,
 			};
 
-		case "setTeams":
+		case "setTeams": {
+			const prevTeamRegionName = getTeamRegionName(state.teams, state.tid);
+
 			return {
 				...state,
 				confs: action.confs,
 				divs: action.divs,
 				teams: action.teams,
+				tid: getNewTid(prevTeamRegionName, action.teams),
 			};
+		}
 
 		case "setTid": {
 			const t = state.teams.find(t => t.tid === action.tid);
@@ -430,7 +453,7 @@ const reducer = (state: State, action: Action): State => {
 			const prevTeamRegionName = getTeamRegionName(state.teams, state.tid);
 
 			const { allKeys, keptKeys } = initKeptKeys({
-				leagueFile: action.leagueFile,
+				newAllKeys: Array.from(action.basicInfo.keys),
 				oldKeptKeys: state.keptKeys,
 				oldAllKeys: state.allKeys,
 			});
@@ -439,26 +462,25 @@ const reducer = (state: State, action: Action): State => {
 			let divs = DEFAULT_DIVS;
 
 			const newSettings = getSettingsFromGameAttributes(
-				action.leagueFile.gameAttributes,
+				action.basicInfo.gameAttributes,
 				action.defaultSettings,
 			);
 
-			if (action.leagueFile.gameAttributes) {
-				if (action.leagueFile.gameAttributes.confs) {
-					confs = unwrapGameAttribute(
-						action.leagueFile.gameAttributes,
-						"confs",
-					);
+			if (action.basicInfo.gameAttributes) {
+				if (action.basicInfo.gameAttributes.confs) {
+					confs = unwrapGameAttribute(action.basicInfo.gameAttributes, "confs");
 				}
-				if (action.leagueFile.gameAttributes.divs) {
-					divs = unwrapGameAttribute(action.leagueFile.gameAttributes, "divs");
+				if (action.basicInfo.gameAttributes.divs) {
+					divs = unwrapGameAttribute(action.basicInfo.gameAttributes, "divs");
 				}
 			}
 
-			return {
+			const updatedState: State = {
 				...state,
 				loadingLeagueFile: false,
-				leagueFile: action.leagueFile,
+				basicInfo: action.basicInfo,
+				file: action.file,
+				url: action.url,
 				allKeys,
 				keptKeys,
 				confs,
@@ -467,6 +489,17 @@ const reducer = (state: State, action: Action): State => {
 				tid: getNewTid(prevTeamRegionName, action.teams),
 				settings: newSettings,
 			};
+
+			// Update name only if we're creating a new league (not importing) and it's a meaningful name (not default League N)
+			if (
+				action.basicInfo.name &&
+				!action.importing &&
+				!action.basicInfo.name.match(/^League \d+$/)
+			) {
+				updatedState.name = action.basicInfo.name;
+			}
+
+			return updatedState;
 		}
 
 		case "newLeagueInfo": {
@@ -492,18 +525,39 @@ const reducer = (state: State, action: Action): State => {
 			const confs = unwrapGameAttribute(action.gameAttributes, "confs");
 			const divs = unwrapGameAttribute(action.gameAttributes, "divs");
 
+			let tid;
+			if (state.rebuildAbbrevPending) {
+				const t = action.teams.find(t => t.srID === state.rebuildAbbrevPending);
+				if (t) {
+					tid = t.tid;
+				}
+			}
+			if (tid === undefined) {
+				tid = getNewTid(prevTeamRegionName, action.teams);
+			}
+
 			return {
 				...state,
 				loadingLeagueFile: false,
-				leagueFile: null,
+				basicInfo: {
+					gameAttributes: action.gameAttributes,
+					maxGid: -1,
+					hasRookieContracts: true,
+					startingSeason: action.startingSeason,
+					teams: action.teams,
+					version: MAX_SUPPORTED_LEAGUE_VERSION,
+				},
+				file: undefined,
+				url: undefined,
 				allKeys,
 				keptKeys,
 				confs,
 				divs,
 				teams: action.teams,
-				tid: getNewTid(prevTeamRegionName, action.teams),
+				tid,
 				pendingInitialLeagueInfo: false,
 				settings: newSettings,
+				rebuildAbbrevPending: undefined,
 			};
 		}
 
@@ -518,8 +572,22 @@ const reducer = (state: State, action: Action): State => {
 	}
 };
 
+const getRebuildInfo = () => {
+	if (location.hash.startsWith("#rebuild=")) {
+		const rebuildSlug = location.hash.replace("#rebuild=", "");
+		const parts = rebuildSlug.split("_");
+		const abbrev = parts[1].toUpperCase();
+		const season = parseInt(parts[2]);
+		if (abbrev && !Number.isNaN(season)) {
+			return {
+				abbrev,
+				season,
+			};
+		}
+	}
+};
+
 const NewLeague = (props: View<"newLeague">) => {
-	const [name, setName] = useState(props.name);
 	const [startingSeason, setStartingSeason] = useState(
 		String(new Date().getFullYear()),
 	);
@@ -527,12 +595,20 @@ const NewLeague = (props: View<"newLeague">) => {
 		"default" | "teams" | "settings"
 	>("default");
 
+	const leagueCreationID = useRef(Math.random());
+	const { leagueCreation, leagueCreationPercent } = useLocalShallow(state => ({
+		leagueCreation: state.leagueCreation,
+		leagueCreationPercent: state.leagueCreationPercent,
+	}));
+
+	const importing = props.lid !== undefined;
+
 	const [state, dispatch] = useReducer(
 		reducer,
 		props,
 		(props: View<"newLeague">): State => {
 			let customize: State["customize"] = "default";
-			if (props.lid !== undefined) {
+			if (importing) {
 				customize = "custom-rosters";
 			}
 			if (props.type === "real") {
@@ -542,7 +618,7 @@ const NewLeague = (props: View<"newLeague">) => {
 				customize = "legends";
 			}
 
-			const leagueFile = null;
+			const basicInfo = undefined;
 
 			const teams = teamsDefault;
 
@@ -551,17 +627,26 @@ const NewLeague = (props: View<"newLeague">) => {
 				prevTeamRegionName = "";
 			}
 
-			let season = parseInt(safeLocalStorage.getItem("prevSeason") as any);
-			if (Number.isNaN(season)) {
-				season = 2021;
-			}
-			let phase = parseInt(safeLocalStorage.getItem("prevPhase") as any);
-			if (Number.isNaN(phase)) {
+			let season;
+			let phase;
+			const rebuildInfo = getRebuildInfo();
+			if (rebuildInfo) {
+				season = rebuildInfo.season;
 				phase = PHASE.PRESEASON;
+				// Can't set tid yet because we haven't loaded teams for this season - do it later with rebuildAbbrevPending
+			} else {
+				season = parseInt(safeLocalStorage.getItem("prevSeason") as any);
+				if (Number.isNaN(season)) {
+					season = 2022;
+				}
+				phase = parseInt(safeLocalStorage.getItem("prevPhase") as any);
+				if (Number.isNaN(phase)) {
+					phase = PHASE.PRESEASON;
+				}
 			}
 
 			const { allKeys, keptKeys } = initKeptKeys({
-				leagueFile,
+				newAllKeys: [],
 			});
 
 			return {
@@ -571,7 +656,10 @@ const NewLeague = (props: View<"newLeague">) => {
 				legend: "all",
 				difficulty: props.difficulty ?? DIFFICULTY.Normal,
 				phase,
-				leagueFile,
+				name: props.name,
+				basicInfo,
+				file: undefined,
+				url: undefined,
 				loadingLeagueFile: false,
 				teams: teamsDefault,
 				confs: DEFAULT_CONFS,
@@ -582,12 +670,13 @@ const NewLeague = (props: View<"newLeague">) => {
 				keptKeys,
 				expandOptions: false,
 				settings: props.defaultSettings,
+				rebuildAbbrevPending: rebuildInfo?.abbrev,
 			};
 		},
 	);
 
 	let title: string;
-	if (props.lid !== undefined) {
+	if (importing) {
 		title = "Import League";
 	} else if (props.type === "custom") {
 		title = SPORT_HAS_REAL_PLAYERS ? "New Custom League" : "New League";
@@ -599,8 +688,14 @@ const NewLeague = (props: View<"newLeague">) => {
 		title = "New Real Players League";
 	}
 
+	const keptKeysIsAvailable = state.allKeys.length > 0;
+	const displayedTeams =
+		!keptKeysIsAvailable || state.keptKeys.includes("teams")
+			? state.teams
+			: teamsDefault;
+
 	const createLeague = async (settingsOverride?: State["settings"]) => {
-		if (props.lid !== undefined) {
+		if (importing) {
 			const result = await confirm(
 				`Are you sure you want to import this league? All the data currently in "${props.name}" will be overwritten.`,
 				{
@@ -627,7 +722,7 @@ const NewLeague = (props: View<"newLeague">) => {
 			? settings.randomization === "shuffle"
 			: false;
 
-		const actualStartingSeason =
+		const startingSeasonFromInput =
 			state.customize === "default" ? startingSeason : undefined;
 
 		try {
@@ -641,11 +736,12 @@ const NewLeague = (props: View<"newLeague">) => {
 						settings.randomization === "debuts" ||
 						settings.randomization === "debutsForever",
 					realDraftRatings: settings.realDraftRatings,
+					realStats: settings.realStats,
 				};
 			} else if (state.customize === "legends") {
 				getLeagueOptions = {
 					type: "legends",
-					decade: state.legend as any,
+					decade: state.legend as LegendKey,
 				};
 			}
 
@@ -656,19 +752,32 @@ const NewLeague = (props: View<"newLeague">) => {
 				safeLocalStorage.setItem("prevPhase", String(state.phase));
 			}
 
+			// If undefined, it's random players, so make this true to not trigger this logic downstream
+			const hasRookieContracts = state.basicInfo?.hasRookieContracts ?? true;
+
 			const lid = await toWorker("main", "createLeague", {
-				name,
+				name: state.name,
 				tid: state.tid,
-				leagueFileInput: state.leagueFile,
+				file: state.file,
+				url: state.url,
 				keptKeys: state.keptKeys,
 				shuffleRosters: actualShuffleRosters,
 				importLid: props.lid,
 				getLeagueOptions,
-				actualStartingSeason,
+				startingSeasonFromInput,
 				confs: state.confs,
 				divs: state.divs,
-				teams: state.teams,
+				teamsFromInput: displayedTeams,
 				settings,
+				fromFile: {
+					gameAttributes: state.basicInfo?.gameAttributes,
+					maxGid: state.basicInfo?.maxGid,
+					hasRookieContracts,
+					startingSeason: state.basicInfo?.startingSeason,
+					teams: state.basicInfo?.teams,
+					version: state.basicInfo?.version,
+				},
+				leagueCreationID: leagueCreationID.current,
 			});
 
 			let type: string = state.customize;
@@ -701,76 +810,81 @@ const NewLeague = (props: View<"newLeague">) => {
 		}
 	};
 
-	const handleNewLeagueFile = useCallback(
-		(err, newLeagueFile) => {
-			if (err) {
-				dispatch({ type: "clearLeagueFile" });
-				return;
-			}
+	const handleNewLeagueFile = (
+		err: Error | null,
+		output?: LeagueFileUploadOutput,
+	) => {
+		if (err) {
+			dispatch({ type: "clearLeagueFile" });
+			return;
+		}
 
-			let newTeams = helpers.deepCopy(newLeagueFile.teams);
-			if (newTeams) {
-				for (const t of newTeams) {
-					// Is pop hidden in season, like in manageTeams import?
-					if (!t.hasOwnProperty("pop") && t.hasOwnProperty("seasons")) {
-						t.pop = t.seasons[t.seasons.length - 1].pop;
-					}
+		const { basicInfo, file, url } = output!;
 
-					// God, I hate being permissive...
-					if (typeof t.pop !== "number") {
-						t.pop = parseFloat(t.pop);
-					}
-					if (Number.isNaN(t.pop)) {
-						t.pop = 1;
-					}
-
-					t.pop = parseFloat(t.pop.toFixed(2));
+		let newTeams = helpers.deepCopy(basicInfo.teams);
+		if (newTeams) {
+			for (const t of newTeams) {
+				// Is pop hidden in season, like in manageTeams import?
+				if (!t.hasOwnProperty("pop") && t.hasOwnProperty("seasons")) {
+					t.pop = t.seasons.at(-1).pop;
 				}
 
-				newTeams = helpers.addPopRank(newTeams);
-			} else {
-				newTeams = teamsDefault;
+				// God, I hate being permissive...
+				if (typeof t.pop !== "number") {
+					t.pop = parseFloat(t.pop);
+				}
+				if (Number.isNaN(t.pop)) {
+					t.pop = 1;
+				}
+
+				t.pop = parseFloat(t.pop.toFixed(2));
 			}
 
-			if (newLeagueFile.gameAttributes) {
-				if (Array.isArray(newLeagueFile.gameAttributes)) {
-					newLeagueFile.gameAttributes = gameAttributesArrayToObject(
-						newLeagueFile.gameAttributes,
-					);
+			newTeams = helpers.addPopRank(newTeams);
+		} else {
+			newTeams = teamsDefault;
+		}
+
+		if (basicInfo.gameAttributes) {
+			if (Array.isArray(basicInfo.gameAttributes)) {
+				basicInfo.gameAttributes = gameAttributesArrayToObject(
+					basicInfo.gameAttributes,
+				);
+			}
+		}
+
+		dispatch({
+			type: "newLeagueFile",
+			importing,
+			basicInfo,
+			file,
+			url,
+			teams: applyRealTeamInfos(
+				newTeams,
+				props.realTeamInfo,
+				basicInfo.startingSeason,
+			),
+			defaultSettings: props.defaultSettings,
+		});
+
+		// Need to update team and difficulty dropdowns?
+		if (basicInfo.gameAttributes) {
+			if (basicInfo.gameAttributes.userTid !== undefined) {
+				let tid = basicInfo.gameAttributes.userTid;
+				if (Array.isArray(tid) && tid.length > 0) {
+					tid = tid.at(-1).value;
+				}
+				if (typeof tid === "number" && !Number.isNaN(tid)) {
+					dispatch({ type: "setTid", tid });
 				}
 			}
 
-			dispatch({
-				type: "newLeagueFile",
-				leagueFile: newLeagueFile,
-				teams: applyRealTeamInfos(
-					newTeams,
-					props.realTeamInfo,
-					newLeagueFile.startingSeason,
-				),
-				defaultSettings: props.defaultSettings,
-			});
-
-			// Need to update team and difficulty dropdowns?
-			if (newLeagueFile.gameAttributes) {
-				if (newLeagueFile.gameAttributes.userTid !== undefined) {
-					let tid = newLeagueFile.gameAttributes.userTid;
-					if (Array.isArray(tid) && tid.length > 0) {
-						tid = tid[tid.length - 1].value;
-					}
-					if (typeof tid === "number" && !Number.isNaN(tid)) {
-						dispatch({ type: "setTid", tid });
-					}
-				}
-
-				const difficulty = newLeagueFile.gameAttributes.difficulty;
-				if (typeof difficulty === "number" && !Number.isNaN(difficulty)) {
-					dispatch({ type: "setDifficulty", difficulty: String(difficulty) });
-				}
+			const difficulty = basicInfo.gameAttributes.difficulty;
+			if (typeof difficulty === "number" && !Number.isNaN(difficulty)) {
+				dispatch({ type: "setDifficulty", difficulty: String(difficulty) });
 			}
-		},
-		[props.defaultSettings, props.realTeamInfo],
-	);
+		}
+	};
 
 	const handleNewLeagueInfo = (leagueInfo: LeagueInfo) => {
 		const newTeams = helpers.addPopRank(helpers.deepCopy(leagueInfo.teams));
@@ -785,6 +899,7 @@ const NewLeague = (props: View<"newLeague">) => {
 			),
 			gameAttributes: leagueInfo.gameAttributes,
 			defaultSettings: props.defaultSettings,
+			startingSeason: leagueInfo.startingSeason,
 		});
 	};
 
@@ -803,7 +918,7 @@ const NewLeague = (props: View<"newLeague">) => {
 	let subPage = null;
 	if (currentScreen === "teams") {
 		subPage = (
-			<motion.div
+			<m.div
 				key="screen-teams"
 				variants={animationVariants}
 				initial="right"
@@ -836,22 +951,15 @@ const NewLeague = (props: View<"newLeague">) => {
 					}}
 					godModeLimits={props.godModeLimits}
 				/>
-			</motion.div>
+			</m.div>
 		);
 	}
 
-	const keptKeysIsAvailable = state.customize.startsWith("custom");
-	const displayedTeams =
-		!keptKeysIsAvailable || state.keptKeys.includes("teams")
-			? state.teams
-			: teamsDefault;
-
-	const createLeagueText =
-		props.lid !== undefined ? "Import League" : "Create League";
+	const createLeagueText = importing ? "Import League" : "Create League";
 
 	if (currentScreen === "settings") {
 		subPage = (
-			<motion.div
+			<m.div
 				key="screen-settings"
 				variants={animationVariants}
 				initial="right"
@@ -876,14 +984,15 @@ const NewLeague = (props: View<"newLeague">) => {
 					// Don't want legends for this!
 					realPlayers={state.customize === "real"}
 				/>
-			</motion.div>
+			</m.div>
 		);
 	}
 
 	const disableWhileLoadingLeagueFile =
 		((state.customize === "custom-rosters" ||
 			state.customize === "custom-url") &&
-			(state.leagueFile === null || state.loadingLeagueFile)) ||
+			((state.file === undefined && state.url === undefined) ||
+				state.loadingLeagueFile)) ||
 		((state.customize === "real" || state.customize === "legends") &&
 			state.pendingInitialLeagueInfo);
 	const showLoadingIndicator =
@@ -894,9 +1003,7 @@ const NewLeague = (props: View<"newLeague">) => {
 
 	const bannedExpansionSeasons = [
 		// Because of other mergers
-		1947,
-		1948,
-		1949,
+		1947, 1948, 1949,
 
 		// Because of ABA merger
 		1976,
@@ -909,9 +1016,9 @@ const NewLeague = (props: View<"newLeague">) => {
 		invalidSeasonPhaseMessage =
 			"Starting after the playoffs is not yet supported for seasons where league mergers occurred.";
 	}
-	if (state.season === 2021 && state.phase > PHASE.PRESEASON) {
+	if (state.season === 2022 && state.phase > PHASE.PRESEASON) {
 		invalidSeasonPhaseMessage =
-			"Sorry, I'm not allowed to share the results of the 2021 season yet.";
+			"Sorry, I'm not allowed to share the results of the 2022 season yet.";
 	}
 
 	const sortedDisplayedTeams = orderBy(displayedTeams, ["region", "name"]);
@@ -922,7 +1029,7 @@ const NewLeague = (props: View<"newLeague">) => {
 			{subPage ? (
 				subPage
 			) : (
-				<motion.form
+				<m.form
 					key="screen-main"
 					variants={animationVariants}
 					initial="left"
@@ -934,7 +1041,7 @@ const NewLeague = (props: View<"newLeague">) => {
 					}}
 					style={{ maxWidth: 800 }}
 				>
-					{props.lid !== undefined ? (
+					{importing ? (
 						<>
 							<p>
 								Here you can create a new league that overwrites one of your
@@ -950,22 +1057,32 @@ const NewLeague = (props: View<"newLeague">) => {
 					) : null}
 					<div className="row">
 						<div className="col-sm-6">
-							<div className="form-group">
-								<label htmlFor="new-league-name">League name</label>
+							<div className="mb-3">
+								<label className="form-label" htmlFor="new-league-name">
+									League name
+								</label>
 								<input
 									id="new-league-name"
 									className="form-control"
 									type="text"
-									value={name}
+									value={state.name}
 									onChange={event => {
-										setName(event.target.value);
+										dispatch({
+											type: "setName",
+											name: event.target.value,
+										});
 									}}
 								/>
 							</div>
 
 							{state.customize === "default" ? (
-								<div className="form-group">
-									<label htmlFor="new-league-starting-season">Season</label>
+								<div className="mb-3">
+									<label
+										className="form-label"
+										htmlFor="new-league-starting-season"
+									>
+										Season
+									</label>
 									<input
 										id="new-league-starting-season"
 										className="form-control"
@@ -980,31 +1097,33 @@ const NewLeague = (props: View<"newLeague">) => {
 
 							{state.customize === "real" ? (
 								<>
-									<div className="form-group">
+									<div className="mb-3">
 										<LeagueMenu
 											value={String(state.season)}
 											values={seasons}
-											getLeagueInfo={(value, value2) =>
-												toWorker("main", "getLeagueInfo", {
-													type: "real",
-													season: parseInt(value),
-													phase: value2,
-													randomDebuts:
-														state.settings.randomization === "debuts" ||
-														state.settings.randomization === "debutsForever",
-													realDraftRatings: state.settings.realDraftRatings,
-												})
-											}
+											getLeagueInfo={async (value, value2) => {
+												const leagueInfo = await toWorker(
+													"main",
+													"getLeagueInfo",
+													{
+														type: "real",
+														season: parseInt(value),
+														phase: value2,
+														randomDebuts:
+															state.settings.randomization === "debuts" ||
+															state.settings.randomization === "debutsForever",
+														realDraftRatings: state.settings.realDraftRatings,
+
+														// Adding historical seasons just screws up tid
+														realStats: "none",
+													},
+												);
+
+												return leagueInfo;
+											}}
 											onLoading={value => {
 												const season = parseInt(value);
 												dispatch({ type: "setSeason", season });
-
-												if (season === 2021) {
-													dispatch({
-														type: "setPhase",
-														phase: PHASE.PRESEASON,
-													});
-												}
 											}}
 											onDone={handleNewLeagueInfo}
 											quickValues={[
@@ -1013,7 +1132,7 @@ const NewLeague = (props: View<"newLeague">) => {
 												"1984",
 												"1996",
 												"2003",
-												"2021",
+												"2022",
 											]}
 											value2={state.phase}
 											values2={phases}
@@ -1039,16 +1158,22 @@ const NewLeague = (props: View<"newLeague">) => {
 							) : null}
 
 							{state.customize === "legends" ? (
-								<div className="form-group">
+								<div className="mb-3">
 									<LeagueMenu
 										value={state.legend}
 										values={legends}
-										getLeagueInfo={value =>
-											toWorker("main", "getLeagueInfo", {
-												type: "legends",
-												decade: value,
-											})
-										}
+										getLeagueInfo={async value => {
+											const leagueInfo = await toWorker(
+												"main",
+												"getLeagueInfo",
+												{
+													type: "legends",
+													decade: value as LegendKey,
+												},
+											);
+
+											return leagueInfo;
+										}}
 										onLoading={legend => {
 											dispatch({ type: "setLegend", legend });
 										}}
@@ -1057,8 +1182,8 @@ const NewLeague = (props: View<"newLeague">) => {
 								</div>
 							) : null}
 
-							<div className="form-group">
-								<label htmlFor="new-league-team" className="mr-2">
+							<div className="mb-3">
+								<label htmlFor="new-league-team" className="form-label me-2">
 									Pick your team
 								</label>
 								<NextPrevButtons
@@ -1077,7 +1202,7 @@ const NewLeague = (props: View<"newLeague">) => {
 								<div className="input-group mb-1">
 									<select
 										id="new-league-team"
-										className="form-control"
+										className="form-select"
 										disabled={disableWhileLoadingLeagueFile}
 										value={state.tid}
 										onChange={event => {
@@ -1098,35 +1223,31 @@ const NewLeague = (props: View<"newLeague">) => {
 										})}
 									</select>
 									{state.customize === "default" ? (
-										<div className="input-group-append new-league-customize-teams-wrapper">
-											<button
-												className="btn btn-secondary"
-												disabled={disableWhileLoadingLeagueFile}
-												type="button"
-												onClick={() => {
-													setCurrentScreen("teams");
-												}}
-											>
-												Customize
-											</button>
-										</div>
-									) : null}
-									<div className="input-group-append">
 										<button
-											className="btn btn-secondary"
+											className="btn btn-light-bordered"
 											disabled={disableWhileLoadingLeagueFile}
 											type="button"
 											onClick={() => {
-												const t =
-													displayedTeams[
-														Math.floor(Math.random() * displayedTeams.length)
-													];
-												dispatch({ type: "setTid", tid: t.tid });
+												setCurrentScreen("teams");
 											}}
 										>
-											Random
+											Customize
 										</button>
-									</div>
+									) : null}
+									<button
+										className="btn btn-light-bordered"
+										disabled={disableWhileLoadingLeagueFile}
+										type="button"
+										onClick={() => {
+											const t =
+												displayedTeams[
+													Math.floor(Math.random() * displayedTeams.length)
+												];
+											dispatch({ type: "setTid", tid: t.tid });
+										}}
+									>
+										Random
+									</button>
 								</div>
 								{!state.settings.equalizeRegions ? (
 									<PopText
@@ -1144,11 +1265,13 @@ const NewLeague = (props: View<"newLeague">) => {
 								)}
 							</div>
 
-							<div className="form-group">
-								<label htmlFor="new-league-difficulty">Difficulty</label>
+							<div className="mb-3">
+								<label className="form-label" htmlFor="new-league-difficulty">
+									Difficulty
+								</label>
 								<select
 									id="new-league-difficulty"
-									className="form-control mb-1"
+									className="form-select mb-1"
 									onChange={event => {
 										dispatch({
 											type: "setDifficulty",
@@ -1172,21 +1295,28 @@ const NewLeague = (props: View<"newLeague">) => {
 							</div>
 
 							<div className="text-center mt-3">
-								<button
+								<ActionButton
+									className="me-2"
+									size="lg"
 									type="submit"
-									className="btn btn-lg btn-primary mr-2"
 									disabled={
 										state.creating ||
 										disableWhileLoadingLeagueFile ||
 										!!invalidSeasonPhaseMessage
 									}
+									processing={state.creating}
 								>
 									{createLeagueText}
-								</button>
+								</ActionButton>
 
 								<button
 									className="btn btn-lg btn-secondary"
 									type="button"
+									disabled={
+										state.creating ||
+										disableWhileLoadingLeagueFile ||
+										!!invalidSeasonPhaseMessage
+									}
 									onClick={() => {
 										setCurrentScreen("settings");
 									}}
@@ -1194,6 +1324,17 @@ const NewLeague = (props: View<"newLeague">) => {
 									Customize Settings
 								</button>
 							</div>
+
+							{(state.file || state.url) &&
+							(leagueCreationPercent?.id === leagueCreationID.current ||
+								leagueCreation?.id === leagueCreationID.current) ? (
+								<div className="mt-3">
+									<ProgressBarText
+										text={leagueCreation?.status ?? ""}
+										percent={leagueCreationPercent?.percent ?? 0}
+									/>
+								</div>
+							) : null}
 						</div>
 
 						{props.type === "custom" ||
@@ -1254,7 +1395,7 @@ const NewLeague = (props: View<"newLeague">) => {
 														time.
 													</p>
 													<p className="mb-0">
-														<a href="https://basketball-gm.com/blog/2020/05/legends-leagues/">
+														<a href="https://zengm.com/blog/2020/05/legends-leagues/">
 															More details
 														</a>
 													</p>
@@ -1268,9 +1409,9 @@ const NewLeague = (props: View<"newLeague">) => {
 											style={{ marginBottom: "-1rem" }}
 										>
 											<h2 className="card-title">Customize</h2>
-											<div className="form-group">
+											<div className="mb-3">
 												<select
-													className="form-control"
+													className="form-select"
 													onChange={event => {
 														const newCustomize = event.target.value as any;
 														dispatch({
@@ -1328,7 +1469,6 @@ const NewLeague = (props: View<"newLeague">) => {
 														}}
 														onDone={handleNewLeagueFile}
 														enterURL={state.customize === "custom-url"}
-														hideLoadedMessage
 													/>
 												</div>
 											) : null}
@@ -1346,17 +1486,10 @@ const NewLeague = (props: View<"newLeague">) => {
 							</div>
 						) : null}
 					</div>
-				</motion.form>
+				</m.form>
 			)}
 		</AnimatePresence>
 	);
-};
-
-NewLeague.propTypes = {
-	difficulty: PropTypes.number,
-	lid: PropTypes.number,
-	name: PropTypes.string.isRequired,
-	type: PropTypes.string.isRequired,
 };
 
 export default NewLeague;

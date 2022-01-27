@@ -33,7 +33,7 @@ export const validateAbbrev = (
 
 		{
 			const parts = abbrev.split("_");
-			const int = parseInt(parts[parts.length - 1]);
+			const int = parseInt(parts.at(-1));
 			if (!Number.isNaN(int) && int < g.get("teamInfoCache").length) {
 				return [int, g.get("teamInfoCache")[int]?.abbrev];
 			}
@@ -68,7 +68,7 @@ export const validateSeason = (season?: number | string): number => {
 	}
 
 	if (typeof season === "string") {
-		season = parseInt(season, 10);
+		season = parseInt(season);
 	}
 
 	if (Number.isNaN(season)) {
@@ -94,7 +94,7 @@ const awardsRecords = (params: Params) => {
 const customizePlayer = (params: Params) => {
 	let pid: number | null = null;
 	if (typeof params.pid === "string") {
-		pid = parseInt(params.pid, 10);
+		pid = parseInt(params.pid);
 		if (Number.isNaN(pid) || pid < 0) {
 			pid = null;
 		}
@@ -138,10 +138,13 @@ const depth = (params: Params) => {
 	});
 
 	// https://github.com/microsoft/TypeScript/issues/21732
-	// @ts-ignore
+	// @ts-expect-error
 	const pos: string = POSITIONS.includes(params.pos) ? params.pos : DEFAULT_POS;
 
-	return { abbrev, pos, tid };
+	const playoffs =
+		params.playoffs === "playoffs" ? "playoffs" : "regularSeason";
+
+	return { abbrev, playoffs, pos, tid };
 };
 
 const draft = () => {
@@ -176,14 +179,30 @@ const draftLottery = (params: Params) => {
 	};
 };
 
-const draftSummary = (params: Params) => {
-	let season = validateSeason(params.season); // Draft hasn't happened yet this year
+const draftHistory = (params: Params) => {
+	let season: number;
 
-	if (g.get("phase") < PHASE.DRAFT) {
-		if (season === g.get("season")) {
-			// View last season by default
-			season = g.get("season") - 1;
-		}
+	const draftAlreadyHappened = g.get("phase") >= PHASE.DRAFT;
+	const currentSeason = g.get("season");
+
+	if (
+		(params.season === undefined || params.season === String(currentSeason)) &&
+		!draftAlreadyHappened
+	) {
+		// View last season by default
+		season = currentSeason - 1;
+	} else {
+		season = validateSeason(params.season);
+	}
+
+	if (
+		season > currentSeason ||
+		(season === currentSeason && !draftAlreadyHappened)
+	) {
+		// Future draft class
+		return {
+			redirectUrl: helpers.leagueUrl(["draft_scouting"]),
+		};
 	}
 
 	return {
@@ -245,7 +264,7 @@ const gameLog = (params: Params) => {
 		params.abbrev === "special" ? "special" : validateAbbrev(params.abbrev)[1];
 	return {
 		abbrev,
-		gid: params.gid !== undefined ? parseInt(params.gid, 10) : -1,
+		gid: params.gid !== undefined ? parseInt(params.gid) : -1,
 		season: validateSeason(params.season),
 	};
 };
@@ -340,17 +359,39 @@ const leaders = (params: Params) => {
 	};
 };
 
+const dailySchedule = (params: Params) => {
+	if (params.season === "today") {
+		return {
+			day: undefined,
+			season: g.get("season"),
+			today: true,
+		};
+	}
+
+	const season = validateSeason(params.season);
+
+	let day = params.day === undefined ? undefined : parseInt(params.day as any);
+	if (Number.isNaN(day)) {
+		day = 1;
+	}
+
+	return {
+		day,
+		season,
+	};
+};
+
 const liveGame = (params: Params, ctxBBGM: any) => {
 	const obj: {
 		fromAction: boolean;
-		gidPlayByPlay?: number;
+		gid?: number;
 		playByPlay?: any[];
 	} = {
 		fromAction: !!ctxBBGM.fromAction,
 	};
 
 	if (ctxBBGM.playByPlay !== undefined) {
-		obj.gidPlayByPlay = ctxBBGM.gidPlayByPlay;
+		obj.gid = ctxBBGM.gidOneGame;
 		obj.playByPlay = ctxBBGM.playByPlay;
 	}
 
@@ -359,7 +400,7 @@ const liveGame = (params: Params, ctxBBGM: any) => {
 
 const message = (params: Params) => {
 	return {
-		mid: params.mid ? parseInt(params.mid, 10) : undefined,
+		mid: params.mid ? parseInt(params.mid) : undefined,
 	};
 };
 
@@ -374,7 +415,7 @@ const negotiation = (params: Params) => {
 	// undefined will load whatever the active one is
 	let pid: number | undefined;
 	if (typeof params.pid === "string") {
-		pid = parseInt(params.pid, 10);
+		pid = parseInt(params.pid);
 		if (Number.isNaN(pid) || pid < 0) {
 			pid = undefined;
 		}
@@ -403,7 +444,7 @@ const newLeague = (params: Params) => {
 	} else if (params.x === "legends") {
 		type = "legends";
 	} else if (params.x !== undefined) {
-		lid = parseInt(params.x, 10);
+		lid = parseInt(params.x);
 		if (Number.isNaN(lid)) {
 			lid = undefined;
 		}
@@ -455,7 +496,7 @@ const news = (params: Params) => {
 
 const player = (params: Params) => {
 	return {
-		pid: params.pid !== undefined ? parseInt(params.pid, 10) : undefined,
+		pid: params.pid !== undefined ? parseInt(params.pid) : undefined,
 	};
 };
 
@@ -482,6 +523,13 @@ const playerFeats = (params: Params) => {
 	return {
 		abbrev,
 		season,
+	};
+};
+
+const playerGameLog = (params: Params) => {
+	return {
+		pid: params.pid !== undefined ? parseInt(params.pid) : undefined,
+		season: validateSeason(params.season),
 	};
 };
 
@@ -528,10 +576,17 @@ const playerStats = (params: Params) => {
 		football: "passing",
 		hockey: "skater",
 	});
+
+	let season: "career" | "all" | number;
+	if (params.season === "career" || params.season === "all") {
+		season = params.season;
+	} else {
+		season = validateSeason(params.season);
+	}
+
 	return {
 		abbrev,
-		season:
-			params.season === "career" ? undefined : validateSeason(params.season),
+		season,
 		statType: params.statType ?? defaultStatType,
 		playoffs,
 	};
@@ -643,11 +698,14 @@ const leagueStats = (params: Params) => {
 };
 
 const standings = (params: Params) => {
-	let type: "conf" | "div" | "league" = bySport({
-		basketball: "conf",
-		football: "div",
-		hockey: "div",
-	});
+	let type: "conf" | "div" | "league" =
+		g.get("numGamesPlayoffSeries").length === 0
+			? "league"
+			: bySport({
+					basketball: "conf",
+					football: "div",
+					hockey: "div",
+			  });
 	if (
 		params.type === "conf" ||
 		params.type === "div" ||
@@ -748,6 +806,21 @@ const watchList = (params: Params) => {
 	return { playoffs, statType, flagNote };
 };
 
+const powerRankings = (params: Params) => {
+	let playoffs =
+		g.get("phase") === PHASE.PLAYOFFS ? "playoffs" : "regularSeason";
+	if (params.playoffs === "playoffs") {
+		playoffs = "playoffs";
+	} else if (params.playoffs === "regularSeason") {
+		playoffs = "regularSeason";
+	}
+
+	return {
+		playoffs,
+		season: validateSeason(params.season),
+	};
+};
+
 const validateSeasonOnly = (params: Params) => {
 	return {
 		season: validateSeason(params.season),
@@ -756,13 +829,17 @@ const validateSeasonOnly = (params: Params) => {
 
 export default {
 	account,
+	allStarDraft: validateSeasonOnly,
+	allStarDunk: validateSeasonOnly,
+	allStarThree: validateSeasonOnly,
 	awardRaces: validateSeasonOnly,
 	awardsRecords,
 	customizePlayer,
+	dailySchedule,
 	depth,
 	draft,
 	draftLottery,
-	draftSummary,
+	draftHistory,
 	draftTeamHistory,
 	editAwards: validateSeasonOnly,
 	exportPlayers: validateSeasonOnly,
@@ -788,16 +865,18 @@ export default {
 	player,
 	playerBios: playerRatings,
 	playerFeats,
+	playerGameLog,
 	playerRatingDists: validateSeasonOnly,
 	playerRatings,
 	playerStatDists,
 	playerStats,
 	playoffs: validateSeasonOnly,
-	powerRankings: validateSeasonOnly,
+	powerRankings,
 	relatives: player,
 	resetPassword,
 	roster,
 	schedule,
+	seasonPreview: validateSeasonOnly,
 	standings,
 	teamFinances,
 	teamHistory,

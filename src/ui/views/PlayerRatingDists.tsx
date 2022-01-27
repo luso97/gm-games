@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { BoxPlot, MoreLinks } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import type { View } from "../../common/types";
@@ -40,10 +39,10 @@ const PlayerRatingDists = ({
 					{Object.keys(ratingsAll).map(rating => {
 						return (
 							<tr key={rating}>
-								<td className="pr-3 text-right">{rating}</td>
+								<td className="pe-3 text-end">{rating}</td>
 								<td style={width100}>
 									<BoxPlot
-										color="var(--blue)"
+										color="var(--bs-blue)"
 										data={ratingsAll[rating]}
 										scale={[0, 100]}
 									/>
@@ -55,11 +54,6 @@ const PlayerRatingDists = ({
 			</table>
 		</>
 	);
-};
-
-PlayerRatingDists.propTypes = {
-	ratingsAll: PropTypes.object.isRequired,
-	season: PropTypes.number.isRequired,
 };
 
 export default PlayerRatingDists;

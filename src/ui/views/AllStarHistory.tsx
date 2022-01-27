@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { DataTable, MoreLinks } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
@@ -17,14 +16,6 @@ const PlayerName = ({
 	}
 
 	return <a href={helpers.leagueUrl(["player", p.pid])}>{p.name}</a>;
-};
-PlayerName.propTypes = {
-	p: PropTypes.shape({
-		abbrev: PropTypes.string.isRequired,
-		name: PropTypes.string.isRequired,
-		pid: PropTypes.number.isRequired,
-		tid: PropTypes.number.isRequired,
-	}),
 };
 
 const PlayerTeam = ({
@@ -46,13 +37,6 @@ const PlayerTeam = ({
 			{p.abbrev}
 		</a>
 	);
-};
-PlayerTeam.propTypes = {
-	p: PropTypes.shape({
-		abbrev: PropTypes.string.isRequired,
-		tid: PropTypes.number.isRequired,
-	}),
-	season: PropTypes.number.isRequired,
 };
 
 const resultText = ({
@@ -121,18 +105,11 @@ const ResultText = ({
 		</>
 	);
 };
-ResultText.propTypes = {
-	gid: PropTypes.number,
-	overtimes: PropTypes.number,
-	score: PropTypes.arrayOf(PropTypes.number),
-	season: PropTypes.number.isRequired,
-	teamNames: PropTypes.arrayOf(PropTypes.string).isRequired,
-};
 
 const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 	useTitleBar({ title: "All-Star History" });
 
-	const cols = getCols(
+	const cols = getCols([
 		"Season",
 		"Result",
 		"Captain 1",
@@ -141,7 +118,12 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 		"Team",
 		"MVP",
 		"Team",
-	);
+		"Dunk Winner",
+		"Team",
+		"Three-Point Winner",
+		"Team",
+		"Links",
+	]);
 
 	const rows = allAllStars.map(row => {
 		const classNamesCaptain1 =
@@ -150,6 +132,10 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 			row.captain2 && row.captain2.tid === userTid ? "table-info" : "";
 		const classNamesMVP =
 			row.mvp && row.mvp.tid === userTid ? "table-info" : "";
+		const classNamesDunk =
+			row.dunk && row.dunk.tid === userTid ? "table-info" : "";
+		const classNamesThree =
+			row.three && row.three.tid === userTid ? "table-info" : "";
 
 		const rowResultText = resultText(row);
 
@@ -162,7 +148,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 					sortValue: rowResultText,
 					value: (
 						// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-						// @ts-ignore
+						// @ts-expect-error
 						<ResultText
 							gid={row.gid}
 							overtimes={row.overtimes}
@@ -175,7 +161,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesCaptain1,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerName p={row.captain1}>
 							{row.captain1 ? row.captain1.name : "???"}
 						</PlayerName>
@@ -184,7 +170,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesCaptain1,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerTeam p={row.captain1} season={row.season}>
 							{row.captain1 ? row.captain1.abbrev : "???"}
 						</PlayerTeam>
@@ -193,7 +179,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesCaptain2,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerName p={row.captain2}>
 							{row.captain2 ? row.captain2.name : "???"}
 						</PlayerName>
@@ -202,7 +188,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesCaptain2,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerTeam p={row.captain2} season={row.season}>
 							{row.captain2 ? row.captain2.abbrev : "???"}
 						</PlayerTeam>
@@ -211,7 +197,7 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesMVP,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerName p={row.mvp}>
 							{row.mvp ? row.mvp.name : "???"}
 						</PlayerName>
@@ -220,12 +206,61 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 				{
 					classNames: classNamesMVP,
 					value: (
-						// @ts-ignore
+						// @ts-expect-error
 						<PlayerTeam p={row.mvp} season={row.season}>
 							{row.mvp ? row.mvp.abbrev : "???"}
 						</PlayerTeam>
 					),
 				},
+				{
+					classNames: classNamesDunk,
+					value: (
+						// @ts-expect-error
+						<PlayerName p={row.dunk}>
+							{row.dunk ? row.dunk.name : "???"}
+						</PlayerName>
+					),
+				},
+				{
+					classNames: classNamesDunk,
+					value: (
+						// @ts-expect-error
+						<PlayerTeam p={row.dunk} season={row.season}>
+							{row.dunk ? row.dunk.abbrev : "???"}
+						</PlayerTeam>
+					),
+				},
+				{
+					classNames: classNamesThree,
+					value: (
+						// @ts-expect-error
+						<PlayerName p={row.three}>
+							{row.three ? row.three.name : "???"}
+						</PlayerName>
+					),
+				},
+				{
+					classNames: classNamesThree,
+					value: (
+						// @ts-expect-error
+						<PlayerTeam p={row.three} season={row.season}>
+							{row.three ? row.three.abbrev : "???"}
+						</PlayerTeam>
+					),
+				},
+				<>
+					<a href={helpers.leagueUrl(["all_star", "draft", row.season])}>
+						Draft Results
+					</a>{" "}
+					|{" "}
+					<a href={helpers.leagueUrl(["all_star", "dunk", row.season])}>
+						Dunk Contest
+					</a>{" "}
+					|{" "}
+					<a href={helpers.leagueUrl(["all_star", "three", row.season])}>
+						Three-Point Contest
+					</a>
+				</>,
 			],
 		};
 	});
@@ -245,11 +280,6 @@ const AllStarHistory = ({ allAllStars, userTid }: View<"allStarHistory">) => {
 			/>
 		</>
 	);
-};
-
-AllStarHistory.propTypes = {
-	allAllStars: PropTypes.arrayOf(PropTypes.object).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default AllStarHistory;

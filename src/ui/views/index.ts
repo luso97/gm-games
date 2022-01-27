@@ -1,21 +1,28 @@
 import Account from "./Account";
-import AllStarDraft from "./AllStarDraft";
-import AllStarHistory from "./AllStarHistory";
 import AccountUpdateCard from "./AccountUpdateCard";
+import Achievements from "./Achievements";
+import AllStar from "./AllStar";
+import AllStarDraft from "./AllStarDraft";
+import AllStarDunk from "./AllStarDunk";
+import AllStarHistory from "./AllStarHistory";
+import AllStarThree from "./AllStarThree";
 import AwardRaces from "./AwardRaces";
 import AwardsRecords from "./AwardsRecords";
 import Colleges from "./Colleges";
 import Countries from "./Countries";
 import CustomizePlayer from "./CustomizePlayer";
+import DailySchedule from "./DailySchedule";
 import DangerZone from "./DangerZone";
 import Dashboard from "./Dashboard";
+import DefaultNewLeagueSettings from "./DefaultNewLeagueSettings";
 import DeleteOldData from "./DeleteOldData";
 import Depth from "./Depth";
 import Draft from "./Draft";
 import DraftLottery from "./DraftLottery";
 import DraftScouting from "./DraftScouting";
-import DraftSummary from "./DraftSummary";
+import DraftHistory from "./DraftHistory";
 import DraftTeamHistory from "./DraftTeamHistory";
+import Dropbox from "./Dropbox";
 import EditAwards from "./EditAwards";
 import ExpansionDraft from "./ExpansionDraft";
 import ExportLeague from "./ExportLeague";
@@ -25,6 +32,7 @@ import FantasyDraft from "./FantasyDraft";
 import FreeAgents from "./FreeAgents";
 import Frivolities from "./Frivolities";
 import FrivolitiesDraftClasses from "./FrivolitiesDraftClasses";
+import FrivolitiesDraftPosition from "./FrivolitiesDraftPosition";
 import FrivolitiesJerseyNumbers from "./FrivolitiesJerseyNumbers";
 import FrivolitiesTeamSeasons from "./FrivolitiesTeamSeasons";
 import FrivolitiesTrades from "./FrivolitiesTrades";
@@ -44,7 +52,6 @@ import Leaders from "./Leaders";
 import LeagueDashboard from "./LeagueDashboard";
 import LeagueFinances from "./LeagueFinances";
 import LeagueStats from "./LeagueStats";
-import Live from "./Live";
 import LiveGame from "./LiveGame";
 import LoginOrRegister from "./LoginOrRegister";
 import LostPassword from "./LostPassword";
@@ -61,6 +68,7 @@ import News from "./News";
 import Player from "./Player";
 import PlayerBios from "./PlayerBios";
 import PlayerFeats from "./PlayerFeats";
+import PlayerGameLog from "./PlayerGameLog";
 import PlayerRatingDists from "./PlayerRatingDists";
 import PlayerRatings from "./PlayerRatings";
 import PlayerStatDists from "./PlayerStatDists";
@@ -74,6 +82,7 @@ import Roster from "./Roster";
 import RosterContinuity from "./RosterContinuity";
 import Schedule from "./Schedule";
 import ScheduledEvents from "./ScheduledEvents";
+import SeasonPreview from "./SeasonPreview";
 import Settings from "./Settings";
 import Standings from "./Standings";
 import TeamFinances from "./TeamFinances";
@@ -92,22 +101,29 @@ import WatchList from "./WatchList";
 export default {
 	Account,
 	AccountUpdateCard,
+	Achievements,
+	AllStar,
 	AllStarDraft,
+	AllStarDunk,
 	AllStarHistory,
+	AllStarThree,
 	AwardRaces,
 	AwardsRecords,
 	Colleges,
 	Countries,
 	CustomizePlayer,
+	DailySchedule,
 	DangerZone,
 	Dashboard,
+	DefaultNewLeagueSettings,
 	DeleteOldData,
 	Depth,
 	Draft,
 	DraftLottery,
 	DraftScouting,
-	DraftSummary,
+	DraftHistory,
 	DraftTeamHistory,
+	Dropbox,
 	EditAwards,
 	ExpansionDraft,
 	ExportLeague,
@@ -117,6 +133,7 @@ export default {
 	FreeAgents,
 	Frivolities,
 	FrivolitiesDraftClasses,
+	FrivolitiesDraftPosition,
 	FrivolitiesJerseyNumbers,
 	FrivolitiesTeamSeasons,
 	FrivolitiesTrades,
@@ -136,7 +153,6 @@ export default {
 	LeagueDashboard,
 	LeagueFinances,
 	LeagueStats,
-	Live,
 	LiveGame,
 	LoginOrRegister,
 	LostPassword,
@@ -153,6 +169,7 @@ export default {
 	Player,
 	PlayerBios,
 	PlayerFeats,
+	PlayerGameLog,
 	PlayerRatingDists,
 	PlayerRatings,
 	PlayerStatDists,
@@ -166,6 +183,7 @@ export default {
 	RosterContinuity,
 	Schedule,
 	ScheduledEvents,
+	SeasonPreview,
 	Settings,
 	Standings,
 	TeamFinances,

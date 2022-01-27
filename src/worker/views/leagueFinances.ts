@@ -9,8 +9,9 @@ const updateLeagueFinances = async (
 ) => {
 	if (
 		updateEvents.includes("firstRun") ||
-		inputs.season !== state.season ||
-		inputs.season === g.get("season")
+		updateEvents.includes("gameSim") ||
+		updateEvents.includes("newPhase") ||
+		state.season !== inputs.season
 	) {
 		const players = await idb.cache.players.indexGetAll("playersByTid", [
 			0,
@@ -18,23 +19,26 @@ const updateLeagueFinances = async (
 		]);
 
 		const teams = (
-			await idb.getCopies.teamsPlus({
-				attrs: ["tid"],
-				seasonAttrs: [
-					"att",
-					"revenue",
-					"profit",
-					"cash",
-					"payroll",
-					"salaryPaid",
-					"pop",
-					"abbrev",
-					"tid",
-					"region",
-					"name",
-				],
-				season: inputs.season,
-			})
+			await idb.getCopies.teamsPlus(
+				{
+					attrs: ["tid", "budget", "strategy"],
+					seasonAttrs: [
+						"att",
+						"revenue",
+						"profit",
+						"cash",
+						"payroll",
+						"salaryPaid",
+						"pop",
+						"abbrev",
+						"tid",
+						"region",
+						"name",
+					],
+					season: inputs.season,
+				},
+				"noCopyCache",
+			)
 		).map(t => {
 			const rosterSpots =
 				g.get("maxRosterSize") - players.filter(p => p.tid === t.tid).length;
@@ -47,7 +51,7 @@ const updateLeagueFinances = async (
 		return {
 			budget: g.get("budget"),
 			currentSeason: g.get("season"),
-			hardCap: g.get("hardCap"),
+			salaryCapType: g.get("salaryCapType"),
 			season: inputs.season,
 			salaryCap: g.get("salaryCap") / 1000,
 			minPayroll: g.get("minPayroll") / 1000,

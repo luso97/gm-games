@@ -1,16 +1,21 @@
 import classNames from "classnames";
 import range from "lodash-es/range";
-import PropTypes from "prop-types";
 import { useEffect, useReducer, useRef } from "react";
-import { DraftAbbrev, MoreLinks, ResponsiveTableWrapper } from "../components";
+import {
+	DraftAbbrev,
+	MoreLinks,
+	PlayPauseNext,
+	ResponsiveTableWrapper,
+} from "../components";
 import useTitleBar from "../hooks/useTitleBar";
-import { helpers, toWorker } from "../util";
+import { helpers, toWorker, useLocal } from "../util";
 import type {
 	DraftLotteryResultArray,
 	View,
 	DraftType,
 } from "../../common/types";
 import useClickable from "../hooks/useClickable";
+import { getDraftLotteryProbs } from "../../common";
 
 const draftTypeDescriptions: Record<DraftType | "dummy", string> = {
 	nba2019: "Weighted lottery for the top 4 picks, like the NBA since 2019",
@@ -31,155 +36,6 @@ const draftTypeDescriptions: Record<DraftType | "dummy", string> = {
 	freeAgents:
 		"There is no draft and all, rookies simply become free agents who can be signed by any team",
 	dummy: "From historical data",
-};
-
-const getProbs = (
-	result: DraftLotteryResultArray,
-	draftType: Exclude<
-		DraftType,
-		"random" | "noLottery" | "noLotteryReverse" | "freeAgents"
-	>,
-): (number | undefined)[][] => {
-	const probs: number[][] = [];
-	const topNCombos = new Map();
-	const totalChances = result.reduce(
-		(total, { chances }) => total + chances,
-		0,
-	);
-
-	if (draftType === "randomLottery") {
-		for (let i = 0; i < result.length; i++) {
-			probs[i] = [];
-			for (let j = 0; j < result.length; j++) {
-				probs[i][j] = 1 / result.length;
-			}
-		}
-
-		return probs;
-	}
-
-	if (draftType === "coinFlip") {
-		for (let i = 0; i < result.length; i++) {
-			probs[i] = [];
-			for (let j = 0; j < result.length; j++) {
-				if (i === 0 && j <= 1) {
-					probs[i][j] = 0.5;
-				} else if (i === 1 && j <= 1) {
-					probs[i][j] = 0.5;
-				} else if (i === j) {
-					probs[i][j] = 1;
-				} else {
-					probs[i][j] = 0;
-				}
-			}
-		}
-
-		return probs;
-	}
-
-	// Top N picks
-	for (let i = 0; i < result.length; i++) {
-		probs[i] = [];
-		probs[i][0] = result[i].chances / totalChances; // First pick
-
-		probs[i][1] = 0; // Second pick
-
-		probs[i][2] = 0; // Third pick
-
-		if (draftType === "nba2019") {
-			probs[i][3] = 0; // Fourth pick
-		}
-
-		for (let k = 0; k < result.length; k++) {
-			if (k !== i) {
-				probs[i][1] +=
-					((result[k].chances / totalChances) * result[i].chances) /
-					(totalChances - result[k].chances);
-
-				for (let l = 0; l < result.length; l++) {
-					if (l !== i && l !== k) {
-						const combosTemp =
-							((result[k].chances / totalChances) *
-								(result[l].chances / (totalChances - result[k].chances)) *
-								result[i].chances) /
-							(totalChances - result[k].chances - result[l].chances);
-						probs[i][2] += combosTemp;
-
-						if (draftType === "nba2019") {
-							// Go one level deeper
-							for (let m = 0; m < result.length; m++) {
-								if (m !== i && m !== k && m !== l) {
-									const combosTemp2 =
-										((result[k].chances / totalChances) *
-											(result[l].chances / (totalChances - result[k].chances)) *
-											(result[m].chances /
-												(totalChances -
-													result[k].chances -
-													result[l].chances)) *
-											result[i].chances) /
-										(totalChances -
-											result[k].chances -
-											result[l].chances -
-											result[m].chances);
-									probs[i][3] += combosTemp2;
-									const topFourKey = JSON.stringify([i, k, l, m].sort());
-
-									if (!topNCombos.has(topFourKey)) {
-										topNCombos.set(topFourKey, combosTemp2);
-									} else {
-										topNCombos.set(
-											topFourKey,
-											topNCombos.get(topFourKey) + combosTemp2,
-										);
-									}
-								}
-							}
-						} else {
-							const topThreeKey = JSON.stringify([i, k, l].sort());
-
-							if (!topNCombos.has(topThreeKey)) {
-								topNCombos.set(topThreeKey, combosTemp);
-							} else {
-								topNCombos.set(
-									topThreeKey,
-									topNCombos.get(topThreeKey) + combosTemp,
-								);
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Fill in picks (N+1)+
-	for (let i = 0; i < result.length; i++) {
-		const skipped = [0, 0, 0, 0, 0]; // Probabilities of being "skipped" (lower prob team in top N) 0/1/2/3/4 times
-
-		for (const [key, prob] of topNCombos.entries()) {
-			const inds = JSON.parse(key);
-			let skipCount = 0;
-
-			for (const ind of inds) {
-				if (ind > i) {
-					skipCount += 1;
-				}
-			}
-
-			if (!inds.includes(i)) {
-				skipped[skipCount] += prob;
-			}
-		}
-
-		// Fill in table after first N picks
-		for (let j = 0; j < (draftType === "nba2019" ? 5 : 4); j++) {
-			if (i + j > (draftType === "nba2019" ? 3 : 2) && i + j < result.length) {
-				probs[i][i + j] = skipped[j];
-			}
-		}
-	}
-
-	return probs;
 };
 
 type Props = View<"draftLottery">;
@@ -283,7 +139,7 @@ const Row = ({
 	userTid: number;
 	indRevealed: State["indRevealed"];
 	toReveal: State["toReveal"];
-	probs: ReturnType<typeof getProbs>;
+	probs: NonNullable<ReturnType<typeof getDraftLotteryProbs>>;
 }) => {
 	const { clicked, toggleClicked } = useClickable();
 
@@ -347,6 +203,72 @@ const Row = ({
 	return row;
 };
 
+const Rigged = ({
+	numToPick,
+	result,
+	rigged,
+	type,
+}: Pick<Props, "numToPick" | "result" | "rigged" | "type">) => {
+	const teamInfoCache = useLocal(state => state.teamInfoCache);
+
+	if (!rigged || !result || type === "projected") {
+		return null;
+	}
+
+	const actualRigged = rigged.slice(0, numToPick);
+	while (actualRigged.length < numToPick) {
+		actualRigged.push(null);
+	}
+
+	return (
+		<tr>
+			<td colSpan={3} />
+			{actualRigged.map((selected, i) => (
+				<td key={i}>
+					<select
+						className="form-select form-select-sm px-1 god-mode"
+						onChange={async event => {
+							const value = parseInt(event.target.value);
+
+							// Unset any other selection of this team
+							if (value !== -1) {
+								for (let j = 0; j < actualRigged.length; j++) {
+									if (actualRigged[j] === value) {
+										actualRigged[j] = null;
+									}
+								}
+							}
+
+							actualRigged[i] = value === -1 ? null : value;
+
+							await toWorker("main", "updateGameAttributes", {
+								riggedLottery: actualRigged,
+							});
+						}}
+						style={{ minWidth: 50 }}
+						value={selected === null ? "-1" : String(selected)}
+						disabled={type === "completed"}
+					>
+						<option value="-1">???</option>
+						{result.map(({ dpid, tid, originalTid }) => {
+							const abbrev = teamInfoCache[tid]?.abbrev;
+							const originalAbbrev = teamInfoCache[originalTid]?.abbrev;
+							return (
+								<option key={dpid} value={dpid}>
+									{abbrev === originalAbbrev
+										? abbrev
+										: `${abbrev} (from ${originalAbbrev})`}
+								</option>
+							);
+						})}
+					</select>
+				</td>
+			))}
+			<td colSpan={result.length - actualRigged.length} />
+		</tr>
+	);
+};
+
 const DraftLotteryTable = (props: Props) => {
 	const isMounted = useRef(true);
 	useEffect(() => {
@@ -395,7 +317,11 @@ const DraftLotteryTable = (props: Props) => {
 
 	const startLottery = async () => {
 		dispatch({ type: "startClicked" });
-		const draftLotteryResult = await toWorker("main", "draftLottery");
+		const draftLotteryResult = await toWorker(
+			"main",
+			"draftLottery",
+			undefined,
+		);
 		if (draftLotteryResult) {
 			const { draftType, result } = draftLotteryResult;
 
@@ -403,7 +329,9 @@ const DraftLotteryTable = (props: Props) => {
 
 			for (let i = 0; i < result.length; i++) {
 				const pick = result[i].pick;
-				toReveal[pick - 1] = i;
+				if (pick !== undefined) {
+					toReveal[pick - 1] = i;
+				}
 				result[i].pick = undefined;
 			}
 			toReveal.reverse();
@@ -435,19 +363,18 @@ const DraftLotteryTable = (props: Props) => {
 		dispatch({ type: "revealOne" });
 	};
 
-	const { season, type, userTid } = props;
+	const { godMode, numToPick, rigged, season, type, userTid } = props;
 	const { draftType, result } = state;
-	const probs =
-		result !== undefined &&
-		draftType !== undefined &&
-		draftType !== "random" &&
-		draftType !== "noLottery" &&
-		draftType !== "noLotteryReverse" &&
-		draftType !== "freeAgents" &&
-		draftType !== "dummy"
-			? getProbs(result, draftType)
-			: undefined;
-	const NUM_PICKS = result !== undefined ? result.length : 14; // I don't think result can ever be undefined, but Flow does
+	const probs = getDraftLotteryProbs(result, draftType);
+	const NUM_PICKS = result !== undefined ? result.length : 14;
+
+	const showStartButton =
+		type === "readyToRun" &&
+		state.revealState === "init" &&
+		result &&
+		result.length > 0;
+
+	const showRigButton = showStartButton && godMode && rigged === undefined;
 
 	let table;
 
@@ -475,7 +402,7 @@ const DraftLotteryTable = (props: Props) => {
 			<>
 				<p />
 				<ResponsiveTableWrapper nonfluid>
-					<table className="table table-striped table-bordered table-sm table-hover">
+					<table className="table table-striped table-sm table-hover">
 						<thead>
 							<tr>
 								<th colSpan={3} />
@@ -491,6 +418,12 @@ const DraftLotteryTable = (props: Props) => {
 									<th key={i}>{helpers.ordinal(i + 1)}</th>
 								))}
 							</tr>
+							<Rigged
+								numToPick={numToPick}
+								rigged={rigged}
+								result={props.result}
+								type={props.type}
+							/>
 						</thead>
 						<tbody>
 							{result.map((t, i) => (
@@ -524,68 +457,42 @@ const DraftLotteryTable = (props: Props) => {
 					</>
 				) : null}
 			</p>
-			{type === "readyToRun" &&
-			state.revealState === "init" &&
-			result &&
-			result.length > 0 ? (
+			{showStartButton ? (
 				<button
 					className="btn btn-large btn-success"
 					onClick={() => startLottery()}
 				>
-					Start Draft Lottery
+					Start Lottery
+				</button>
+			) : null}
+			{showRigButton ? (
+				<button
+					className="btn btn-large btn-god-mode ms-2"
+					onClick={async () => {
+						await toWorker("main", "updateGameAttributes", {
+							riggedLottery: [],
+						});
+					}}
+				>
+					Rig Lottery
 				</button>
 			) : null}
 			{type === "readyToRun" &&
 			(state.revealState === "running" || state.revealState === "paused") ? (
-				<div className="btn-group">
-					{state.revealState === "paused" ? (
-						<button
-							className="btn btn-light-bordered"
-							onClick={handleResume}
-							title="Resume Lottery"
-						>
-							<span className="glyphicon glyphicon-play" />
-						</button>
-					) : (
-						<button
-							className="btn btn-light-bordered"
-							onClick={handlePause}
-							title="Pause Lottery"
-						>
-							<span className="glyphicon glyphicon-pause" />
-						</button>
-					)}
-					<button
-						className="btn btn-light-bordered"
-						disabled={state.revealState === "running"}
-						onClick={handleShowOne}
-						title="Show Next Pick"
-					>
-						<span className="glyphicon glyphicon-step-forward" />
-					</button>
-				</div>
+				<PlayPauseNext
+					onPlay={handleResume}
+					onPause={handlePause}
+					onNext={handleShowOne}
+					paused={state.revealState === "paused"}
+					titlePlay="Resume Lottery"
+					titlePause="Pause Lottery"
+					titleNext="Show Next Pick"
+				/>
 			) : null}
 
 			{table}
 		</>
 	);
-};
-
-DraftLotteryTable.propTypes = {
-	draftType: PropTypes.string,
-	result: PropTypes.arrayOf(
-		PropTypes.shape({
-			tid: PropTypes.number.isRequired,
-			originalTid: PropTypes.number.isRequired,
-			chances: PropTypes.number.isRequired,
-			pick: PropTypes.number,
-			won: PropTypes.number.isRequired,
-			lost: PropTypes.number.isRequired,
-		}),
-	),
-	season: PropTypes.number.isRequired,
-	type: PropTypes.string.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 const DraftLottery = (props: Props) => {
@@ -626,7 +533,5 @@ const DraftLottery = (props: Props) => {
 		</>
 	);
 };
-
-DraftLottery.propTypes = DraftLotteryTable.propTypes;
 
 export default DraftLottery;

@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import type { SyntheticEvent, MouseEvent } from "react";
 import type { Col, SortBy, SuperCol } from ".";
 
@@ -38,16 +37,6 @@ const FilterHeader = ({
 			})}
 		</tr>
 	);
-};
-
-FilterHeader.propTypes = {
-	cols: PropTypes.arrayOf(
-		PropTypes.shape({
-			title: PropTypes.string.isRequired,
-		}),
-	).isRequired,
-	filters: PropTypes.arrayOf(PropTypes.string).isRequired,
-	handleFilterUpdate: PropTypes.func.isRequired,
 };
 
 const SuperCols = ({
@@ -93,6 +82,8 @@ const SuperCols = ({
 				if (adjustedColspan <= 0) {
 					return null;
 				}
+
+				// Have border-start and border-end for all, even with no title. Why? So tabs for regular season / playoffs on player pages look okay.
 				return (
 					<th
 						key={i}
@@ -101,6 +92,7 @@ const SuperCols = ({
 							textAlign: "center",
 						}}
 						title={desc}
+						className="border-start border-end"
 					>
 						{title}
 					</th>
@@ -108,6 +100,21 @@ const SuperCols = ({
 			})}
 		</tr>
 	);
+};
+
+export const getSortClassName = (sortBys: SortBy[], i: number) => {
+	let className = "sorting";
+
+	for (const sortBy of sortBys) {
+		if (sortBy[0] === i) {
+			className = `sorting_highlight ${
+				sortBy[1] === "asc" ? "sorting_asc" : "sorting_desc"
+			}`;
+			break;
+		}
+	}
+
+	return className;
 };
 
 const Header = ({
@@ -150,22 +157,16 @@ const Header = ({
 					if (sortSequence && sortSequence.length === 0) {
 						className = null;
 					} else {
-						className = "sorting";
-
-						for (const sortBy of sortBys) {
-							if (sortBy[0] === colIndex) {
-								className =
-									sortBy[1] === "asc" ? "sorting_asc" : "sorting_desc";
-								break;
-							}
-						}
+						className = getSortClassName(sortBys, colIndex);
 					}
 
 					return (
 						<th
 							className={classNames(colClassNames, className)}
 							key={colIndex}
-							onClick={event => handleColClick(event, colIndex)}
+							onClick={event => {
+								handleColClick(event, colIndex);
+							}}
 							title={desc}
 							style={{ width }}
 						>
@@ -184,33 +185,6 @@ const Header = ({
 			) : null}
 		</thead>
 	);
-};
-
-Header.propTypes = {
-	cols: PropTypes.arrayOf(
-		PropTypes.shape({
-			desc: PropTypes.string,
-			sortSequence: PropTypes.arrayOf(PropTypes.string),
-			title: PropTypes.string.isRequired,
-			width: PropTypes.string,
-		}),
-	).isRequired,
-	enableFilters: PropTypes.bool.isRequired,
-	filters: PropTypes.arrayOf(PropTypes.string).isRequired,
-	handleColClick: PropTypes.func.isRequired,
-	handleFilterUpdate: PropTypes.func.isRequired,
-	sortBys: PropTypes.arrayOf(
-		PropTypes.arrayOf(
-			PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
-		),
-	).isRequired,
-	superCols: PropTypes.arrayOf(
-		PropTypes.shape({
-			colspan: PropTypes.number.isRequired,
-			desc: PropTypes.string,
-			title: PropTypes.any.isRequired,
-		}),
-	),
 };
 
 export default Header;

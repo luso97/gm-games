@@ -1,86 +1,52 @@
-import PropTypes from "prop-types";
-import { Fragment, ReactNode } from "react";
-import {
-	CountryFlag,
-	DataTable,
-	Height,
-	PlayerPicture,
-	SafeHtml,
-	SkillsBlock,
-	WatchBlock,
-	Weight,
-	JerseyNumber,
-	Mood,
-} from "../../components";
+import { useState } from "react";
+import { DataTable, SafeHtml, SkillsBlock } from "../../components";
 import Injuries from "./Injuries";
-import RatingsOverview from "./RatingsOverview";
 import useTitleBar from "../../hooks/useTitleBar";
-import {
-	confirm,
-	getCols,
-	helpers,
-	toWorker,
-	realtimeUpdate,
-	groupAwards,
-} from "../../util";
-import type { View, Player, Phase } from "../../../common/types";
-import { bySport, isSport, PHASE, PLAYER } from "../../../common";
+import { getCols, helpers, groupAwards } from "../../util";
+import type { View } from "../../../common/types";
 import classNames from "classnames";
 import { formatStatGameHigh } from "../PlayerStats";
-import AwardsSummary from "./AwardsSummary";
 import SeasonIcons from "./SeasonIcons";
-import Note from "./Note";
+import TopStuff from "./TopStuff";
+import { PLAYER } from "../../../common";
 
-const Relatives = ({
-	pid,
-	relatives,
-}: {
-	pid: number;
-	relatives: Player["relatives"];
-}) => {
-	if (relatives.length === 0) {
-		return null;
-	}
-
+const SeasonLink = ({ pid, season }: { pid: number; season: number }) => {
 	return (
-		<>
-			{relatives.map(rel => {
-				return (
-					<Fragment key={rel.pid}>
-						{helpers.upperCaseFirstLetter(rel.type)}:{" "}
-						<a href={helpers.leagueUrl(["player", rel.pid])}>{rel.name}</a>
-						<br />
-					</Fragment>
-				);
-			})}
-			<a href={helpers.leagueUrl(["frivolities", "relatives", pid])}>
-				(Family details)
-			</a>
-			<br />
-		</>
+		<a href={helpers.leagueUrl(["player_game_log", pid, season])}>{season}</a>
 	);
-};
-
-Relatives.propTypes = {
-	pid: PropTypes.number.isRequired,
-	relatives: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
 const StatsTable = ({
 	name,
 	onlyShowIf,
 	p,
-	playoffs = false,
 	stats,
 	superCols,
 }: {
 	name: string;
 	onlyShowIf?: string[];
 	p: View<"player">["player"];
-	playoffs?: boolean;
 	stats: string[];
 	superCols?: any[];
 }) => {
+	const hasRegularSeasonStats = p.careerStats.gp > 0;
+	const hasPlayoffStats = p.careerStatsPlayoffs.gp > 0;
+
+	// Show playoffs by default if that's all we have
+	const [playoffs, setPlayoffs] = useState(!hasRegularSeasonStats);
+
+	// If game sim means we switch from having no stats to having some stats, make sure we're showing what we have
+	if (hasRegularSeasonStats && !hasPlayoffStats && playoffs) {
+		setPlayoffs(false);
+	}
+	if (!hasRegularSeasonStats && hasPlayoffStats && !playoffs) {
+		setPlayoffs(true);
+	}
+
+	if (!hasRegularSeasonStats && !hasPlayoffStats) {
+		return null;
+	}
+
 	const playerStats = p.stats.filter(ps => ps.playoffs === playoffs);
 	const careerStats = playoffs ? p.careerStatsPlayoffs : p.careerStats;
 
@@ -98,14 +64,14 @@ const StatsTable = ({
 		}
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		"Year",
 		"Team",
 		"Age",
 		...stats.map(
 			stat => `stat:${stat.endsWith("Max") ? stat.replace("Max", "") : stat}`,
 		),
-	);
+	]);
 
 	if (superCols) {
 		superCols = helpers.deepCopy(superCols);
@@ -117,12 +83,46 @@ const StatsTable = ({
 	if (name === "Shot Locations") {
 		cols[cols.length - 3].title = "M";
 		cols[cols.length - 2].title = "A";
-		cols[cols.length - 1].title = "%";
+		cols.at(-1).title = "%";
 	}
 
 	return (
 		<>
-			<h3>{name}</h3>
+			<h2>{name}</h2>
+			<ul className="nav nav-tabs border-bottom-0">
+				{hasRegularSeasonStats ? (
+					<li className="nav-item">
+						<a
+							className={classNames("nav-link", {
+								active: !playoffs,
+								"border-bottom": !playoffs,
+							})}
+							onClick={event => {
+								event.preventDefault();
+								setPlayoffs(false);
+							}}
+						>
+							Regular Season
+						</a>
+					</li>
+				) : null}
+				{hasPlayoffStats ? (
+					<li className="nav-item">
+						<a
+							className={classNames("nav-link", {
+								active: playoffs,
+								"border-bottom": playoffs,
+							})}
+							onClick={event => {
+								event.preventDefault();
+								setPlayoffs(true);
+							}}
+						>
+							Playoffs
+						</a>
+					</li>
+				) : null}
+			</ul>
 			<DataTable
 				className="mb-3"
 				cols={cols}
@@ -134,7 +134,7 @@ const StatsTable = ({
 					...stats.map(stat => formatStatGameHigh(careerStats, stat)),
 				]}
 				hideAllControls
-				name={`Player:${name}${playoffs ? ":Playoffs" : ""}`}
+				name={`Player:${name}`}
 				rows={playerStats.map((ps, i) => {
 					return {
 						key: i,
@@ -144,7 +144,7 @@ const StatsTable = ({
 								sortValue: i,
 								value: (
 									<>
-										{ps.season}{" "}
+										<SeasonLink pid={p.pid} season={ps.season} />{" "}
 										<SeasonIcons
 											season={ps.season}
 											awards={p.awards}
@@ -173,163 +173,9 @@ const StatsTable = ({
 	);
 };
 
-StatsTable.propTypes = {
-	name: PropTypes.string.isRequired,
-	onlyShowIf: PropTypes.arrayOf(PropTypes.string),
-	p: PropTypes.object.isRequired,
-	playoffs: PropTypes.bool,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	superCols: PropTypes.array,
-};
-
-const StatsSummary = ({
-	name,
-	onlyShowIf,
-	p,
-	phase,
-	position,
-	season,
-	stats,
-}: {
-	name: string;
-	onlyShowIf?: string[];
-	p: View<"player">["player"];
-	phase: Phase;
-	position: string;
-	season: number;
-	stats: string[];
-}) => {
-	if (onlyShowIf !== undefined) {
-		if (!onlyShowIf.includes(position)) {
-			return null;
-		}
-	}
-
-	let ps: typeof p["stats"][number] | undefined;
-	if (p.tid === PLAYER.RETIRED) {
-		// Find best season for retired player
-		let maxValue = -Infinity;
-		for (const row of p.stats) {
-			if (row.playoffs) {
-				continue;
-			}
-
-			const value = bySport({
-				basketball: row.ws,
-				football: row.av,
-				hockey: row.ps,
-			});
-			if (value > maxValue) {
-				ps = row;
-				maxValue = value;
-			}
-		}
-	} else {
-		// Find current season for active player
-		const playerStats = p.stats.filter(
-			ps =>
-				!ps.playoffs &&
-				(ps.season === season ||
-					(ps.season === season - 1 && phase === PHASE.PRESEASON)),
-		);
-		ps = playerStats[playerStats.length - 1];
-	}
-
-	const cols = getCols("Summary", ...stats.map(stat => `stat:${stat}`));
-
-	if (name === "Shot Locations") {
-		cols[cols.length - 3].title = "M";
-		cols[cols.length - 2].title = "A";
-		cols[cols.length - 1].title = "%";
-	}
-
-	const separatorAfter = bySport({
-		basketball: [0, 4, 8],
-		football: [0, 2],
-		hockey: onlyShowIf?.includes("G") ? [0, 3] : [0, 5],
-	});
-
-	return (
-		<div className="player-stats-summary">
-			<table className="table table-sm table-condensed table-nonfluid text-center mt-3 mb-0">
-				<thead>
-					<tr>
-						{cols.map((col, i) => {
-							return (
-								<th
-									key={i}
-									title={col.desc}
-									className={classNames({
-										"table-separator-right": separatorAfter.includes(i),
-										"table-separator-left": separatorAfter.includes(i - 1),
-										"text-left": i === 0,
-									})}
-								>
-									{col.title}
-								</th>
-							);
-						})}
-					</tr>
-				</thead>
-				{ps ? (
-					<tbody>
-						<tr>
-							<th
-								className="table-separator-right text-left"
-								title={p.tid === PLAYER.RETIRED ? String(ps.season) : undefined}
-							>
-								{p.tid === PLAYER.RETIRED ? "Peak" : ps.season}
-							</th>
-							{stats.map((stat, i) => {
-								return (
-									<td
-										key={stat}
-										className={classNames({
-											"table-separator-right": separatorAfter.includes(i + 1),
-											"table-separator-left": separatorAfter.includes(i),
-										})}
-									>
-										{helpers.roundStat((ps as any)[stat], stat)}
-									</td>
-								);
-							})}
-						</tr>
-					</tbody>
-				) : null}
-
-				<tfoot>
-					<tr>
-						<th className="table-separator-right text-left">Career</th>
-						{stats.map((stat, i) => {
-							return (
-								<td
-									key={stat}
-									className={classNames({
-										"table-separator-right": separatorAfter.includes(i + 1),
-										"table-separator-left": separatorAfter.includes(i),
-									})}
-								>
-									{helpers.roundStat(p.careerStats[stat], stat)}
-								</td>
-							);
-						})}
-					</tr>
-				</tfoot>
-			</table>
-		</div>
-	);
-};
-
-StatsSummary.propTypes = {
-	name: PropTypes.string.isRequired,
-	onlyShowIf: PropTypes.arrayOf(PropTypes.string),
-	retired: PropTypes.bool,
-	p: PropTypes.object.isRequired,
-	playoffs: PropTypes.bool,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-};
-
 const Player2 = ({
+	currentSeason,
+	customMenu,
 	events,
 	feats,
 	freeAgent,
@@ -340,7 +186,6 @@ const Player2 = ({
 	player,
 	ratings,
 	retired,
-	season,
 	showContract,
 	showRatings,
 	showTradeFor,
@@ -351,379 +196,80 @@ const Player2 = ({
 	teamColors,
 	teamJersey,
 	teamName,
+	teamURL,
 	willingToSign,
 }: View<"player">) => {
-	useTitleBar({ title: player.name });
+	useTitleBar({
+		title: player.name,
+		customMenu,
+		dropdownView: "player",
+		dropdownFields:
+			player.tid !== PLAYER.UNDRAFTED
+				? {
+						playerProfile: "overview",
+				  }
+				: undefined,
+		dropdownCustomURL: fields => {
+			let gameLogSeason;
+			if (player.stats.length > 0) {
+				gameLogSeason = player.stats.at(-1).season;
+			} else if (player.ratings.length > 0) {
+				gameLogSeason = player.ratings.at(-1).season;
+			} else {
+				gameLogSeason = currentSeason;
+			}
 
-	let draftInfo: ReactNode = null;
-	if (player.draft.round > 0) {
-		draftInfo = (
-			<>
-				Draft:{" "}
-				<a href={helpers.leagueUrl(["draft_history", player.draft.year])}>
-					{player.draft.year}
-				</a>{" "}
-				- Round {player.draft.round} (Pick {player.draft.pick}) by{" "}
-				{player.draft.abbrev}
-				<br />
-			</>
-		);
-	} else {
-		draftInfo = (
-			<>
-				Undrafted:{" "}
-				<a href={helpers.leagueUrl(["draft_history", player.draft.year])}>
-					{player.draft.year}
-				</a>
-				<br />
-			</>
-		);
-	}
+			const parts =
+				fields.playerProfile === "gameLog"
+					? ["player_game_log", player.pid, gameLogSeason]
+					: ["player", player.pid];
 
-	let contractInfo: ReactNode = null;
-	if (showContract) {
-		contractInfo = (
-			<>
-				{freeAgent ? "Asking for" : "Contract"}:{" "}
-				{helpers.formatCurrency(player.contract.amount, "M")}
-				/yr thru {player.contract.exp}
-				<br />
-			</>
-		);
-	}
-
-	let statusInfo: ReactNode = null;
-	if (retired) {
-		statusInfo = (
-			<div className="d-flex align-items-center">
-				<WatchBlock className="ml-0" pid={player.pid} watch={player.watch} />
-			</div>
-		);
-	} else {
-		const gameOrWeek = bySport({ default: "game", football: "week" });
-		statusInfo = (
-			<div className="d-flex align-items-center">
-				{injured ? (
-					<span
-						className="badge badge-danger badge-injury ml-0"
-						title={`${player.injury.type} (out ${
-							player.injury.gamesRemaining
-						} more ${
-							player.injury.gamesRemaining === 1 ? gameOrWeek : `${gameOrWeek}s`
-						})`}
-					>
-						{player.injury.gamesRemaining}
-					</span>
-				) : null}
-				<SkillsBlock
-					className={injured ? undefined : "skills-alone"}
-					skills={player.ratings[player.ratings.length - 1].skills}
-				/>
-				<WatchBlock className="ml-2" pid={player.pid} watch={player.watch} />
-				{player.tid === PLAYER.FREE_AGENT ||
-				player.tid === PLAYER.UNDRAFTED ||
-				player.tid >= PLAYER.FREE_AGENT ? (
-					<Mood
-						className="ml-2"
-						defaultType={
-							player.tid === PLAYER.FREE_AGENT ||
-							player.tid === PLAYER.UNDRAFTED
-								? "user"
-								: "current"
-						}
-						p={player}
-					/>
-				) : null}
-			</div>
-		);
-	}
-
-	// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-	// @ts-ignore
-	const height = <Height inches={player.hgt} />;
-
-	// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-	// @ts-ignore
-	const weight = <Weight pounds={player.weight} />;
-
-	let teamURL;
-	if (player.tid >= 0) {
-		teamURL = helpers.leagueUrl(["roster", `${player.abbrev}_${player.tid}`]);
-	} else if (player.tid === PLAYER.FREE_AGENT) {
-		teamURL = helpers.leagueUrl(["free_agents"]);
-	} else if (
-		player.tid === PLAYER.UNDRAFTED ||
-		player.tid === PLAYER.UNDRAFTED_FANTASY_TEMP
-	) {
-		teamURL = helpers.leagueUrl(["draft_scouting"]);
-	}
-
-	const college =
-		player.college && player.college !== "" ? player.college : "None";
+			return helpers.leagueUrl(parts);
+		},
+	});
 
 	const awardsGrouped = groupAwards(player.awards);
 
 	return (
 		<>
-			<div className="mb-3">
-				<div className="d-sm-flex">
-					<div className="player-bio">
-						<div className="d-flex">
-							<div
-								className="player-picture"
-								style={{
-									marginTop: player.imgURL ? 0 : -20,
-								}}
-							>
-								<PlayerPicture
-									face={player.face}
-									imgURL={player.imgURL}
-									colors={teamColors}
-									jersey={teamJersey}
-								/>
-							</div>
-							<div>
-								<strong>
-									{player.ratings[player.ratings.length - 1].pos},{" "}
-									{teamURL ? <a href={teamURL}>{teamName}</a> : teamName}
-									{player.jerseyNumber ? (
-										<>
-											,{" "}
-											<a
-												href={helpers.leagueUrl([
-													"frivolities",
-													"most",
-													"jersey_number",
-													player.jerseyNumber,
-												])}
-											>
-												#{player.jerseyNumber}
-											</a>
-										</>
-									) : null}
-								</strong>
-								<br />
-								{height}, {weight}
-								<br />
-								Born: {player.born.year} -{" "}
-								<a
-									href={helpers.leagueUrl([
-										"frivolities",
-										"most",
-										"country",
-										window.encodeURIComponent(
-											helpers.getCountry(player.born.loc),
-										),
-									])}
-								>
-									{player.born.loc}
-									<CountryFlag className="ml-1" country={player.born.loc} />
-								</a>
-								<br />
-								{typeof player.diedYear !== "number" ? (
-									<>
-										Age: {player.age}
-										<br />
-									</>
-								) : (
-									<>
-										Died: {player.diedYear} (
-										{player.diedYear - player.born.year} years old)
-										<br />
-									</>
-								)}
-								<Relatives pid={player.pid} relatives={player.relatives} />
-								{draftInfo}
-								{isSport("hockey") && college === "None" ? null : (
-									<>
-										College:{" "}
-										<a
-											href={helpers.leagueUrl([
-												"frivolities",
-												"most",
-												"college",
-												window.encodeURIComponent(college),
-											])}
-										>
-											{college}
-										</a>
-										<br />
-									</>
-								)}
-								Experience:{" "}
-								{player.experience === 0
-									? "none"
-									: `${player.experience} year${
-											player.experience > 1 ? "s" : ""
-									  }`}
-								<br />
-								{contractInfo}
-								{statusInfo}
-							</div>
-						</div>
+			<TopStuff
+				currentSeason={currentSeason}
+				freeAgent={freeAgent}
+				godMode={godMode}
+				injured={injured}
+				jerseyNumberInfos={jerseyNumberInfos}
+				phase={phase}
+				player={player}
+				retired={retired}
+				showContract={showContract}
+				showRatings={showRatings}
+				showTradeFor={showTradeFor}
+				showTradingBlock={showTradingBlock}
+				spectator={spectator}
+				statSummary={statSummary}
+				teamColors={teamColors}
+				teamJersey={teamJersey}
+				teamName={teamName}
+				teamURL={teamURL}
+				willingToSign={willingToSign}
+			/>
 
-						<div className="btn-group mt-2">
-							<a
-								href={helpers.leagueUrl(["customize_player", player.pid])}
-								className={classNames(
-									"btn",
-									godMode ? "btn-god-mode" : "btn-light-bordered",
-								)}
-							>
-								Edit
-							</a>
-							{godMode ? (
-								<button
-									className="btn btn-god-mode"
-									onClick={async () => {
-										const proceed = await confirm(
-											`Are you sure you want to delete ${player.name}?`,
-											{
-												okText: "Delete Player",
-											},
-										);
-										if (proceed) {
-											await toWorker("main", "removePlayers", [player.pid]);
-
-											realtimeUpdate([], helpers.leagueUrl([]));
-										}
-									}}
-								>
-									Delete
-								</button>
-							) : null}
-							{godMode ? (
-								<a
-									href={helpers.leagueUrl([
-										"customize_player",
-										player.pid,
-										"clone",
-									])}
-									className="btn btn-god-mode"
-								>
-									Clone
-								</a>
-							) : null}
-							{showTradeFor || showTradingBlock ? (
-								<button
-									className="btn btn-light-bordered"
-									disabled={player.untradable}
-									onClick={() => {
-										if (showTradeFor) {
-											toWorker("actions", "tradeFor", { pid: player.pid });
-										} else {
-											toWorker("actions", "addToTradingBlock", player.pid);
-										}
-									}}
-									title={player.untradableMsg}
-								>
-									{showTradeFor ? (
-										"Trade For"
-									) : (
-										<>
-											<span className="d-none d-md-inline">Add To </span>Trading
-											Block
-										</>
-									)}
-								</button>
-							) : null}
-							{!spectator && freeAgent ? (
-								<button
-									className="btn btn-light-bordered"
-									disabled={!willingToSign}
-									onClick={() => toWorker("actions", "negotiate", player.pid)}
-									title={
-										willingToSign
-											? undefined
-											: `${player.name} refuses to negotiate with you`
-									}
-								>
-									Negotiate Contract
-								</button>
-							) : null}
-						</div>
-						{player.careerStats.gp > 0 ? (
-							<>
-								{statSummary.map(({ name, onlyShowIf, stats }) => (
-									<StatsSummary
-										key={name}
-										name={name}
-										onlyShowIf={onlyShowIf}
-										position={player.ratings[player.ratings.length - 1].pos}
-										phase={phase}
-										season={season}
-										stats={stats}
-										p={player}
-									/>
-								))}
-							</>
-						) : null}
-					</div>
-
-					<div className="mt-3 mt-sm-0 text-nowrap">
-						{!retired && showRatings ? (
-							<RatingsOverview ratings={player.ratings} />
-						) : null}
-						{jerseyNumberInfos.length > 0 ? (
-							<div
-								className={classNames("d-flex flex-wrap", {
-									"mt-2": (!retired && showRatings) || player.awards.length > 0,
-								})}
-								style={{
-									gap: "0.5em",
-								}}
-							>
-								{jerseyNumberInfos.map((info, i) => (
-									<JerseyNumber key={i} {...info} />
-								))}
-							</div>
-						) : null}
-					</div>
-				</div>
-
-				<AwardsSummary awards={player.awards} />
-
-				<Note note={player.note} pid={player.pid} />
-			</div>
-
-			{player.careerStats.gp > 0 ? (
-				<>
-					<h2>Regular Season</h2>
-					{statTables.map(({ name, onlyShowIf, stats, superCols }) => (
-						<StatsTable
-							key={name}
-							name={name}
-							onlyShowIf={onlyShowIf}
-							stats={stats}
-							superCols={superCols}
-							p={player}
-						/>
-					))}
-				</>
-			) : null}
-
-			{player.careerStatsPlayoffs.gp > 0 ? (
-				<>
-					<h2>Playoffs</h2>
-					{statTables.map(({ name, onlyShowIf, stats, superCols }) => (
-						<StatsTable
-							key={name}
-							name={name}
-							onlyShowIf={onlyShowIf}
-							stats={stats}
-							superCols={superCols}
-							p={player}
-							playoffs
-						/>
-					))}
-				</>
-			) : null}
+			{statTables.map(({ name, onlyShowIf, stats, superCols }) => (
+				<StatsTable
+					key={name}
+					name={name}
+					onlyShowIf={onlyShowIf}
+					stats={stats}
+					superCols={superCols}
+					p={player}
+				/>
+			))}
 
 			<>
 				<h2>Ratings</h2>
 				<DataTable
 					className="mb-3"
-					cols={getCols(
+					cols={getCols([
 						"Year",
 						"Team",
 						"Age",
@@ -732,7 +278,7 @@ const Player2 = ({
 						"Pot",
 						...ratings.map(rating => `rating:${rating}`),
 						"Skills",
-					)}
+					])}
 					defaultSort={[0, "asc"]}
 					hideAllControls
 					name="Player:Ratings"
@@ -745,12 +291,12 @@ const Player2 = ({
 									sortValue: i,
 									value: (
 										<>
-											{r.season}{" "}
+											<SeasonLink pid={player.pid} season={r.season} />{" "}
 											<SeasonIcons season={r.season} awards={player.awards} />
 											{r.injuryIndex !== undefined &&
 											player.injuries[r.injuryIndex] ? (
 												<span
-													className="badge badge-danger badge-injury"
+													className="badge bg-danger badge-injury"
 													title={player.injuries[r.injuryIndex].type}
 												>
 													+
@@ -788,7 +334,7 @@ const Player2 = ({
 				<div className="col-6 col-md-3">
 					<h2>Awards</h2>
 					{awardsGrouped.length > 0 ? (
-						<table className="table table-nonfluid table-striped table-bordered table-sm player-awards">
+						<table className="table table-nonfluid table-striped table-sm player-awards">
 							<tbody>
 								{awardsGrouped.map((a, i) => {
 									return (
@@ -809,7 +355,7 @@ const Player2 = ({
 					<h2>Salaries</h2>
 					<DataTable
 						className="mb-3"
-						cols={getCols("Year", "Amount")}
+						cols={getCols(["Year", "Amount"])}
 						defaultSort={[0, "asc"]}
 						footer={[
 							"Total",
@@ -826,7 +372,7 @@ const Player2 = ({
 										sortValue: i,
 										value: (
 											<>
-												{s.season}{" "}
+												<SeasonLink pid={player.pid} season={s.season} />{" "}
 												<SeasonIcons season={s.season} awards={player.awards} />
 											</>
 										),
@@ -876,39 +422,6 @@ const Player2 = ({
 			</div>
 		</>
 	);
-};
-
-Player2.propTypes = {
-	events: PropTypes.arrayOf(
-		PropTypes.shape({
-			eid: PropTypes.number.isRequired,
-			season: PropTypes.number.isRequired,
-			text: PropTypes.string.isRequired,
-		}),
-	).isRequired,
-	feats: PropTypes.arrayOf(
-		PropTypes.shape({
-			eid: PropTypes.number.isRequired,
-			season: PropTypes.number.isRequired,
-			text: PropTypes.string.isRequired,
-		}),
-	).isRequired,
-	freeAgent: PropTypes.bool.isRequired,
-	godMode: PropTypes.bool.isRequired,
-	injured: PropTypes.bool.isRequired,
-	player: PropTypes.object.isRequired,
-	ratings: PropTypes.arrayOf(PropTypes.string).isRequired,
-	retired: PropTypes.bool.isRequired,
-	showContract: PropTypes.bool.isRequired,
-	showTradeFor: PropTypes.bool.isRequired,
-	statTables: PropTypes.arrayOf(
-		PropTypes.shape({
-			name: PropTypes.string.isRequired,
-			stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-		}),
-	).isRequired,
-	teamColors: PropTypes.arrayOf(PropTypes.string),
-	willingToSign: PropTypes.bool.isRequired,
 };
 
 export default Player2;

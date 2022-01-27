@@ -1,4 +1,10 @@
-import { PLAYER, applyRealTeamInfo, bySport, isSport } from "../../../common";
+import {
+	PLAYER,
+	applyRealTeamInfo,
+	bySport,
+	isSport,
+	DEFAULT_PLAY_THROUGH_INJURIES,
+} from "../../../common";
 import { finances, freeAgents, league, player, team } from "..";
 import { idb } from "../../db";
 import { env, g, helpers, local, logEvent, random, toUI } from "../../util";
@@ -7,7 +13,7 @@ import type {
 	PhaseReturn,
 	RealTeamInfo,
 } from "../../../common/types";
-import groupBy from "lodash-es/groupBy";
+import { groupBy } from "../../../common/groupBy";
 
 const newPhasePreseason = async (
 	conditions: Conditions,
@@ -34,6 +40,18 @@ const newPhasePreseason = async (
 	const realTeamInfo = (await idb.meta.get("attributes", "realTeamInfo")) as
 		| RealTeamInfo
 		| undefined;
+
+	const popInfo: Record<
+		string,
+		{
+			oldPop: number;
+			newPop: number;
+		}
+	> = {};
+	const sameRegionOverrides: Record<string, string | undefined> = {
+		"San Jose": "San Francisco",
+		Brooklyn: "New York",
+	};
 
 	let updatedTeams = false;
 	let scoutingRank: number | undefined;
@@ -112,11 +130,14 @@ const newPhasePreseason = async (
 		// Only actually need 3 seasons for userTid, but get it for all just in case there is a
 		// skipped season (alternatively could use cursor to just find most recent season, but this
 		// is not performance critical code)
-		const teamSeasons2 = await idb.getCopies.teamSeasons({
-			tid,
-			seasons: [g.get("season") - 3, g.get("season") - 1],
-		});
-		const prevSeason = teamSeasons2[teamSeasons2.length - 1];
+		const teamSeasons2 = await idb.getCopies.teamSeasons(
+			{
+				tid,
+				seasons: [g.get("season") - 3, g.get("season") - 1],
+			},
+			"noCopyCache",
+		);
+		const prevSeason = teamSeasons2.at(-1);
 
 		// Only need scoutingRank for the user's team to calculate fuzz when ratings are updated below.
 		// This is done BEFORE a new season row is added.
@@ -139,7 +160,22 @@ const newPhasePreseason = async (
 
 		// Mean population should stay constant, otherwise the economics change too much
 		if (!g.get("equalizeRegions")) {
-			t.pop *= random.uniform(0.98, 1.02);
+			// Check if this is the same region as another team, in which case keep the populations in sync
+			const actualRegion = sameRegionOverrides[t.region] ?? t.region;
+			if (
+				actualRegion !== "" &&
+				popInfo[actualRegion] &&
+				popInfo[actualRegion].oldPop === t.pop
+			) {
+				t.pop = popInfo[actualRegion].newPop;
+			} else {
+				const newPop = t.pop * random.uniform(0.98, 1.02);
+				popInfo[actualRegion] = {
+					oldPop: t.pop,
+					newPop,
+				};
+				t.pop = newPop;
+			}
 		}
 		newSeason.pop = t.pop;
 
@@ -161,12 +197,15 @@ const newPhasePreseason = async (
 			local.autoPlayUntil ||
 			g.get("spectator")
 		) {
-			team.autoBudgetSettings(t, popRanks[i]);
+			await team.autoBudgetSettings(t, popRanks[i]);
 			t.adjustForInflation = true;
+			t.autoTicketPrice = true;
 			t.keepRosterSorted = true;
+			t.playThroughInjuries = DEFAULT_PLAY_THROUGH_INJURIES;
 			await idb.cache.teams.put(t);
 		}
 	}
+	await finances.updateRanks(["budget"]);
 
 	if (updatedTeams) {
 		await league.setGameAttributes({
@@ -174,6 +213,7 @@ const newPhasePreseason = async (
 				abbrev: t.abbrev,
 				disabled: t.disabled,
 				imgURL: t.imgURL,
+				imgURLSmall: t.imgURLSmall,
 				name: t.name,
 				region: t.region,
 			})),
@@ -219,7 +259,7 @@ const newPhasePreseason = async (
 				})} uncovered evidence that ${name}`,
 				`Internet sleuths on Twitter uncovered evidence that ${name}`,
 				`In an emotional interview on 60 Minutes, ${name} admitted that he`,
-				`During a preaseason locker room interview, ${name} accidentally revealed that he`,
+				`During a preseason locker room interview, ${name} accidentally revealed that he`,
 				`In a Reddit AMA, ${name} confirmed that he`,
 				`A recent Wikileaks report revealed that ${name}`,
 				`A foreign ID from the stolen luggage of ${name} revealed he`,
@@ -317,12 +357,12 @@ const newPhasePreseason = async (
 	for (const [tidString, roster] of Object.entries(playersByTeam)) {
 		const tid = parseInt(tidString);
 		for (const p of roster) {
-			const jerseyNumber = p.stats[p.stats.length - 1].jerseyNumber;
+			const jerseyNumber = p.stats.at(-1).jerseyNumber;
 			if (!jerseyNumber) {
 				continue;
 			}
 			const conflicts = roster.filter(
-				p2 => p2.stats[p2.stats.length - 1].jerseyNumber === jerseyNumber,
+				p2 => p2.stats.at(-1).jerseyNumber === jerseyNumber,
 			);
 			if (conflicts.length > 1) {
 				// Conflict! Who gets to keep the number?
@@ -338,9 +378,7 @@ const newPhasePreseason = async (
 
 				for (const p of conflicts) {
 					if (p !== playerWhoKeepsIt) {
-						p.stats[
-							p.stats.length - 1
-						].jerseyNumber = await player.genJerseyNumber(p);
+						p.stats.at(-1).jerseyNumber = await player.genJerseyNumber(p);
 					}
 				}
 			}
@@ -348,9 +386,7 @@ const newPhasePreseason = async (
 
 		// One more pass, for players without jersey numbers at all (draft picks)
 		for (const p of roster) {
-			p.stats[p.stats.length - 1].jerseyNumber = await player.genJerseyNumber(
-				p,
-			);
+			p.stats.at(-1).jerseyNumber = await player.genJerseyNumber(p);
 		}
 	}
 

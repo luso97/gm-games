@@ -1,7 +1,6 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { helpers } from "../../util";
-import { ColPtsOrGB } from "../Standings";
+import { ColPtsOrGB, TeamColumn } from "../Standings";
 import type { View } from "../../../common/types";
 
 const width100 = {
@@ -11,7 +10,7 @@ const width100 = {
 const Standings = ({
 	confTeams,
 	numPlayoffTeams,
-	playoffsByConference,
+	playoffsByConf,
 	pointsFormula,
 	usePts,
 	userTid,
@@ -19,64 +18,48 @@ const Standings = ({
 	View<"leagueDashboard">,
 	| "confTeams"
 	| "numPlayoffTeams"
-	| "playoffsByConference"
+	| "playoffsByConf"
 	| "pointsFormula"
 	| "usePts"
 	| "userTid"
->) => (
-	<>
-		<table className="table table-striped table-bordered table-sm mb-1">
-			<thead>
-				<tr>
-					<th style={width100}>Team</th>
-					<ColPtsOrGB
-						alignRight
-						pointsFormula={pointsFormula}
-						usePts={usePts}
-					/>
-				</tr>
-			</thead>
-			<tbody>
-				{confTeams.map((t, i) => {
-					return (
-						<tr
-							key={t.tid}
-							className={classNames({
-								separator: i === numPlayoffTeams - 1 && playoffsByConference,
-								"table-info": t.tid === userTid,
-							})}
-						>
-							<td>
-								{t.rank}.{" "}
-								<a
-									href={helpers.leagueUrl([
-										"roster",
-										`${t.seasonAttrs.abbrev}_${t.tid}`,
-									])}
-								>
-									{t.seasonAttrs.region}
-								</a>
-								{t.seasonAttrs.clinchedPlayoffs
-									? ` ${t.seasonAttrs.clinchedPlayoffs}`
-									: null}
-							</td>
-							<td className="text-right">
-								{usePts ? Math.round(t.seasonAttrs.pts) : t.gb}
-							</td>
-						</tr>
-					);
-				})}
-			</tbody>
-		</table>
-		<a href={helpers.leagueUrl(["standings"])}>» League Standings</a>
-	</>
-);
+>) => {
+	const maxRank = Math.max(...confTeams.map(t => t.rank));
 
-Standings.propTypes = {
-	confTeams: PropTypes.arrayOf(PropTypes.object).isRequired,
-	numPlayoffTeams: PropTypes.number.isRequired,
-	playoffsByConference: PropTypes.bool.isRequired,
-	userTid: PropTypes.number.isRequired,
+	return (
+		<>
+			<table className="table table-striped table-sm align-middle mb-1">
+				<thead>
+					<tr>
+						<th style={width100}>Conference</th>
+						<ColPtsOrGB
+							alignRight
+							pointsFormula={pointsFormula}
+							usePts={usePts}
+						/>
+					</tr>
+				</thead>
+				<tbody>
+					{confTeams.map((t, i) => {
+						return (
+							<tr
+								key={t.tid}
+								className={classNames({
+									separator: i === numPlayoffTeams - 1 && playoffsByConf,
+									"table-info": t.tid === userTid,
+								})}
+							>
+								<TeamColumn rank={t.rank} maxRank={maxRank} t={t} />
+								<td className="text-end">
+									{usePts ? Math.round(t.seasonAttrs.pts) : t.gb}
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+			<a href={helpers.leagueUrl(["standings"])}>» League Standings</a>
+		</>
+	);
 };
 
 export default Standings;

@@ -1,4 +1,4 @@
-import type { ScheduledEventWithoutKey } from "../../../common/types";
+import type { Phase, ScheduledEventWithoutKey } from "../../../common/types";
 
 export type Ratings = {
 	slug: string;
@@ -30,17 +30,21 @@ export type Basketball = {
 		  }[]
 		| undefined
 	>;
-	stats: {
+	teams: {
 		slug: string;
 		season: number;
 		abbrev: string;
 		jerseyNumber?: string;
+
+		// Currently, phase is only set for players in the alexnoob rosters who move between phases in the same year. So currently I have those for PRESEASON and DRAFT_LOTTERY, meaning it can't identify players who joined a team during the season but before the playoffs. Well, handles the 2021 Horford trade at least.
+		phase?: number;
 	}[];
 	bios: Record<
 		string,
 		| {
 				name: string;
 				bornYear: number;
+				diedYear: number;
 				country: string;
 				weight: number;
 				pos: string;
@@ -65,12 +69,16 @@ export type Basketball = {
 		exp: number;
 		amount: number;
 	}[];
-	injuries: {
-		slug: string;
-		season: number;
-		type: string;
-		gamesRemaining: number;
-	}[];
+	injuries: Record<
+		string,
+		| {
+				season: number;
+				phase: Phase;
+				type: string;
+				gamesRemaining: number;
+		  }[]
+		| undefined
+	>;
 	scheduledEventsGameAttributes: ScheduledEventWithoutKey[];
 	scheduledEventsTeams: ScheduledEventWithoutKey[];
 	draftPicks: Record<
@@ -88,6 +96,12 @@ export type Basketball = {
 
 			// Only for the hardcoded current season picks
 			season?: number;
+
+			// Records when picks have been traded
+			range?:
+				| [[number, number], [number, number]]
+				| [[number, number], null]
+				| [null, [number, number]];
 		}[]
 	>;
 	freeAgents: any[];
@@ -120,6 +134,14 @@ export type Basketball = {
 		}[]
 	>;
 	expansionDrafts: Record<number, Record<string, string[]>>;
+	retiredJerseyNumbers: Record<
+		string,
+		{
+			number: string;
+			season: number;
+			slug: string;
+		}[]
+	>;
 };
 
 let cachedJSON: Basketball;

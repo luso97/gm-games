@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { isSport, PHASE } from "../../common";
 import { helpers, realtimeUpdate, toWorker, useLocalShallow } from "../util";
@@ -26,10 +25,6 @@ const TeamNameLink = ({
 	) : (
 		<>{children}</>
 	);
-};
-TeamNameLink.propTypes = {
-	season: PropTypes.number.isRequired,
-	t: PropTypes.object.isRequired,
 };
 
 const TeamLogo = ({
@@ -69,7 +64,7 @@ const TeamLogo = ({
 						/>
 					</TeamNameLink>
 				</div>
-				<div className="mt-1 mb-3 font-weight-bold">{record}</div>
+				<div className="mt-1 mb-3 fw-bold">{record}</div>
 			</div>
 		</div>
 	) : null;
@@ -79,11 +74,11 @@ const HeadlineScore = ({ boxScore }: any) => {
 	// Historical games will have boxScore.won.name and boxScore.lost.name so use that for ordering, but live games
 	// won't. This is hacky, because the existence of this property is just a historical coincidence, and maybe it'll
 	// change in the future.
-	const liveGameSim = !boxScore.won || !boxScore.won.name;
+	const liveGameSim = boxScore.won?.name === undefined;
 	const t0 =
-		boxScore.won && boxScore.won.name ? boxScore.won : boxScore.teams[0];
+		boxScore.won?.name !== undefined ? boxScore.won : boxScore.teams[0];
 	const t1 =
-		boxScore.lost && boxScore.lost.name ? boxScore.lost : boxScore.teams[1];
+		boxScore.lost?.name !== undefined ? boxScore.lost : boxScore.teams[1];
 
 	return (
 		<>
@@ -118,13 +113,10 @@ const HeadlineScore = ({ boxScore }: any) => {
 		</>
 	);
 };
-HeadlineScore.propTypes = {
-	boxScore: PropTypes.object.isRequired,
-};
 
 const FourFactors = ({ teams }: { teams: any[] }) => {
 	return (
-		<table className="table table-bordered table-sm mb-2 mb-sm-0">
+		<table className="table table-sm mb-2 mb-sm-0">
 			<thead>
 				<tr />
 				<tr>
@@ -171,9 +163,6 @@ const FourFactors = ({ teams }: { teams: any[] }) => {
 		</table>
 	);
 };
-FourFactors.propTypes = {
-	teams: PropTypes.array.isRequired,
-};
 
 const NextButton = ({
 	abbrev,
@@ -194,7 +183,7 @@ const NextButton = ({
 	const simNext = useCallback(async () => {
 		setAutoGoToNext(true);
 		setClickedGoToNext(true);
-		await toWorker("playMenu", "day");
+		await toWorker("playMenu", "day", undefined);
 	}, []);
 
 	useEffect(() => {
@@ -239,7 +228,7 @@ const NextButton = ({
 	);
 
 	return (
-		<div className="ml-4">
+		<div className="ms-4">
 			{boxScore.season === season &&
 			currentGidInList &&
 			(nextGid === undefined || clickedGoToNext || autoGoToNext) &&
@@ -272,12 +261,6 @@ const NextButton = ({
 		</div>
 	);
 };
-NextButton.propTypes = {
-	abbrev: PropTypes.string,
-	boxScore: PropTypes.object.isRequired,
-	currentGidInList: PropTypes.bool,
-	nextGid: PropTypes.number,
-};
 
 const DetailedScore = ({
 	abbrev,
@@ -309,7 +292,7 @@ const DetailedScore = ({
 	return (
 		<div className="d-flex align-items-center justify-content-center">
 			{showNextPrev ? (
-				<div className="mr-4">
+				<div className="me-4">
 					<a
 						className={classNames("btn", "btn-light-bordered", {
 							disabled: prevGid === undefined,
@@ -326,8 +309,8 @@ const DetailedScore = ({
 				</div>
 			) : null}
 			<div>
-				<div className="mr-4 mx-xs-auto table-nonfluid text-center">
-					<table className="table table-bordered table-sm mb-2 mb-sm-0">
+				<div className="me-4 mx-xs-auto table-nonfluid text-center">
+					<table className="table table-sm mb-2 mb-sm-0">
 						<thead>
 							<tr>
 								<th />
@@ -385,16 +368,6 @@ const DetailedScore = ({
 			) : null}
 		</div>
 	);
-};
-
-DetailedScore.propTypes = {
-	abbrev: PropTypes.string,
-	boxScore: PropTypes.object.isRequired,
-	currentGidInList: PropTypes.bool,
-	nextGid: PropTypes.number,
-	prevGid: PropTypes.number,
-	showNextPrev: PropTypes.bool,
-	tid: PropTypes.number,
 };
 
 const PlayoffRecord = ({
@@ -469,7 +442,6 @@ const BoxScoreWrapper = ({
 	abbrev,
 	boxScore,
 	currentGidInList,
-	injuredToBottom,
 	nextGid,
 	playIndex,
 	prevGid,
@@ -480,7 +452,6 @@ const BoxScoreWrapper = ({
 	abbrev?: string;
 	boxScore: any;
 	currentGidInList?: boolean;
-	injuredToBottom?: boolean;
 	nextGid?: number;
 	playIndex?: number;
 	prevGid?: number;
@@ -493,10 +464,15 @@ const BoxScoreWrapper = ({
 		prevPlayIndex.current = playIndex;
 	});
 	// If more than one play has happend between renders, force update of every row of the live box score, in case a player was subbed out in the missing play
-	const forceRowUpdate =
+	let forceRowUpdate =
 		playIndex !== undefined &&
 		prevPlayIndex.current !== undefined &&
 		playIndex - prevPlayIndex.current > 1;
+
+	// Always update when game ends (needed to show DNPs after live sim ends)
+	if (boxScore.gameOver) {
+		forceRowUpdate = true;
+	}
 
 	const handleKeydown = useCallback(
 		e => {
@@ -544,23 +520,31 @@ const BoxScoreWrapper = ({
 	// won't. This is hacky, because the existence of this property is just a historical coincidence, and maybe it'll
 	// change in the future.
 	const t0 =
-		boxScore.won && boxScore.won.name ? boxScore.won : boxScore.teams[0];
+		boxScore.won?.name !== undefined ? boxScore.won : boxScore.teams[0];
 	const t1 =
-		boxScore.lost && boxScore.lost.name ? boxScore.lost : boxScore.teams[1];
+		boxScore.lost?.name !== undefined ? boxScore.lost : boxScore.teams[1];
 
 	let forcedWinText = null;
 	if (boxScore.forceWin !== undefined) {
 		const pure = boxScore.forceWin <= 500;
+
+		// Live game sim still has final score in won/lost.pts
+		const tie = boxScore.won.pts === boxScore.lost.pts;
+
 		forcedWinText = (
 			<>
 				<br />
-				Forced win in{" "}
+				Forced {tie ? "tie" : "win"} in{" "}
 				<span
 					className={pure ? "text-success" : "text-danger"}
 					title={
 						pure
-							? "Win was forced without giving a bonus to the winning team"
-							: "Forcing the win required giving the winning team a bonus"
+							? `${tie ? "Tie" : "Win"} was forced without giving a bonus to ${
+									tie ? "either" : "the winning"
+							  } team`
+							: `Forcing the ${tie ? "tie" : "win"} required giving ${
+									tie ? "a" : "the winning"
+							  } team a bonus`
 					}
 				>
 					{helpers.numberWithCommas(boxScore.forceWin)}
@@ -597,27 +581,11 @@ const BoxScoreWrapper = ({
 				</div>
 				<TeamLogo season={boxScore.season} t={t1} />
 			</div>
-			<BoxScore
-				boxScore={boxScore}
-				Row={Row}
-				forceRowUpdate={forceRowUpdate}
-				injuredToBottom={injuredToBottom}
-			/>
+			<BoxScore boxScore={boxScore} Row={Row} forceRowUpdate={forceRowUpdate} />
 			Attendance: {helpers.numberWithCommas(boxScore.att)}
 			{forcedWinText}
 		</>
 	);
-};
-
-BoxScoreWrapper.propTypes = {
-	abbrev: PropTypes.string,
-	boxScore: PropTypes.object.isRequired,
-	currentGidInList: PropTypes.bool,
-	nextGid: PropTypes.number,
-	prevGid: PropTypes.number,
-	showNextPrev: PropTypes.bool,
-	tid: PropTypes.number,
-	Row: PropTypes.any,
 };
 
 export default BoxScoreWrapper;

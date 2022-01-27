@@ -37,6 +37,7 @@ import type {
 import type { IDBPTransaction } from "idb";
 import type { LeagueDB } from "./connectLeague";
 import getAll from "./getAll";
+import { league } from "../core";
 
 type Status = "empty" | "error" | "filling" | "full";
 
@@ -202,6 +203,7 @@ class Cache {
 		number,
 		{
 			resolve: () => void;
+			timeoutID: number;
 			validStatuses: Status[];
 		}
 	>;
@@ -238,7 +240,7 @@ class Cache {
 
 	events: StoreAPI<EventBBGMWithoutKey, EventBBGM, number>;
 
-	gameAttributes: StoreAPI<GameAttribute, GameAttribute, string>;
+	gameAttributes: StoreAPI<GameAttribute<any>, GameAttribute<any>, string>;
 
 	games: StoreAPI<Game, Game, number>;
 
@@ -274,17 +276,17 @@ class Cache {
 
 	constructor() {
 		this._status = "empty";
-		// @ts-ignore
+		// @ts-expect-error
 		this._data = {};
-		// @ts-ignore
+		// @ts-expect-error
 		this._deletes = {};
 		this._dirty = false;
 		this._dirtyIndexes = new Set();
-		// @ts-ignore
+		// @ts-expect-error
 		this._dirtyRecords = {};
-		// @ts-ignore
+		// @ts-expect-error
 		this._indexes = {};
-		// @ts-ignore
+		// @ts-expect-error
 		this._maxIds = {};
 		this.newLeague = false;
 		this._requestQueue = new Map();
@@ -504,7 +506,7 @@ class Cache {
 			},
 		};
 
-		// @ts-ignore
+		// @ts-expect-error
 		this._index2store = {};
 
 		for (const store of helpers.keys(this.storeInfos)) {
@@ -550,12 +552,7 @@ class Cache {
 				this._requestInd += 1;
 				const ind = this._requestInd;
 
-				this._requestQueue.set(ind, {
-					resolve,
-					validStatuses,
-				});
-
-				setTimeout(() => {
+				const timeoutID = setTimeout(() => {
 					reject(
 						new Error(
 							`Timeout while waiting for valid status (${validStatuses.join(
@@ -565,7 +562,13 @@ class Cache {
 					);
 
 					this._requestQueue.delete(ind);
-				}, 30000);
+				}, 30000) as unknown as number;
+
+				this._requestQueue.set(ind, {
+					resolve,
+					timeoutID,
+					validStatuses,
+				});
 			});
 		}
 	}
@@ -575,6 +578,7 @@ class Cache {
 
 		for (const [ind, entry] of this._requestQueue.entries()) {
 			if (entry.validStatuses.includes(status)) {
+				self.clearTimeout(entry.timeoutID);
 				entry.resolve();
 
 				this._requestQueue.delete(ind);
@@ -691,7 +695,7 @@ class Cache {
 
 		this._setStatus("filling");
 
-		// @ts-ignore
+		// @ts-expect-error
 		this._data = {};
 
 		// This is crap and should be fixed ASAP
@@ -729,7 +733,7 @@ class Cache {
 		this._setStatus("full");
 		//performance.measure('fillTime', 'fillStart');
 		//const entries = performance.getEntriesByName('fillTime');
-		//console.log(`${g.get("phase")} fill duration: ${entries[entries.length - 1].duration / 1000} seconds`);
+		//console.log(`${g.get("phase")} fill duration: ${entries.at(-1).duration / 1000} seconds`);
 	}
 
 	// Take current contents in database and write to disk
@@ -770,15 +774,13 @@ class Cache {
 			this._dirty = false;
 
 			// Update lastPlayed
-			const l = await idb.meta.get("leagues", g.get("lid"));
-			if (l) {
-				l.lastPlayed = new Date();
-				await idb.meta.put("leagues", l);
-			}
+			await league.updateMeta({
+				lastPlayed: new Date(),
+			});
 		}
 		//performance.measure('flushTime', 'flushStart');
 		//const entries = performance.getEntriesByName('flushTime');
-		//console.log(`${g.get("phase")} flush duration: ${entries[entries.length - 1].duration / 1000} seconds`);
+		//console.log(`${g.get("phase")} flush duration: ${entries.at(-1).duration / 1000} seconds`);
 	}
 
 	async _autoFlush() {
@@ -939,9 +941,7 @@ class Cache {
 
 		// Need to have the correct type here for IndexedDB
 		const idParsed =
-			this.storeInfos[store].pkType === "number"
-				? parseInt(obj[pk], 10)
-				: obj[pk];
+			this.storeInfos[store].pkType === "number" ? parseInt(obj[pk]) : obj[pk];
 
 		this._dirtyRecords[store].add(idParsed);
 
@@ -963,65 +963,39 @@ class Cache {
 	async _delete(store: Store, id: number | string) {
 		await this._waitForStatus("full");
 
-		if (
-			[
-				"draftPicks",
-				"draftLotteryResults",
-				"messages",
-				"negotiations",
-				"players",
-				"releasedPlayers",
-				"schedule",
-				"scheduledEvents",
-				"teamSeasons",
-				"teamStats",
-				"teams",
-			].includes(store)
-		) {
-			if (this._data[store].hasOwnProperty(id)) {
-				delete this._data[store][id];
-			}
-
-			// Need to have the correct type here for IndexedDB
-			const idParsed =
-				this.storeInfos[store].pkType === "number" && typeof id === "string"
-					? parseInt(id, 10)
-					: id;
-
-			this._deletes[store].add(idParsed);
-
-			this._dirty = true;
-
-			this._markDirtyIndexes(store);
-		} else {
-			throw new Error(`delete not implemented for store "${store}"`);
+		if (this._data[store].hasOwnProperty(id)) {
+			delete this._data[store][id];
 		}
+
+		// Need to have the correct type here for IndexedDB
+		const idParsed =
+			this.storeInfos[store].pkType === "number" && typeof id === "string"
+				? parseInt(id)
+				: id;
+
+		this._deletes[store].add(idParsed);
+
+		this._dirty = true;
+
+		this._markDirtyIndexes(store);
 	}
 
 	async _clear(store: Store) {
 		await this._waitForStatus("full");
 
-		if (
-			["negotiations", "releasedPlayers", "schedule", "teamSeasons"].includes(
-				store,
-			)
-		) {
-			for (const id of Object.keys(this._data[store])) {
-				delete this._data[store][id];
+		for (const id of Object.keys(this._data[store])) {
+			delete this._data[store][id];
 
-				// Need to have the correct type here for IndexedDB
-				const idParsed =
-					this.storeInfos[store].pkType === "number" ? parseInt(id, 10) : id;
+			// Need to have the correct type here for IndexedDB
+			const idParsed =
+				this.storeInfos[store].pkType === "number" ? parseInt(id) : id;
 
-				this._deletes[store].add(idParsed);
-			}
-
-			this._dirty = true;
-
-			this._markDirtyIndexes(store);
-		} else {
-			throw new Error(`clear not implemented for store "${store}"`);
+			this._deletes[store].add(idParsed);
 		}
+
+		this._dirty = true;
+
+		this._markDirtyIndexes(store);
 	}
 }
 

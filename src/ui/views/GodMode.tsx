@@ -1,7 +1,8 @@
 import classNames from "classnames";
 import useTitleBar from "../hooks/useTitleBar";
-import { helpers, localActions, toWorker } from "../util";
+import { helpers, toWorker } from "../util";
 import type { View } from "../../common/types";
+import { DAILY_SCHEDULE } from "../../common";
 
 const GodMode = (props: View<"godMode">) => {
 	const { godMode } = props;
@@ -19,7 +20,6 @@ const GodMode = (props: View<"godMode">) => {
 		}
 
 		await toWorker("main", "updateGameAttributes", attrs);
-		localActions.update({ godMode: attrs.godMode });
 	};
 	return (
 		<div style={{ maxWidth: 1100 }}>
@@ -31,14 +31,14 @@ const GodMode = (props: View<"godMode">) => {
 
 			<p className="text-danger">
 				If you enable God Mode within a league, you will not get credit for any{" "}
-				<a href="/account">Achievements</a>. This persists even if you disable
-				God Mode. You can only get Achievements in a league where God Mode has
-				never been enabled.
+				<a href="/achievements">Achievements</a>. This persists even if you
+				disable God Mode. You can only get Achievements in a league where God
+				Mode has never been enabled.
 			</p>
 
 			<button
 				className={classNames(
-					"btn btn-lg border-0",
+					"btn btn-lg",
 					godMode ? "btn-success" : "btn-god-mode",
 				)}
 				onClick={handleGodModeToggle}
@@ -51,9 +51,13 @@ const GodMode = (props: View<"godMode">) => {
 					<div className="card-body">
 						<h3 className="card-title">Advanced Settings</h3>
 						<p className="card-text">
-							Customize tons of options at{" "}
+							Customize tons of settings at{" "}
 							<a href={helpers.leagueUrl(["settings"])}>
 								Tools &gt; League Settings
+							</a>
+							, and control your league even more at{" "}
+							<a href={helpers.leagueUrl(["danger_zone"])}>
+								Tools &gt; Danger Zone
 							</a>
 							.
 						</p>
@@ -125,20 +129,26 @@ const GodMode = (props: View<"godMode">) => {
 							before it happens, from either{" "}
 							<a href={helpers.leagueUrl(["schedule"])}>Team &gt; Schedule</a>{" "}
 							or the{" "}
-							<a href={helpers.leagueUrl(["live"])}>Live Game Simulation</a>{" "}
+							<a href={helpers.leagueUrl(["daily_schedule"])}>
+								{DAILY_SCHEDULE}
+							</a>{" "}
 							page.
 						</p>
 					</div>
 				</div>
 				<div className="card border-top-sm-0 border-radius-top-sm-0">
 					<div className="card-body">
-						<h3 className="card-title">Edit Awards</h3>
+						<h3 className="card-title">Edit Awards, Draft, Playoffs...</h3>
 						<p className="card-text">
 							Decide who should win any end-of-season awards at{" "}
 							<a href={helpers.leagueUrl(["edit_awards"])}>
 								Tools &gt; Edit Awards
 							</a>
-							.
+							. Rig the{" "}
+							<a href={helpers.leagueUrl(["draft_lottery"])}>draft lottery</a>.
+							Pick new{" "}
+							<a href={helpers.leagueUrl(["playoffs"])}>playoff teams</a>. And
+							so much more!
 						</p>
 					</div>
 				</div>

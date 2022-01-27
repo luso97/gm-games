@@ -1,5 +1,6 @@
 import type { Conf, Div } from "../../../common/types";
 
+// Keep in sync with BASIC_TEAM_KEYS
 export type NewLeagueTeam = {
 	tid: number;
 	region: string;
@@ -9,6 +10,7 @@ export type NewLeagueTeam = {
 	popRank: number;
 	stadiumCapacity?: number;
 	imgURL?: string;
+	imgURLSmall?: string;
 	colors?: [string, string, string];
 	srID?: string;
 	disabled?: boolean;
@@ -17,6 +19,8 @@ export type NewLeagueTeam = {
 	did: number;
 };
 
+export type NewLeagueTeamWithoutRank = Omit<NewLeagueTeam, "popRank">;
+
 export type LeagueInfo = {
 	startingSeason: number;
 	stores: string[];
@@ -24,5 +28,5 @@ export type LeagueInfo = {
 		confs: Conf[];
 		divs: Div[];
 	};
-	teams: NewLeagueTeam[];
+	teams: NewLeagueTeamWithoutRank[];
 };

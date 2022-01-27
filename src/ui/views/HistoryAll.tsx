@@ -1,5 +1,9 @@
-import PropTypes from "prop-types";
-import { DataTable, MoreLinks, PlayerNameLabels } from "../components";
+import {
+	DataTable,
+	MoreLinks,
+	PlayerNameLabels,
+	TeamLogoInline,
+} from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import type { View } from "../../common/types";
@@ -25,8 +29,8 @@ const awardName = (
 
 	const ret = (
 		<div className="d-flex">
-			<div className="mr-auto">
-				<PlayerNameLabels pid={award.pid} pos={award.pos}>
+			<div className="me-auto">
+				<PlayerNameLabels pid={award.pid} pos={award.pos} season={season}>
 					{award.name}
 				</PlayerNameLabels>{" "}
 				(
@@ -79,8 +83,8 @@ const teamName = (
 const CountBadge = ({ count }: { count: number }) => {
 	if (count > 1) {
 		return (
-			<div className="ml-1">
-				<span className="badge badge-secondary align-text-bottom">{count}</span>
+			<div className="ms-1">
+				<span className="badge bg-secondary align-text-bottom">{count}</span>
 			</div>
 		);
 	}
@@ -98,15 +102,11 @@ const formatTeam = (
 	}
 
 	return {
-		classNames: t.tid === userTid ? "table-info p-0 pr-1" : "p-0 pr-1",
+		classNames: t.tid === userTid ? "table-info py-1" : "py-1",
 		value: (
 			<div className="d-flex align-items-center">
-				{t.imgURL ? (
-					<div className="playoff-matchup-logo mr-2 d-flex align-items-center justify-content-center">
-						<img className="mw-100 mh-100" src={t.imgURL} alt="" />
-					</div>
-				) : null}
-				<div className="mr-auto">
+				<TeamLogoInline imgURL={t.imgURL} imgURLSmall={t.imgURLSmall} />
+				<div className="ms-1 me-auto">
 					{t.seed}. {teamName(t, season)}
 				</div>
 				<CountBadge count={t.count} />
@@ -119,12 +119,12 @@ const formatTeam = (
 const HistoryAll = ({ awards, seasons, userTid }: View<"historyAll">) => {
 	useTitleBar({ title: "League History" });
 
-	const cols = getCols(
+	const cols = getCols([
 		"Season",
 		"League Champion",
 		"Runner Up",
 		...awards.map(award => `award:${award}`),
-	);
+	]);
 
 	const rows = seasons.map(s => {
 		let seasonLink;
@@ -157,7 +157,7 @@ const HistoryAll = ({ awards, seasons, userTid }: View<"historyAll">) => {
 			<MoreLinks type="league" page="history_all" />
 
 			<DataTable
-				className="align-middle-all"
+				className="align-middle"
 				cols={cols}
 				defaultSort={[0, "desc"]}
 				name="HistoryAll"
@@ -166,12 +166,6 @@ const HistoryAll = ({ awards, seasons, userTid }: View<"historyAll">) => {
 			/>
 		</>
 	);
-};
-
-HistoryAll.propTypes = {
-	awards: PropTypes.arrayOf(PropTypes.string).isRequired,
-	seasons: PropTypes.arrayOf(PropTypes.object).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default HistoryAll;

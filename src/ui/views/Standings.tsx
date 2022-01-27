@@ -1,15 +1,18 @@
 import classNames from "classnames";
 import { CSSProperties, Fragment } from "react";
-import { ResponsiveTableWrapper, MovOrDiff } from "../components";
+import {
+	ResponsiveTableWrapper,
+	MovOrDiff,
+	TeamLogoInline,
+} from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import useClickable from "../hooks/useClickable";
-import type { View } from "../../common/types";
+import type { TeamSeason, View } from "../../common/types";
 import { isSport, TIEBREAKERS } from "../../common";
 
-type StandingsTeam = View<"standings">["rankingGroups"]["league"][number][number];
-
-const MAX_WIDTH = 1320;
+type StandingsTeam =
+	View<"standings">["rankingGroups"]["league"][number][number];
 
 const record = (
 	seasonAttrs: StandingsTeam["seasonAttrs"],
@@ -30,7 +33,68 @@ const record = (
 	return text;
 };
 
+export const TeamColumn = ({
+	maxRank,
+	rank,
+	season,
+	t,
+	includeName,
+}: {
+	maxRank: number;
+	rank: number | null;
+	season?: number;
+	t: {
+		tid: number;
+		seasonAttrs: Pick<
+			TeamSeason,
+			"abbrev" | "clinchedPlayoffs" | "imgURL" | "imgURLSmall" | "region"
+		> & {
+			// Only required with includeName
+			name?: string;
+		};
+	};
+	includeName?: boolean;
+}) => {
+	const rankMinWidth = 8 + 7 * (String(maxRank).length - 1);
+
+	return (
+		<td className="py-1">
+			<div className="d-flex align-items-center">
+				<div
+					className="text-end"
+					style={{
+						minWidth: rankMinWidth,
+					}}
+				>
+					{rank !== null ? rank : null}
+				</div>
+				<TeamLogoInline
+					imgURL={t.seasonAttrs.imgURL}
+					imgURLSmall={t.seasonAttrs.imgURLSmall}
+					className="mx-1"
+				/>
+				<div>
+					<a
+						href={helpers.leagueUrl([
+							"roster",
+							`${t.seasonAttrs.abbrev}_${t.tid}`,
+							...(season !== undefined ? [season] : []),
+						])}
+					>
+						{t.seasonAttrs.region}
+						{includeName ? ` ${t.seasonAttrs.name}` : null}
+					</a>
+					{t.seasonAttrs.clinchedPlayoffs
+						? ` ${t.seasonAttrs.clinchedPlayoffs}`
+						: null}
+				</div>
+			</div>
+		</td>
+	);
+};
+
 const GroupStandingsRow = ({
+	maxRank,
 	season,
 	separator,
 	showTiebreakers,
@@ -44,6 +108,7 @@ const GroupStandingsRow = ({
 	View<"standings">,
 	"season" | "showTiebreakers" | "ties" | "otl" | "type" | "usePts" | "userTid"
 > & {
+	maxRank: number;
 	separator: boolean;
 	t: StandingsTeam;
 }) => {
@@ -59,21 +124,13 @@ const GroupStandingsRow = ({
 			})}
 			onClick={toggleClicked}
 		>
-			<td>
-				{t.rank.playoffs > 0 ? `${t.rank.playoffs}. ` : null}
-				<a
-					href={helpers.leagueUrl([
-						"roster",
-						`${t.seasonAttrs.abbrev}_${t.tid}`,
-						season,
-					])}
-				>
-					{t.seasonAttrs.region} {t.seasonAttrs.name}
-				</a>
-				{t.seasonAttrs.clinchedPlayoffs
-					? ` ${t.seasonAttrs.clinchedPlayoffs}`
-					: null}
-			</td>
+			<TeamColumn
+				maxRank={maxRank}
+				rank={t.rank.playoffs > 0 ? t.rank.playoffs : null}
+				season={season}
+				t={t}
+				includeName
+			/>
 			<td>{t.seasonAttrs.won}</td>
 			<td>{t.seasonAttrs.lost}</td>
 			{otl ? <td>{t.seasonAttrs.otl}</td> : null}
@@ -119,7 +176,7 @@ export const ColPtsOrGB = ({
 	pointsFormula: string;
 	usePts: boolean;
 }) => {
-	const col = getCols(usePts ? "PTS" : "GB")[0];
+	const col = getCols([usePts ? "PTS" : "GB"])[0];
 	if (usePts) {
 		col.desc = `Points (${pointsFormula})`;
 	}
@@ -166,12 +223,14 @@ const GroupStandings = ({
 	separatorIndex?: number;
 	teams: StandingsTeam[];
 }) => {
+	const maxRank = Math.max(...teams.map(t => t.rank.playoffs));
+
 	return (
 		<ResponsiveTableWrapper>
-			<table className="table table-striped table-bordered table-sm table-hover">
+			<table className="table table-striped table-sm table-hover align-middle">
 				<thead>
 					<tr>
-						<th style={width100}>{name}</th>
+						<th style={{ minWidth: 215 }}>{name}</th>
 						<th>W</th>
 						<th>L</th>
 						{otl ? <th>OTL</th> : null}
@@ -207,6 +266,7 @@ const GroupStandings = ({
 					{teams.map((t, i) => (
 						<GroupStandingsRow
 							key={t.tid}
+							maxRank={maxRank}
 							t={t}
 							season={season}
 							separator={separatorIndex === i}
@@ -227,7 +287,8 @@ const GroupStandings = ({
 const SmallStandingsRow = ({
 	i,
 	maxPlayoffSeed,
-	playoffsByConference,
+	maxRank,
+	playoffsByConf,
 	season,
 	t,
 	usePts,
@@ -235,7 +296,8 @@ const SmallStandingsRow = ({
 }: {
 	i: number;
 	maxPlayoffSeed: number;
-	playoffsByConference: boolean;
+	maxRank: number;
+	playoffsByConf: boolean;
 	season: number;
 	t: StandingsTeam;
 	usePts: boolean;
@@ -253,25 +315,16 @@ const SmallStandingsRow = ({
 			})}
 			onClick={toggleClicked}
 		>
-			<td>
-				{playoffsByConference ? t.rank.conf : t.rank.league}.{" "}
-				<a
-					href={helpers.leagueUrl([
-						"roster",
-						`${t.seasonAttrs.abbrev}_${t.tid}`,
-						season,
-					])}
-				>
-					{t.seasonAttrs.region}
-				</a>
-				{t.seasonAttrs.clinchedPlayoffs
-					? ` ${t.seasonAttrs.clinchedPlayoffs}`
-					: null}
-			</td>
-			<td className="text-right">
+			<TeamColumn
+				maxRank={maxRank}
+				rank={playoffsByConf ? t.rank.conf : t.rank.league}
+				season={season}
+				t={t}
+			/>
+			<td className="text-end">
 				{usePts
 					? Math.round(t.seasonAttrs.pts)
-					: playoffsByConference
+					: playoffsByConf
 					? t.gb.conf
 					: t.gb.league}
 			</td>
@@ -281,7 +334,7 @@ const SmallStandingsRow = ({
 
 const SmallStandings = ({
 	maxPlayoffSeed,
-	playoffsByConference,
+	playoffsByConf,
 	pointsFormula,
 	season,
 	teams,
@@ -290,7 +343,7 @@ const SmallStandings = ({
 }: Pick<
 	View<"standings">,
 	| "maxPlayoffSeed"
-	| "playoffsByConference"
+	| "playoffsByConf"
 	| "pointsFormula"
 	| "season"
 	| "usePts"
@@ -298,8 +351,12 @@ const SmallStandings = ({
 > & {
 	teams: StandingsTeam[];
 }) => {
+	const maxRank = Math.max(
+		...teams.map(t => (playoffsByConf ? t.rank.conf : t.rank.league)),
+	);
+
 	return (
-		<table className="table table-striped table-bordered table-sm">
+		<table className="table table-striped table-sm align-middle">
 			<thead>
 				<tr>
 					<th style={width100}>Team</th>
@@ -316,7 +373,8 @@ const SmallStandings = ({
 						key={t.tid}
 						i={i}
 						maxPlayoffSeed={maxPlayoffSeed}
-						playoffsByConference={playoffsByConference}
+						maxRank={maxRank}
+						playoffsByConf={playoffsByConf}
 						season={season}
 						t={t}
 						usePts={usePts}
@@ -333,7 +391,8 @@ const Standings = ({
 	divs,
 	maxPlayoffSeed,
 	numPlayoffByes,
-	playoffsByConference,
+	playIn,
+	playoffsByConf,
 	pointsFormula,
 	rankingGroups,
 	season,
@@ -362,8 +421,8 @@ const Standings = ({
 	);
 	const showSmallPlayoffStandings =
 		type === "div" &&
-		((playoffsByConference && confHasMultipleDivs) ||
-			(!playoffsByConference && divs.length > 1));
+		((playoffsByConf && confHasMultipleDivs) ||
+			(!playoffsByConf && divs.length > 1));
 
 	let groups: {
 		name?: string;
@@ -375,7 +434,7 @@ const Standings = ({
 	}[];
 	if (type === "league") {
 		let separatorIndex: number | undefined;
-		if (!playoffsByConference) {
+		if (!playoffsByConf) {
 			separatorIndex = maxPlayoffSeed - 1;
 		}
 		groups = [
@@ -390,7 +449,7 @@ const Standings = ({
 		];
 	} else if (type === "conf") {
 		let separatorIndex: number | undefined;
-		if (playoffsByConference || confs.length === 1) {
+		if (playoffsByConf || confs.length === 1) {
 			separatorIndex = maxPlayoffSeed - 1;
 		}
 		groups = confs.map((conf, i) => ({
@@ -404,7 +463,7 @@ const Standings = ({
 		}));
 	} else {
 		let separatorIndex: number | undefined;
-		if ((playoffsByConference && !confHasMultipleDivs) || divs.length === 1) {
+		if ((playoffsByConf && !confHasMultipleDivs) || divs.length === 1) {
 			separatorIndex = maxPlayoffSeed - 1;
 		}
 		groups = confs.map(conf => ({
@@ -424,8 +483,8 @@ const Standings = ({
 
 	const footer = (
 		<>
-			<div className="float-md-left">
-				z - clinched {playoffsByConference ? "a" : "the"} #1 seed
+			<div className="float-md-start">
+				z - clinched {playoffsByConf ? "a" : "the"} #1 seed
 				<br />
 				{numPlayoffByes > 0 ? (
 					<>
@@ -434,9 +493,16 @@ const Standings = ({
 					</>
 				) : null}
 				x - clinched playoffs
-				<br />o - eliminated from playoff contention
+				<br />
+				{playIn ? (
+					<>
+						w - clinched play-in tournament
+						<br />
+					</>
+				) : null}
+				o - eliminated from playoff contention
 			</div>
-			<div className="float-md-right mt-3 mt-md-0" style={{ maxWidth: 400 }}>
+			<div className="float-md-end mt-3 mt-md-0" style={{ maxWidth: 400 }}>
 				<p>Tiebreakers for the {season} season:</p>
 				<ol>
 					{tiebreakers.map(key => (
@@ -479,21 +545,23 @@ const Standings = ({
 	if (!showSmallPlayoffStandings) {
 		// No small standings
 		allStandings = (
-			<div style={{ maxWidth: 0.75 * MAX_WIDTH - 30 }}>{groupStandings}</div>
+			<div className="d-flex">
+				<div style={{ minWidth: 0 }}>{groupStandings}</div>
+			</div>
 		);
-	} else if (playoffsByConference) {
+	} else if (playoffsByConf) {
 		// Show small standings alongside each conference
 		allStandings = (
-			<div className="row" style={{ maxWidth: MAX_WIDTH }}>
+			<Fragment>
 				{groupStandings.map((confStandings, i) => {
 					return (
-						<Fragment key={i}>
-							<div className="col-md-9">{confStandings}</div>
-							<div className="col-md-3 d-none d-md-block">
+						<div className="d-flex" key={i}>
+							<div style={{ minWidth: 0 }}>{confStandings}</div>
+							<div className="d-none d-md-block ms-3" style={{ minWidth: 200 }}>
 								<h2>&nbsp;</h2>
 								<SmallStandings
 									maxPlayoffSeed={maxPlayoffSeed}
-									playoffsByConference={playoffsByConference}
+									playoffsByConf={playoffsByConf}
 									pointsFormula={pointsFormula}
 									season={season}
 									teams={rankingGroups.conf[i]}
@@ -501,21 +569,21 @@ const Standings = ({
 									usePts={usePts}
 								/>
 							</div>
-						</Fragment>
+						</div>
 					);
 				})}
-			</div>
+			</Fragment>
 		);
 	} else {
 		// Show small standings for whole league
 		allStandings = (
-			<div className="row" style={{ maxWidth: MAX_WIDTH }}>
-				<div className="col-md-9">{groupStandings}</div>
-				<div className="col-md-3 d-none d-md-block">
+			<div className="d-flex">
+				<div>{groupStandings}</div>
+				<div className="d-none d-md-block ms-3" style={{ minWidth: 200 }}>
 					<h2>&nbsp;</h2>
 					<SmallStandings
 						maxPlayoffSeed={maxPlayoffSeed}
-						playoffsByConference={playoffsByConference}
+						playoffsByConf={playoffsByConf}
 						pointsFormula={pointsFormula}
 						season={season}
 						teams={rankingGroups.league[0]}

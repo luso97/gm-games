@@ -66,16 +66,47 @@ const COMPOSITE_WEIGHTS: CompositeWeights<RatingKey> = {
 	},
 };
 
+const PLAYER_GAME_STATS = {
+	skaters: {
+		name: "Skater",
+		stats: [
+			"g",
+			"a",
+			"pts",
+			"pm",
+			"pim",
+			"s",
+			"sPct",
+			"hit",
+			"blk",
+			"gv",
+			"tk",
+			"fow",
+			"fol",
+			"foPct",
+			"min",
+			"ppMin",
+			"shMin",
+		],
+		sortBy: ["min"],
+	},
+	goalies: {
+		name: "Goalie",
+		stats: ["ga", "sa", "sv", "svPct", "pim", "min", "ppMin", "shMin"],
+		sortBy: ["min"],
+	},
+};
+
 const PLAYER_SUMMARY = {
 	summarySkater: {
 		name: "SummarySkater",
 		onlyShowIf: ["C", "W", "D"],
-		stats: ["gp", "g", "a", "pts", "pm", "ops", "dps", "ps"],
+		stats: ["gpSkater", "g", "a", "pts", "pm", "ops", "dps", "ps"],
 	},
 	summaryGoalie: {
 		name: "SummaryGoalie",
 		onlyShowIf: ["G"],
-		stats: ["gp", "gRec", "so", "gaa", "svPct", "gps"],
+		stats: ["gpGoalie", "gRec", "so", "gaa", "svPct", "gps"],
 	},
 };
 
@@ -83,7 +114,7 @@ const PLAYER_STATS_TABLES = {
 	goalie: {
 		name: "Goalie",
 		stats: [
-			"gp",
+			"gpGoalie",
 			"gRec",
 			"ga",
 			"sa",
@@ -101,7 +132,7 @@ const PLAYER_STATS_TABLES = {
 	skater: {
 		name: "Skater",
 		stats: [
-			"gp",
+			"gpSkater",
 			"g",
 			"a",
 			"pts",
@@ -333,6 +364,7 @@ export {
 	COMPOSITE_WEIGHTS,
 	NUM_LINES,
 	NUM_PLAYERS_PER_LINE,
+	PLAYER_GAME_STATS,
 	PLAYER_STATS_TABLES,
 	PLAYER_SUMMARY,
 	POSITION_COUNTS,

@@ -70,7 +70,7 @@ const newPhaseResignPlayers = async (
 			}
 
 			const positionInfo = positionInfoByTid.get(p.tid);
-			const pos = p.ratings[p.ratings.length - 1].pos;
+			const pos = p.ratings.at(-1).pos;
 
 			if (positionInfo !== undefined && positionInfo[pos] !== undefined) {
 				positionInfo[pos].count -= 1;
@@ -83,7 +83,7 @@ const newPhaseResignPlayers = async (
 
 	const payrollsByTid = new Map();
 
-	if (g.get("hardCap")) {
+	if (g.get("salaryCapType") === "hard") {
 		for (let tid = 0; tid < g.get("numTeams"); tid++) {
 			const payroll = await team.getPayroll(tid);
 			const expiringPayroll = players
@@ -98,12 +98,23 @@ const newPhaseResignPlayers = async (
 		[
 			"tid",
 			p => {
-				return g.get("hardCap") && p.draft.year === g.get("season") ? 1 : -1;
+				return p.draft.year === g.get("season") ? 1 : -1;
 			},
 			"value",
 		],
 		["asc", "desc", "desc"],
 	).map(p => p.pid);
+
+	const expiredRookieContractPids = new Set(
+		players
+			.filter(
+				p =>
+					p.contract.exp <= g.get("season") &&
+					p.contract.rookie &&
+					p.draft.year < g.get("season"),
+			)
+			.map(p => p.pid),
+	);
 
 	await freeAgents.normalizeContractDemands({
 		type: "includeExpiringContracts",
@@ -116,7 +127,23 @@ const newPhaseResignPlayers = async (
 			continue;
 		}
 
-		const draftPick = g.get("hardCap") && p.draft.year === g.get("season");
+		if (expiredRookieContractPids.has(p.pid)) {
+			p.contract.rookieResign = true;
+		}
+
+		const draftPick = p.draft.year === g.get("season");
+
+		if (draftPick && !g.get("draftPickAutoContract")) {
+			p.contract.amount /= 2;
+
+			if (p.contract.amount < g.get("minContract")) {
+				p.contract.amount = g.get("minContract");
+			} else {
+				p.contract.amount = helpers.roundContract(p.contract.amount);
+			}
+
+			p.contract.rookie = true;
+		}
 
 		if (
 			g.get("userTids").includes(p.tid) &&
@@ -126,16 +153,6 @@ const newPhaseResignPlayers = async (
 			const tid = p.tid;
 
 			player.addToFreeAgents(p);
-
-			if (draftPick) {
-				p.contract.amount /= 2;
-
-				if (p.contract.amount < g.get("minContract")) {
-					p.contract.amount = g.get("minContract");
-				} else {
-					p.contract.amount = helpers.roundContract(p.contract.amount);
-				}
-			}
 
 			await idb.cache.players.put(p);
 			const error = await contractNegotiation.create(p.pid, true, tid);
@@ -160,9 +177,9 @@ const newPhaseResignPlayers = async (
 			const payroll = payrollsByTid.get(p.tid);
 
 			const positionInfo = positionInfoByTid.get(p.tid);
-			const pos = p.ratings[p.ratings.length - 1].pos;
+			const pos = p.ratings.at(-1).pos;
 
-			if (g.get("hardCap")) {
+			if (g.get("salaryCapType") === "hard") {
 				if (contract.amount + payroll > g.get("salaryCap")) {
 					if (payroll === undefined) {
 						throw new Error(
@@ -184,19 +201,8 @@ const newPhaseResignPlayers = async (
 					reSignPlayer = false;
 				}
 
-				// Always sign rookies, and give them smaller contracts
+				// Always sign rookies
 				if (draftPick) {
-					// Hockey already has rookie salaries set correctly in normalizeContractDemands
-					if (isSport("football")) {
-						contract.amount /= 2;
-
-						if (contract.amount < g.get("minContract")) {
-							contract.amount = g.get("minContract");
-						} else {
-							contract.amount = helpers.roundContract(contract.amount);
-						}
-					}
-
 					reSignPlayer = true;
 				}
 			}
@@ -218,7 +224,8 @@ const newPhaseResignPlayers = async (
 						contract.amount < g.get("minContract") * 2 && Math.random() < 0.5;
 
 					// More randomness if hard cap
-					const whatever = g.get("hardCap") ? Math.random() > 0.1 : true;
+					const whatever =
+						g.get("salaryCapType") === "hard" ? Math.random() > 0.1 : true;
 
 					if (
 						draftPick ||
@@ -244,6 +251,11 @@ const newPhaseResignPlayers = async (
 
 			if (!reSignPlayer) {
 				player.addToFreeAgents(p);
+			}
+
+			// Delete rookieResign for AI players, since we're done re-signing them. Leave it for user players.
+			if (expiredRookieContractPids.has(pid) || p.contract.rookieResign) {
+				delete p.contract.rookieResign;
 			}
 
 			await idb.cache.players.put(p);

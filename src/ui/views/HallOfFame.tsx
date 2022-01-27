@@ -1,7 +1,6 @@
-import PropTypes from "prop-types";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
-import { DataTable } from "../components";
+import { DataTable, PlayerNameLabels } from "../components";
 import type { View } from "../../common/types";
 
 const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
@@ -22,7 +21,7 @@ const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Drafted",
@@ -33,14 +32,14 @@ const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
 		"Team",
 		...stats.map(stat => `stat:${stat}`),
 		...stats.map(stat => `stat:${stat}`),
-	);
+	]);
 
 	const rows = players.map(p => {
 		return {
 			key: p.pid,
 			data: [
-				<a href={helpers.leagueUrl(["player", p.pid])}>{p.name}</a>,
-				p.ratings[p.ratings.length - 1].pos,
+				<PlayerNameLabels pid={p.pid}>{p.name}</PlayerNameLabels>,
+				p.ratings.at(-1).pos,
 				p.draft.year,
 				p.retiredYear,
 				p.draft.round > 0 ? `${p.draft.round}-${p.draft.pick}` : "",
@@ -64,8 +63,7 @@ const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
 					p.statsTids.slice(0, p.statsTids.length - 1).includes(userTid) &&
 					p.legacyTid !== userTid,
 				"table-success":
-					p.statsTids[p.statsTids.length - 1] === userTid &&
-					p.legacyTid !== userTid,
+					p.statsTids.at(-1) === userTid && p.legacyTid !== userTid,
 			},
 		};
 	});
@@ -88,7 +86,7 @@ const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
 
 			<DataTable
 				cols={cols}
-				defaultSort={[20, "desc"]}
+				defaultSort={[cols.length - 2, "desc"]}
 				name="HallOfFame"
 				pagination
 				rows={rows}
@@ -96,12 +94,6 @@ const HallOfFame = ({ players, stats, userTid }: View<"hallOfFame">) => {
 			/>
 		</>
 	);
-};
-
-HallOfFame.propTypes = {
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default HallOfFame;

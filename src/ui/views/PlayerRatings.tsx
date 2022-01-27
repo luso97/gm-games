@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { DataTable, MoreLinks, PlayerNameLabels } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
@@ -31,7 +30,7 @@ const PlayerRatings = ({
 		}
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Team",
@@ -42,7 +41,7 @@ const PlayerRatings = ({
 		"Pot",
 		...ratings.map(rating => `rating:${rating}`),
 		...ovrsPotsColNames,
-	);
+	]);
 
 	const rows = players.map(p => {
 		const showRatings = !challengeNoRatings || p.tid === PLAYER.RETIRED;
@@ -62,6 +61,7 @@ const PlayerRatings = ({
 				<PlayerNameLabels
 					pid={p.pid}
 					injury={p.injury}
+					season={season}
 					skills={p.ratings.skills}
 					jerseyNumber={p.stats.jerseyNumber}
 					watch={p.watch}
@@ -124,15 +124,6 @@ const PlayerRatings = ({
 			/>
 		</>
 	);
-};
-
-PlayerRatings.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	currentSeason: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	ratings: PropTypes.arrayOf(PropTypes.string).isRequired,
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default PlayerRatings;

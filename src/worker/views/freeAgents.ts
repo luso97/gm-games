@@ -1,31 +1,37 @@
 import { bySport, PLAYER } from "../../common";
+import type { Player } from "../../common/types";
 import { player, team } from "../core";
 import { idb } from "../db";
 import { g } from "../util";
+
+export const addMood = async (players: Player[]) => {
+	const moods: Awaited<ReturnType<typeof player["moodInfos"]>>[] = [];
+	for (const p of players) {
+		moods.push(await player.moodInfos(p));
+	}
+
+	return players.map((p, i) => ({
+		...p,
+		mood: moods[i],
+	}));
+};
 
 const updateFreeAgents = async () => {
 	const userTid = g.get("userTid");
 
 	const payroll = await team.getPayroll(userTid);
-	const userPlayersAll = await idb.cache.players.indexGetAll(
-		"playersByTid",
-		userTid,
+	const userPlayersAll = await addMood(
+		await idb.cache.players.indexGetAll("playersByTid", userTid),
 	);
-	const playersAll = await idb.cache.players.indexGetAll(
-		"playersByTid",
-		PLAYER.FREE_AGENT,
+	const playersAll = await addMood(
+		await idb.cache.players.indexGetAll("playersByTid", PLAYER.FREE_AGENT),
 	);
-	const capSpace =
-		g.get("salaryCap") > payroll ? (g.get("salaryCap") - payroll) / 1000 : 0;
+	const capSpace = (g.get("salaryCap") - payroll) / 1000;
 	const stats = bySport({
 		basketball: ["min", "pts", "trb", "ast", "per"],
 		football: ["gp", "keyStats", "av"],
 		hockey: ["gp", "keyStats", "ops", "dps", "ps"],
 	});
-
-	for (const p of playersAll) {
-		(p as any).mood = await player.moodInfos(p);
-	}
 
 	const players = await idb.getCopies.playersPlus(playersAll, {
 		attrs: [
@@ -60,7 +66,8 @@ const updateFreeAgents = async () => {
 		capSpace,
 		challengeNoFreeAgents: g.get("challengeNoFreeAgents"),
 		challengeNoRatings: g.get("challengeNoRatings"),
-		hardCap: g.get("hardCap"),
+		godMode: g.get("godMode"),
+		salaryCapType: g.get("salaryCapType"),
 		maxContract: g.get("maxContract"),
 		minContract: g.get("minContract"),
 		numRosterSpots: g.get("maxRosterSize") - userPlayers.length,

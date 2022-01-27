@@ -1,10 +1,10 @@
-import PropTypes from "prop-types";
 import {
 	DataTable,
 	DraftAbbrev,
 	SkillsBlock,
 	PlayerNameLabels,
 	MoreLinks,
+	PlusMinus,
 } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers, useLocal } from "../util";
@@ -23,7 +23,7 @@ const DraftTeamHistory = ({
 	const noDraft = draftType === "freeAgents";
 
 	useTitleBar({
-		title: noDraft ? "Prospects History" : "Draft History",
+		title: noDraft ? "Prospects Team History" : "Draft Team History",
 		dropdownView: "draft_team_history",
 		dropdownFields: { teamsAndYours: abbrev },
 	});
@@ -31,7 +31,7 @@ const DraftTeamHistory = ({
 	const superCols = [
 		{
 			title: "",
-			colspan: 4,
+			colspan: 7,
 		},
 		{
 			title: noDraft ? "As Prospect" : "At Draft",
@@ -51,9 +51,12 @@ const DraftTeamHistory = ({
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"Season",
 		"Pick",
+		"Pre-Lottery",
+		"Change",
+		"Odds",
 		"Name",
 		"Pos",
 		"Team",
@@ -71,7 +74,7 @@ const DraftTeamHistory = ({
 		"Pot",
 		"Skills",
 		...stats.map(stat => `stat:${stat}`),
-	);
+	]);
 
 	const teamInfoCache = useLocal(state => state.teamInfoCache);
 
@@ -85,20 +88,32 @@ const DraftTeamHistory = ({
 					{p.draft.year}
 				</a>,
 				`${p.draft.round}-${p.draft.pick}`,
+				p.preLotteryRank,
+				p.lotteryChange !== undefined ? (
+					<PlusMinus decimalPlaces={0} includePlus>
+						{p.lotteryChange}
+					</PlusMinus>
+				) : undefined,
+				p.lotteryProb !== undefined ? (
+					<a href={helpers.leagueUrl(["draft_lottery", p.draft.year])}>
+						{(p.lotteryProb * 100).toFixed(1)}%
+					</a>
+				) : undefined,
 				{
 					value: (
 						<div className="d-flex">
 							<PlayerNameLabels
 								jerseyNumber={p.jerseyNumber}
 								pid={p.pid}
+								season={p.draft.year}
 								skills={p.currentSkills}
 								watch={p.watch}
 							>
 								{p.name}
 							</PlayerNameLabels>
-							<div className="ml-auto">
-								<SeasonIcons className="ml-1" awards={p.awards} playoffs />
-								<SeasonIcons className="ml-1" awards={p.awards} />
+							<div className="ms-auto">
+								<SeasonIcons className="ms-1" awards={p.awards} playoffs />
+								<SeasonIcons className="ms-1" awards={p.awards} />
 							</div>
 						</div>
 					),
@@ -175,14 +190,6 @@ const DraftTeamHistory = ({
 			/>
 		</>
 	);
-};
-
-DraftTeamHistory.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	draftType: PropTypes.string.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userAbbrev: PropTypes.string.isRequired,
 };
 
 export default DraftTeamHistory;

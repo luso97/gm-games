@@ -1,8 +1,14 @@
-import { bySport, isSport, PHASE } from "../../../common";
-import { finances, team } from "..";
+import { bySport, isSport, PHASE, unwrapGameAttribute } from "../../../common";
+import { team } from "..";
 import { idb } from "../../db";
-import { g, helpers, random } from "../../util";
+import { defaultGameAttributes, g, helpers } from "../../util";
 import type { GameResults } from "../../../common/types";
+import {
+	getActualAttendance,
+	getAdjustedTicketPrice,
+	getAutoTicketPrice,
+	getBaseAttendance,
+} from "./attendance";
 
 const writeTeamStats = async (results: GameResults) => {
 	const allStarGame = results.team[0].id === -1 && results.team[1].id === -2;
@@ -11,11 +17,9 @@ const writeTeamStats = async (results: GameResults) => {
 		return g.get("defaultStadiumCapacity");
 	}
 
-	let att = 0;
-	let ticketPrice = 0;
-
-	// This one is adjusted for the salary cap, so it can be used in attendance calculation without distorting things for leagues with low/high caps
-	let relativeTicketPrice = 0;
+	let baseAttendance = 0;
+	let attendance = 0;
+	let adjustedTicketPrice = 0;
 
 	for (const t1 of [0, 1]) {
 		const t2 = t1 === 1 ? 0 : 1;
@@ -27,7 +31,7 @@ const writeTeamStats = async (results: GameResults) => {
 				[results.team[t1].id, g.get("season")],
 			]),
 		]);
-		const teamSeason = teamSeasons[teamSeasons.length - 1];
+		const teamSeason = teamSeasons.at(-1);
 		const won = results.team[t1].stat.pts > results.team[t2].stat.pts;
 		const lost = results.team[t1].stat.pts < results.team[t2].stat.pts;
 
@@ -44,30 +48,32 @@ const writeTeamStats = async (results: GameResults) => {
 			throw new Error("Invalid tid");
 		}
 
-		// Attendance - base calculation now, which is used for other revenue estimates
+		// Attendance - base calculation now, which is used for other revenue estimates. Base on the home team
 		if (t1 === 0) {
-			// Base on home team
-			att =
-				10000 +
-				(0.1 + 0.9 * teamSeason.hype ** 2) * teamSeason.pop * 1000000 * 0.01; // Base attendance - between 2% and 0.2% of the region
+			const playoffs = g.get("phase") === PHASE.PLAYOFFS;
 
-			if (g.get("phase") === PHASE.PLAYOFFS) {
-				att *= 1.5; // Playoff bonus
+			baseAttendance = getBaseAttendance({
+				hype: teamSeason.hype,
+				pop: teamSeason.pop,
+				playoffs,
+			});
+
+			if (t.autoTicketPrice !== false || !g.get("userTids").includes(t.tid)) {
+				const ticketPrice = getAutoTicketPrice({
+					hype: teamSeason.hype,
+					pop: teamSeason.pop,
+					stadiumCapacity: teamSeason.stadiumCapacity,
+					teamSeasons,
+				});
+				if (ticketPrice !== t.budget.ticketPrice.amount) {
+					t.budget.ticketPrice.amount = ticketPrice;
+				}
 			}
 
-			if (isSport("hockey")) {
-				att *= 1.05;
-			}
-
-			ticketPrice = t.budget.ticketPrice.amount;
-
-			// The exponential factor was hand-tuned to make this work in 1965
-			relativeTicketPrice =
-				t.budget.ticketPrice.amount * (90000 / g.get("salaryCap")) ** 0.75;
-
-			if (isSport("football")) {
-				att *= 28;
-			}
+			adjustedTicketPrice = getAdjustedTicketPrice(
+				t.budget.ticketPrice.amount,
+				playoffs,
+			);
 		}
 
 		// Some things are only paid for regular season games.
@@ -89,24 +95,36 @@ const writeTeamStats = async (results: GameResults) => {
 			healthPaid = t.budget.health.amount / g.get("numGames");
 			facilitiesPaid = t.budget.facilities.amount / g.get("numGames");
 
+			const salaryCapFactor =
+				g.get("salaryCap") / defaultGameAttributes.salaryCap;
+
+			// Only different for hockey
+			let salaryCapFactor2;
+			if (isSport("hockey")) {
+				// Legacy, should probably adjust other params
+				salaryCapFactor2 = g.get("salaryCap") / 90000;
+			} else {
+				salaryCapFactor2 = salaryCapFactor;
+			}
+
 			if (isSport("basketball") || isSport("hockey")) {
-				merchRevenue = ((g.get("salaryCap") / 90000) * 4.5 * att) / 1000;
+				merchRevenue = (salaryCapFactor2 * 4.5 * baseAttendance) / 1000;
 
-				if (merchRevenue > 250) {
-					merchRevenue = 250;
+				if (merchRevenue > salaryCapFactor * 250) {
+					merchRevenue = salaryCapFactor * 250;
 				}
 
-				sponsorRevenue = ((g.get("salaryCap") / 90000) * 15 * att) / 1000;
+				sponsorRevenue = (salaryCapFactor2 * 15 * baseAttendance) / 1000;
 
-				if (sponsorRevenue > 600) {
-					sponsorRevenue = 600;
+				if (sponsorRevenue > salaryCapFactor * 600) {
+					sponsorRevenue = salaryCapFactor * 600;
 				}
 
-				nationalTvRevenue = (g.get("salaryCap") / 90000) * 375;
-				localTvRevenue = ((g.get("salaryCap") / 90000) * 15 * att) / 1000;
+				nationalTvRevenue = salaryCapFactor2 * 375;
+				localTvRevenue = (salaryCapFactor2 * 15 * baseAttendance) / 1000;
 
-				if (localTvRevenue > 1200) {
-					localTvRevenue = 1200;
+				if (localTvRevenue > salaryCapFactor * 1200) {
+					localTvRevenue = salaryCapFactor * 1200;
 				}
 			} else {
 				// Football targets:
@@ -116,40 +134,34 @@ const writeTeamStats = async (results: GameResults) => {
 				// ticket: $75M
 				// sponsorship: $25M
 				// merchandise: $25M
-				nationalTvRevenue = 175000 / g.get("numGames");
+				nationalTvRevenue = (salaryCapFactor2 * 175000) / g.get("numGames");
 				localTvRevenue =
-					((5000 / g.get("numGames")) * att) / g.get("defaultStadiumCapacity");
+					(salaryCapFactor2 * ((5000 / g.get("numGames")) * baseAttendance)) /
+					g.get("defaultStadiumCapacity");
 				sponsorRevenue =
-					((2500 / g.get("numGames")) * att) / g.get("defaultStadiumCapacity");
+					(salaryCapFactor2 * ((2500 / g.get("numGames")) * baseAttendance)) /
+					g.get("defaultStadiumCapacity");
 				merchRevenue =
-					((2500 / g.get("numGames")) * att) / g.get("defaultStadiumCapacity");
+					(salaryCapFactor2 * ((2500 / g.get("numGames")) * baseAttendance)) /
+					g.get("defaultStadiumCapacity");
 			}
 		}
 
 		// Attendance: base on home team
 		if (t1 === 0) {
-			if (isSport("football")) {
-				att *= 0.23;
-			}
-
-			att = random.gauss(att, 1000);
-			att *= (45 * 50) / relativeTicketPrice ** 2; // Attendance depends on ticket price. Not sure if this formula is reasonable.
-
-			att *=
-				1 +
-				(0.075 *
-					(g.get("numActiveTeams") -
-						finances.getRankLastThree(teamSeasons, "expenses", "facilities"))) /
-					(g.get("numActiveTeams") - 1); // Attendance depends on facilities. Not sure if this formula is reasonable.
-
-			att = helpers.bound(att, 0, teamSeason.stadiumCapacity);
-			att = Math.round(att);
+			attendance = getActualAttendance({
+				baseAttendance,
+				randomize: true,
+				stadiumCapacity: teamSeason.stadiumCapacity,
+				teamSeasons,
+				adjustedTicketPrice,
+			});
 		}
 
 		// This doesn't really make sense
-		let ticketRevenue = (ticketPrice * att) / 1000; // [thousands of dollars]
-		// Hype - relative to the expectations of prior seasons
+		let ticketRevenue = (adjustedTicketPrice * attendance) / 1000; // [thousands of dollars]
 
+		// Hype - relative to the expectations of prior seasons
 		if (teamSeason.gp > 5 && g.get("phase") !== PHASE.PLAYOFFS) {
 			let winp = helpers.calcWinp(teamSeason);
 			let winpOld = 0; // Avg winning percentage of last 0-2 seasons (as available)
@@ -187,11 +199,32 @@ const writeTeamStats = async (results: GameResults) => {
 		const fudgeFactor = g.get("userTids").includes(results.team[t1].id)
 			? helpers.bound(1 - 0.2 * g.get("difficulty"), 0, Infinity)
 			: 1;
-		merchRevenue *= fudgeFactor;
-		sponsorRevenue *= fudgeFactor;
-		nationalTvRevenue *= fudgeFactor;
-		localTvRevenue *= fudgeFactor;
-		ticketRevenue *= fudgeFactor;
+
+		// Globally adjust revenue based on the number of games in the season and playoffs
+
+		let seasonLengthFactor;
+		if (g.get("phase") === PHASE.PLAYOFFS) {
+			let numGamesCurrent = 0;
+			for (const numGames of g.get("numGamesPlayoffSeries")) {
+				numGamesCurrent += Math.ceil((numGames * 3) / 4);
+			}
+			let numGamesDefault = 0;
+			for (const numGames of unwrapGameAttribute(
+				defaultGameAttributes,
+				"numGamesPlayoffSeries",
+			)) {
+				numGamesDefault += Math.ceil((numGames * 3) / 4);
+			}
+			seasonLengthFactor = numGamesDefault / numGamesCurrent;
+		} else {
+			seasonLengthFactor = defaultGameAttributes.numGames / g.get("numGames");
+		}
+
+		merchRevenue *= fudgeFactor * seasonLengthFactor;
+		sponsorRevenue *= fudgeFactor * seasonLengthFactor;
+		nationalTvRevenue *= fudgeFactor * seasonLengthFactor;
+		localTvRevenue *= fudgeFactor * seasonLengthFactor;
+		ticketRevenue *= fudgeFactor * seasonLengthFactor;
 		const revenue =
 			merchRevenue +
 			sponsorRevenue +
@@ -204,7 +237,7 @@ const writeTeamStats = async (results: GameResults) => {
 
 		if (t1 === 0) {
 			// Only home team gets attendance...
-			teamSeason.att += att; // This is only used for attendance tracking
+			teamSeason.att += attendance; // This is only used for attendance tracking
 
 			if (!teamSeason.hasOwnProperty("gpHome")) {
 				teamSeason.gpHome = Math.round(teamSeason.gp / 2);
@@ -352,12 +385,27 @@ const writeTeamStats = async (results: GameResults) => {
 			teamSeason.streak = 0;
 		}
 
+		if (teamSeason.ovrStart === undefined) {
+			const playersRaw = await idb.cache.players.indexGetAll(
+				"playersByTid",
+				teamSeason.tid,
+			);
+			const players = await idb.getCopies.playersPlus(playersRaw, {
+				attrs: ["value"],
+				fuzz: true,
+				ratings: ["ovr", "pos", "ovrs"],
+				season: g.get("season"),
+				tid: teamSeason.tid,
+			});
+			teamSeason.ovrStart = team.ovr(players);
+		}
+
 		await idb.cache.teams.put(t);
 		await idb.cache.teamSeasons.put(teamSeason);
 		await idb.cache.teamStats.put(teamStats);
 	}
 
-	return att;
+	return attendance;
 };
 
 export default writeTeamStats;

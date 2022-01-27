@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { useCallback, useState, CSSProperties } from "react";
 import { Dropdown } from "react-bootstrap";
 
@@ -7,14 +6,13 @@ import ago from "s-ago";
 import {
 	bySport,
 	DIFFICULTY,
-	isSport,
 	SPORT_HAS_LEGENDS,
 	SPORT_HAS_REAL_PLAYERS,
 	WEBSITE_PLAY,
 } from "../../common";
-import { DataTable } from "../components";
+import { DataTable, TeamLogoInline } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
-import { confirm, getCols, toWorker } from "../util";
+import { confirm, getCols, logEvent, toWorker } from "../util";
 import type { View } from "../../common/types";
 
 // Re-rendering caused this to run multiple times after "Play" click, even with useRef or useMemo
@@ -71,17 +69,13 @@ const DifficultyText = ({
 	return (
 		<span
 			className={classNames({
-				"font-weight-bold": difficulty > DIFFICULTY.Insane,
+				"fw-bold": difficulty > DIFFICULTY.Insane,
 				"text-danger": difficulty >= DIFFICULTY.Insane,
 			})}
 		>
 			{difficultyText(difficulty)}
 		</span>
 	);
-};
-
-DifficultyText.propTypes = {
-	children: PropTypes.number,
 };
 
 const PlayButton = ({
@@ -131,8 +125,11 @@ const Star = ({ lid, starred }: { lid: number; starred?: boolean }) => {
 	const [actuallyStarred, setActuallyStarred] = useState<boolean>(!!starred);
 	const toggle = useCallback(async () => {
 		setActuallyStarred(!actuallyStarred);
-		await toWorker("main", "updateLeague", lid, {
-			starred: !actuallyStarred,
+		await toWorker("main", "updateLeague", {
+			lid,
+			obj: {
+				starred: !actuallyStarred,
+			},
 		});
 	}, [actuallyStarred, lid]);
 
@@ -173,7 +170,7 @@ const LeagueName = ({
 }) => {
 	return (
 		<div className="d-flex align-items-center">
-			<div className="mr-1">
+			<div className="me-1">
 				{!disabled ? (
 					<a href={`/l/${lid}`} onClick={onClick}>
 						{name}
@@ -203,22 +200,33 @@ const dropdownStyle: CSSProperties = {
 const Dashboard = ({ leagues }: View<"dashboard">) => {
 	const [loadingLID, setLoadingLID] = useState<number | undefined>();
 	const [deletingLID, setDeletingLID] = useState<number | undefined>();
+	const [cloningLID, setCloningLID] = useState<number | undefined>();
 	useTitleBar();
+
 	const cols = getCols(
-		"",
-		"League",
-		"Team",
-		"Phase",
-		"# Seasons",
-		"Difficulty",
-		"Created",
-		"Last Played",
-		"",
+		[
+			"",
+			"League",
+			"Team",
+			"Phase",
+			"# Seasons",
+			"Difficulty",
+			"Created",
+			"Last Played",
+			"",
+		],
+		{
+			"": {
+				width: "1%",
+			},
+		},
 	);
-	cols[0].width = "1%";
-	cols[7].width = "1%";
+
 	const rows = leagues.map(league => {
-		const disabled = deletingLID !== undefined || loadingLID !== undefined;
+		const disabled =
+			deletingLID !== undefined ||
+			loadingLID !== undefined ||
+			cloningLID !== undefined;
 		const throbbing = loadingLID === league.lid;
 		return {
 			key: league.lid,
@@ -237,7 +245,22 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 				>
 					{league.name}
 				</LeagueName>,
-				`${league.teamRegion} ${league.teamName}`,
+				{
+					value: (
+						<div className="d-flex align-items-center">
+							<TeamLogoInline
+								imgURL={league.imgURL}
+								size={48}
+								className="me-2"
+							/>
+							<div>
+								{league.teamRegion} {league.teamName}
+							</div>
+						</div>
+					),
+					sortValue: `${league.teamRegion} ${league.teamName}`,
+					classNames: "py-0",
+				},
 				league.phaseText,
 				league.startingSeason !== undefined && league.season !== undefined
 					? 1 + league.season - league.startingSeason
@@ -263,7 +286,10 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 							: 0,
 					value: <Ago date={league.lastPlayed} />,
 				},
-				<Dropdown style={dropdownStyle}>
+				<Dropdown
+					style={dropdownStyle}
+					className={window.mobile ? "dropdown-mobile" : undefined}
+				>
 					<Dropdown.Toggle
 						as="span"
 						bsPrefix="no-caret"
@@ -295,13 +321,51 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 									});
 
 									if (typeof newName === "string") {
-										await toWorker("main", "updateLeague", league.lid, {
-											name: newName,
+										await toWorker("main", "updateLeague", {
+											lid: league.lid,
+											obj: {
+												name: newName,
+											},
 										});
 									}
 								}}
 							>
 								Rename
+							</Dropdown.Item>
+							<Dropdown.Item
+								onClick={async () => {
+									try {
+										logEvent({
+											type: "info",
+											text: `Cloning league "${league.name}". This may take a little while if it's a large league.`,
+											saveToDb: false,
+											showNotification: true,
+										});
+
+										setCloningLID(league.lid);
+										const name = await toWorker(
+											"main",
+											"cloneLeague",
+											league.lid,
+										);
+										setCloningLID(undefined);
+
+										logEvent({
+											type: "info",
+											text: `Clone complete! Your new league is named "${name}".`,
+											saveToDb: false,
+											showNotification: true,
+										});
+									} catch (error) {
+										logEvent({
+											type: "error",
+											text: error.message,
+											saveToDb: false,
+										});
+									}
+								}}
+							>
+								Clone
 							</Dropdown.Item>
 							<Dropdown.Item
 								onClick={async () => {
@@ -359,7 +423,7 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 					<>
 						<a
 							href="/new_league/real"
-							className="btn btn-primary dashboard-top-link dashboard-top-link-new mr-3 mb-3"
+							className="btn btn-primary dashboard-top-link dashboard-top-link-new me-3 mb-3"
 						>
 							New league
 							<br />
@@ -367,7 +431,7 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 						</a>
 						<a
 							href="/new_league/random"
-							className="btn btn-primary dashboard-top-link dashboard-top-link-new mr-sm-3 mb-3"
+							className="btn btn-primary dashboard-top-link dashboard-top-link-new me-sm-3 mb-3"
 						>
 							New league
 							<br />
@@ -377,7 +441,7 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 						{SPORT_HAS_LEGENDS ? (
 							<a
 								href="/new_league/legends"
-								className="btn btn-primary dashboard-top-link dashboard-top-link-new mr-3 mb-3"
+								className="btn btn-primary dashboard-top-link dashboard-top-link-new me-3 mb-3"
 							>
 								New league
 								<br />
@@ -386,7 +450,7 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 						) : null}
 						<a
 							href="/new_league"
-							className="btn btn-primary dashboard-top-link dashboard-top-link-new mr-sm-3 mb-3"
+							className="btn btn-primary dashboard-top-link dashboard-top-link-new me-sm-3 mb-3"
 						>
 							New league
 							<br />
@@ -397,7 +461,7 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 				) : (
 					<a
 						href="/new_league"
-						className="btn btn-primary dashboard-top-link dashboard-top-link-new mr-3 mb-3"
+						className="btn btn-primary dashboard-top-link dashboard-top-link-new me-3 mb-3"
 					>
 						Create new
 						<br />
@@ -414,47 +478,19 @@ const Dashboard = ({ leagues }: View<"dashboard">) => {
 			</div>
 
 			{rows.length > 0 ? (
-				<>
-					<div className="clearfix" />
-
-					<DataTable
-						bordered={false}
-						cols={cols}
-						className="dashboard-table"
-						disableSettingsCache
-						defaultSort={[7, "desc"]}
-						name="Dashboard"
-						pagination={pagination}
-						small={false}
-						rows={rows}
-					/>
-				</>
-			) : null}
-
-			{isSport("hockey") ? (
-				<p className="mb-0">
-					If you're looking for your old leagues in the old version of ZenGM
-					Hockey, <a href="http://hockey.zengm.com/">click here</a>.
-				</p>
+				<DataTable
+					cols={cols}
+					className="dashboard-table align-middle"
+					disableSettingsCache
+					defaultSort={[7, "desc"]}
+					name="Dashboard"
+					pagination={pagination}
+					small={false}
+					rows={rows}
+				/>
 			) : null}
 		</>
 	);
-};
-
-Dashboard.propTypes = {
-	leagues: PropTypes.arrayOf(
-		PropTypes.shape({
-			created: PropTypes.instanceOf(Date),
-			lastPlayed: PropTypes.instanceOf(Date),
-			difficulty: PropTypes.number,
-			lid: PropTypes.number.isRequired,
-			name: PropTypes.string.isRequired,
-			phaseText: PropTypes.string.isRequired,
-			starred: PropTypes.bool,
-			teamName: PropTypes.string.isRequired,
-			teamRegion: PropTypes.string.isRequired,
-		}),
-	).isRequired,
 };
 
 export default Dashboard;

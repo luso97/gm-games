@@ -9,7 +9,7 @@ const leagueNotFoundMessage = (
 			<a href="/new_league" className="btn btn-success btn-lg m-2">
 				Create a new league
 			</a>
-			<span className="d-none d-sm-inline mr-5" />
+			<span className="d-none d-sm-inline me-5" />
 			<a href="/" className="btn btn-primary btn-lg m-2">
 				Load an existing league
 			</a>
@@ -66,7 +66,7 @@ const leagueNotFoundMessage = (
 							game-breaking power-ups.
 						</p>
 						<p>
-							Our only goal is making the best possible {process.env.SPORT}
+							Our only goal is making the best possible {process.env.SPORT}{" "}
 							management game!
 						</p>
 					</div>

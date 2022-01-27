@@ -1,6 +1,9 @@
 // This is dynamically resolved with rollup-plugin-alias
-import names from "player-names"; // eslint-disable-line
 import { bySport } from "../../common";
+
+// Would be nice to put this stuff in names.json, but need a way to make it sport specific.
+
+// Countries in default names will be added to this in loadNames.ts, so be careful using this anywhere else!
 
 const groups = {
 	hispanic: [
@@ -42,6 +45,7 @@ const groups = {
 let defaultCountries: Record<string, number>;
 
 if (process.env.NODE_ENV === "test") {
+	// Keep in sync with loadNames.ts
 	defaultCountries = {
 		Angola: 8,
 		Argentina: 71,
@@ -192,68 +196,49 @@ if (process.env.NODE_ENV === "test") {
 			"Virgin Islands": 1,
 		},
 
-		// Frequencies manually taken from https://www.hockey-reference.com/friv/birthplaces.cgi
+		// Frequencies manually taken from https://www.quanthockey.com/nhl/nationality-totals/active-nhl-players-career-stats.html
 		hockey: {
-			Austria: 9,
-			Bahamas: 1,
+			Canada: 433,
+			USA: 283,
+			Sweden: 98,
+			Russia: 53,
+			Finland: 59,
+			"Czech Republic": 34,
+			Slovakia: 10,
+			Switzerland: 12,
+			Denmark: 8,
+			Slovenia: 1,
+			Germany: 9,
+			Norway: 1,
+			France: 3,
+			Austria: 1,
+			Latvia: 4,
+			Netherlands: 1,
 			Belarus: 2,
+			Australia: 1,
+
+			// Extra countries from https://www.hockey-reference.com/friv/birthplaces.cgi
+			Bahamas: 1,
 			Belgium: 1,
-			Brazil: 2,
+			Brazil: 1,
 			Bulgaria: 1,
-			Canada: 5256,
-			"Czech Republic": 225,
-			Denmark: 16,
-			England: 48,
-			Finland: 232,
-			France: 12,
-			Germany: 36,
+			England: 1,
 			Haiti: 1,
-			Ireland: 5,
-			Italy: 3,
+			Ireland: 1,
+			Italy: 1,
 			Jamaica: 1,
-			Japan: 2,
+			Japan: 1,
 			Kazakhstan: 1,
-			Latvia: 7,
 			Lithuania: 1,
-			Netherlands: 2,
-			Nigeria: 2,
-			Norway: 8,
+			Nigeria: 1,
 			Paraguay: 1,
-			Poland: 8,
-			Russia: 304,
-			Slovakia: 98,
-			Slovenia: 2,
+			Poland: 1,
 			"South Africa": 1,
-			"South Korea": 2,
-			Sweden: 355,
-			Switzerland: 37,
-			USA: 1283,
+			"South Korea": 1,
 			Ukraine: 1,
-			Venezuela: 2,
+			Venezuela: 1,
 		},
 	});
 }
-
-const possiblyMissingCountries = Object.keys(names);
-for (const countries of Object.values(groups)) {
-	possiblyMissingCountries.push(...countries);
-}
-for (const country of possiblyMissingCountries) {
-	if (defaultCountries[country] === undefined) {
-		defaultCountries[country] = 0.2;
-	}
-}
-
-/*// https://stackoverflow.com/a/53593328
-const JSONstringifyOrder = (obj, space) => {
-	var allKeys = [];
-	JSON.stringify(obj, (key, value) => {
-		allKeys.push(key);
-		return value;
-	});
-	allKeys.sort();
-	return JSON.stringify(obj, allKeys, space);
-};
-console.log(JSONstringifyOrder(defaultCountries, 4));*/
 
 export { defaultCountries, groups };

@@ -24,7 +24,7 @@ const FrivolitiesDraftClasses = ({
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"#",
 		"Season",
 		bySport({ basketball: "stat:ws", football: "stat:av", hockey: "stat:ps" }),
@@ -41,7 +41,7 @@ const FrivolitiesDraftClasses = ({
 		"Pick",
 		"Peak Ovr",
 		...stats.map(stat => `stat:${stat}`),
-	);
+	]);
 
 	const rows = draftClasses.map((draftClass, i) => {
 		const p = draftClass.bestPlayer;
@@ -68,8 +68,7 @@ const FrivolitiesDraftClasses = ({
 						<PlayerNameLabels
 							jerseyNumber={p.jerseyNumber}
 							pid={p.pid}
-							watch={p.watch}
-							disableWatchToggle
+							season={p.draft.year}
 						>
 							{p.name}
 						</PlayerNameLabels>
@@ -79,7 +78,7 @@ const FrivolitiesDraftClasses = ({
 						"table-info": p.statsTids.includes(userTid),
 					},
 				},
-				p.ratings[p.ratings.length - 1].pos,
+				p.ratings.at(-1).pos,
 				p.draft.round > 0 ? `${p.draft.round}-${p.draft.pick}` : "",
 				showRatings ? p.peakOvr : null,
 				...stats.map(stat => helpers.roundStat(p.careerStats[stat], stat)),

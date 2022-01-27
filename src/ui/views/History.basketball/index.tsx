@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { MoreLinks, RetiredPlayers } from "../../../ui/components";
 import useTitleBar from "../../../ui/hooks/useTitleBar";
 import AwardsAndChamp from "./AwardsAndChamp";
@@ -31,13 +30,8 @@ const History = (props: View<"history">) => {
 		);
 	}
 
-	const {
-		awards,
-		champ,
-		confs,
-		retiredPlayers,
-		userTid,
-	} = props as ActualProps;
+	const { awards, champ, confs, retiredPlayers, userTid } =
+		props as ActualProps;
 
 	return (
 		<>
@@ -61,13 +55,6 @@ const History = (props: View<"history">) => {
 						team={awards.allLeague}
 						userTid={userTid}
 					/>
-					<Team
-						className="mb-3"
-						name="All-Rookie Team"
-						season={season}
-						team={awards.allRookie}
-						userTid={userTid}
-					/>
 				</div>
 				<div className="col-md-3 col-sm-4 col-6">
 					<Team
@@ -76,6 +63,13 @@ const History = (props: View<"history">) => {
 						nested
 						season={season}
 						team={awards.allDefensive}
+						userTid={userTid}
+					/>
+					<Team
+						className="mb-3"
+						name="All-Rookie Team"
+						season={season}
+						team={awards.allRookie}
 						userTid={userTid}
 					/>
 				</div>
@@ -89,16 +83,6 @@ const History = (props: View<"history">) => {
 			</div>
 		</>
 	);
-};
-
-History.propTypes = {
-	awards: PropTypes.object,
-	champ: PropTypes.object,
-	confs: PropTypes.arrayOf(PropTypes.object),
-	invalidSeason: PropTypes.bool.isRequired,
-	retiredPlayers: PropTypes.arrayOf(PropTypes.object),
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number,
 };
 
 export default History;

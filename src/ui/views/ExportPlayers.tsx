@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PLAYER } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
-import { getCols, helpers, toWorker, downloadFile } from "../util";
+import { getCols, helpers, toWorker } from "../util";
 import { DataTable, MoreLinks, PlayerNameLabels } from "../components";
 import type { View } from "../../common/types";
 
@@ -26,11 +26,17 @@ const ExportPlayers = ({
 		dropdownFields: { seasons: season },
 	});
 
-	const cols = getCols("Name", "Pos", "Age", "Team", "Ovr", "Pot", "");
-	cols[0].width = "100%";
+	const cols = getCols(["Name", "Pos", "Age", "Team", "Ovr", "Pot", ""], {
+		Name: {
+			width: "100%",
+		},
+	});
 
-	const cols2 = getCols("#", "Name", "Pos", "Age", "Team", "Ovr", "Pot", "");
-	cols2[1].width = "100%";
+	const cols2 = getCols(["#", "Name", "Pos", "Age", "Team", "Ovr", "Pot", ""], {
+		Name: {
+			width: "100%",
+		},
+	});
 
 	const commonRows = (p: typeof players[number]) => {
 		const showRatings = !challengeNoRatings || p.tid === PLAYER.RETIRED;
@@ -40,6 +46,7 @@ const ExportPlayers = ({
 				injury={p.injury}
 				jerseyNumber={p.jerseyNumber}
 				pid={p.pid}
+				season={season}
 				skills={p.ratings.skills}
 				watch={p.watch}
 			>
@@ -130,7 +137,7 @@ const ExportPlayers = ({
 							rows={rows}
 						/>
 					</div>
-					<div className="float-right btn-group my-3">
+					<div className="float-end btn-group my-3">
 						<button
 							className="btn btn-secondary"
 							onClick={() => {
@@ -174,16 +181,55 @@ const ExportPlayers = ({
 									setErrorMessage(undefined);
 
 									try {
-										const { filename, json } = await toWorker(
+										const filename = await toWorker(
 											"main",
-											"exportPlayers",
-											selected.map(({ p, season }) => ({
-												pid: p.pid,
-												season,
-											})),
+											"getExportFilename",
+											"players",
 										);
 
-										downloadFile(filename, json, "application/json");
+										const pids = selected.map(info => info.p.pid);
+
+										const { downloadFileStream, makeExportStream } =
+											await import("../util/exportLeague");
+
+										const readableStream = await makeExportStream(["players"], {
+											compressed: false,
+											filter: {
+												players: p => pids.includes(p.pid),
+											},
+											forEach: {
+												players: p => {
+													const info = selected.find(
+														info => info.p.pid === p.pid,
+													);
+													if (info) {
+														p.exportedSeason = info.season;
+													}
+
+													delete p.gamesUntilTradable;
+													delete p.numDaysFreeAgent;
+													delete p.ptModifier;
+													delete p.rosterOrder;
+													delete p.statsTids;
+													delete p.value;
+													delete p.valueFuzz;
+													delete p.valueNoPot;
+													delete p.valueNoPotFuzz;
+													delete p.valueWithContract;
+													delete p.watch;
+													delete p.yearsFreeAgent;
+												},
+											},
+										});
+
+										const fileStream = await downloadFileStream(
+											false,
+											filename,
+										);
+
+										await readableStream
+											.pipeThrough(new TextEncoderStream())
+											.pipeTo(fileStream);
 									} catch (error) {
 										console.error(error);
 										setErrorMessage(error.message);

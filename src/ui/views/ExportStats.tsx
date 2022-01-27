@@ -1,9 +1,9 @@
-import PropTypes from "prop-types";
 import { useCallback, useState } from "react";
 import useTitleBar from "../hooks/useTitleBar";
 import { downloadFile, toWorker } from "../util";
 import type { View } from "../../common/types";
 import { GAME_ACRONYM, isSport } from "../../common";
+import { ActionButton } from "../components";
 
 const genFilename = (
 	leagueName: string,
@@ -32,7 +32,7 @@ const ExportStats = ({ seasons }: View<"exportStats">) => {
 		const selectEls = event.target.getElementsByTagName("select");
 		const grouping = selectEls[0].value;
 		const season =
-			selectEls[1].value === "all" ? "all" : parseInt(selectEls[1].value, 10);
+			selectEls[1].value === "all" ? "all" : parseInt(selectEls[1].value);
 
 		let csvPromise;
 		if (grouping === "averages") {
@@ -44,16 +44,20 @@ const ExportStats = ({ seasons }: View<"exportStats">) => {
 			return;
 		}
 
-		const [data, leagueName] = await Promise.all([
-			csvPromise,
-			toWorker("main", "getLeagueName"),
-		]);
+		try {
+			const [data, leagueName] = await Promise.all([
+				csvPromise,
+				toWorker("main", "getLeagueName", undefined),
+			]);
 
-		const filename = genFilename(leagueName, season, grouping);
+			const filename = genFilename(leagueName, season, grouping);
 
-		downloadFile(filename, data, "text/csv");
+			downloadFile(filename, data, "text/csv");
 
-		setStatus(undefined);
+			setStatus(undefined);
+		} catch (error) {
+			setStatus(`Error: ${error.message}`);
+		}
 	}, []);
 
 	const resetState = useCallback(() => {
@@ -72,17 +76,17 @@ const ExportStats = ({ seasons }: View<"exportStats">) => {
 
 			<h2>Player Stats</h2>
 
-			<form className="form-inline" onSubmit={handleSubmit}>
-				<div className="form-group mr-2">
-					<select className="form-control" onChange={resetState}>
+			<form className="row gx-2" onSubmit={handleSubmit}>
+				<div className="col-auto">
+					<select className="form-select" onChange={resetState}>
 						<option value="averages">Season Averages</option>
 						{isSport("basketball") ? (
 							<option value="games">Individual Games</option>
 						) : null}
 					</select>
-				</div>{" "}
-				<div className="form-group mr-2">
-					<select className="form-control" onChange={resetState}>
+				</div>
+				<div className="col-auto">
+					<select className="form-select" onChange={resetState}>
 						{seasons.map(s => {
 							return (
 								<option key={s.key} value={s.key}>
@@ -91,28 +95,23 @@ const ExportStats = ({ seasons }: View<"exportStats">) => {
 							);
 						})}
 					</select>
-				</div>{" "}
-				<button
-					type="submit"
-					className="btn btn-primary"
-					disabled={status === "Exporting..."}
-				>
-					Export Stats
-				</button>
+				</div>
+				<div className="col-auto">
+					<ActionButton type="submit" processing={status === "Exporting..."}>
+						Export Stats
+					</ActionButton>
+				</div>
 			</form>
 
-			{status ? <p className="mt-3">{status}</p> : null}
+			{status && status !== "Exporting..." ? (
+				<p
+					className={`mt-3${status.startsWith("Error:") ? " text-danger" : ""}`}
+				>
+					{status}
+				</p>
+			) : null}
 		</>
 	);
-};
-
-ExportStats.propTypes = {
-	seasons: PropTypes.arrayOf(
-		PropTypes.shape({
-			key: PropTypes.string.isRequired,
-			val: PropTypes.string.isRequired,
-		}),
-	).isRequired,
 };
 
 export default ExportStats;

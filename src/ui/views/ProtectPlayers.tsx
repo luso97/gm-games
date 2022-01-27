@@ -1,14 +1,7 @@
 import { useState, FormEvent } from "react";
 import type { ReactNode } from "react";
 import useTitleBar from "../hooks/useTitleBar";
-import {
-	confirm,
-	helpers,
-	toWorker,
-	logEvent,
-	realtimeUpdate,
-	getCols,
-} from "../util";
+import { confirm, helpers, toWorker, realtimeUpdate, getCols } from "../util";
 import type { View } from "../../common/types";
 import { PlayerNameLabels, SafeHtml, DataTable } from "../components";
 import { PHASE } from "../../common";
@@ -31,7 +24,7 @@ const PlayerList = ({
 	tid: number;
 	upcomingFreeAgentsText: ReactNode;
 }) => {
-	const cols = getCols(
+	const cols = getCols([
 		"",
 		"Name",
 		"Pos",
@@ -42,7 +35,7 @@ const PlayerList = ({
 		"Exp",
 		...stats.map(stat => `stat:${stat}`),
 		"Acquired",
-	);
+	]);
 
 	const rows = players.map(p => {
 		return {
@@ -186,8 +179,14 @@ const ProtectPlayers = ({
 				return;
 			}
 		} else if (userTids.length > 1) {
+			const expansionTids = expansionDraft.expansionTids;
+
 			// Check other teams in multi team mode too
 			for (const tid of userTids) {
+				if (expansionTids.includes(tid)) {
+					continue;
+				}
+
 				const protectedPids2 = expansionDraft.protectedPids[tid] || [];
 				const numRemaining2 =
 					expansionDraft.numProtectedPlayers - protectedPids2.length;
@@ -209,26 +208,19 @@ const ProtectPlayers = ({
 			}
 		}
 
-		const errors = await toWorker("main", "startExpansionDraft");
-
-		if (errors) {
-			logEvent({
-				type: "error",
-				text: `- ${errors.join("<br>- ")}`,
-				saveToDb: false,
-			});
-			setSaving(false);
-		} else {
-			realtimeUpdate([], helpers.leagueUrl(["draft"]));
-		}
+		await toWorker("main", "startExpansionDraft", undefined);
+		realtimeUpdate([], helpers.leagueUrl(["draft"]));
 	};
 
 	const updateProtectedPids = async (newProtectedPids: number[]) => {
-		await toWorker("main", "updateProtectedPlayers", userTid, newProtectedPids);
+		await toWorker("main", "updateProtectedPlayers", {
+			tid: userTid,
+			protectedPids: newProtectedPids,
+		});
 	};
 
 	const handleCancel = async () => {
-		await toWorker("main", "cancelExpansionDraft");
+		await toWorker("main", "cancelExpansionDraft", undefined);
 		realtimeUpdate([], helpers.leagueUrl([]));
 	};
 
@@ -287,7 +279,7 @@ const ProtectPlayers = ({
 
 				<button
 					type="button"
-					className="btn btn-light-bordered ml-2"
+					className="btn btn-light-bordered ms-2"
 					disabled={saving}
 					onClick={handleCancel}
 				>

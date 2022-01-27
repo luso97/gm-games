@@ -17,7 +17,33 @@ const doInjury = async (
 	conditions: Conditions,
 ) => {
 	p2.injury = player.injury(healthRank);
-	p.injury = helpers.deepCopy(p2.injury); // So it gets written to box score
+
+	// Is this a reinjury or not?
+	let reaggravateExtraDays;
+	if (p.injury.playingThrough) {
+		if (
+			p2.injury.gamesRemaining < p.injury.gamesRemaining ||
+			Math.random() < 0.33
+		) {
+			// Reaggravate previous injury
+			reaggravateExtraDays = random.randInt(1, 10);
+			p2.injury.gamesRemaining = p.injury.gamesRemaining + reaggravateExtraDays;
+			p2.injury.type = p.injury.type;
+		}
+	}
+
+	// So it gets written to box score... save the old injury (if playing through injury
+	if (p.injury.playingThrough) {
+		p.injuryAtStart = {
+			type: p.injury.type,
+			gamesRemaining: p.injury.gamesRemaining,
+		};
+	}
+	p.injury = {
+		type: p2.injury.type,
+		gamesRemaining: p2.injury.gamesRemaining,
+		newThisGame: true,
+	};
 
 	if (p2.injury.gamesRemaining <= 1) {
 		pidsInjuredOneGameOrLess.add(p2.pid);
@@ -112,9 +138,13 @@ const doInjury = async (
 			type: "injured",
 			text: `${p.pos} <a href="${helpers.leagueUrl(["player", p2.pid])}">${
 				p2.firstName
-			} ${p2.lastName}</a> was injured! (${p2.injury.type}, out for ${
-				p2.injury.gamesRemaining
-			} ${p2.injury.gamesRemaining === 1 ? gameOrWeek : `${gameOrWeek}s`})`,
+			} ${p2.lastName}</a> ${
+				reaggravateExtraDays === undefined
+					? "was injured"
+					: "reaggravated his injury"
+			}! (${p2.injury.type}, out for ${p2.injury.gamesRemaining} ${
+				p2.injury.gamesRemaining === 1 ? gameOrWeek : `${gameOrWeek}s`
+			})`,
 			showNotification: false,
 			pids: [p2.pid],
 			tids: [p2.tid],
@@ -136,7 +166,7 @@ const doInjury = async (
 	if (
 		gamesRemainingNormalized > 25 &&
 		Math.random() < gamesRemainingNormalized / 82 &&
-		!p2.ratings[p2.ratings.length - 1].locked
+		!p2.ratings.at(-1).locked
 	) {
 		ratingsLoss = true;
 		let biggestRatingsLoss = 20;
@@ -150,15 +180,11 @@ const doInjury = async (
 		const r = p2.ratings.length - 1;
 
 		// New ratings row
-		p2.ratings[r].spd = helpers.bound(
+		p2.ratings[r].spd = player.limitRating(
 			p2.ratings[r].spd - random.randInt(1, biggestRatingsLoss),
-			1,
-			100,
 		);
-		p2.ratings[r].endu = helpers.bound(
+		p2.ratings[r].endu = player.limitRating(
 			p2.ratings[r].endu - random.randInt(1, biggestRatingsLoss),
-			1,
-			100,
 		);
 		const rating = bySport({
 			basketball: "jmp",
@@ -166,10 +192,8 @@ const doInjury = async (
 			hockey: undefined,
 		});
 		if (rating) {
-			p2.ratings[r][rating] = helpers.bound(
+			p2.ratings[r][rating] = player.limitRating(
 				p2.ratings[r][rating] - random.randInt(1, biggestRatingsLoss),
-				1,
-				100,
 			);
 		}
 
@@ -191,10 +215,8 @@ const doInjury = async (
 			}
 		}
 
-		p2.injuries[p2.injuries.length - 1].ovrDrop =
-			p2.ratings[r2].ovr - p2.ratings[r].ovr;
-		p2.injuries[p2.injuries.length - 1].potDrop =
-			p2.ratings[r2].pot - p2.ratings[r].pot;
+		p2.injuries.at(-1).ovrDrop = p2.ratings[r2].ovr - p2.ratings[r].ovr;
+		p2.injuries.at(-1).potDrop = p2.ratings[r2].pot - p2.ratings[r].pot;
 	}
 
 	return {
@@ -366,17 +388,17 @@ const writePlayerStats = async (
 				}
 
 				if (!allStarGame) {
-					let ps = p2.stats[p2.stats.length - 1];
+					let ps = p2.stats.at(-1);
 
-					// This should never happen, but sometimes does (actually it might not, after putting stats back in player object)
-					if (!ps || ps.tid !== t.id || ps.playoffs !== playoffs) {
+					// This should never happen, but sometimes does
+					if (
+						!ps ||
+						ps.tid !== t.id ||
+						ps.playoffs !== playoffs ||
+						ps.season !== g.get("season")
+					) {
 						await player.addStatsRow(p2, playoffs);
-						ps = p2.stats[p2.stats.length - 1];
-					}
-
-					// Since index is not on playoffs, manually check
-					if (ps.playoffs !== playoffs) {
-						throw new Error(`Missing playoff stats for player ${p.id}`);
+						ps = p2.stats.at(-1);
 					}
 
 					// Update stats
@@ -446,7 +468,7 @@ const writePlayerStats = async (
 					}
 				}
 
-				const injuredThisGame = p.injured && p.injury.type === "Healthy"; // Injury crap - assign injury type if player does not already have an injury in the database
+				const injuredThisGame = p.newInjury;
 
 				let ratingsLoss = false;
 

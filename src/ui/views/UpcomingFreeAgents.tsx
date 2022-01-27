@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { PHASE } from "../../common";
 import { DataTable, MoreLinks, PlayerNameLabels } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
@@ -36,7 +35,7 @@ const UpcomingFreeAgents = ({
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Team",
@@ -48,7 +47,7 @@ const UpcomingFreeAgents = ({
 		"Mood",
 		...(phase === PHASE.RESIGN_PLAYERS ? [] : ["Current Contract"]),
 		"Projected Contract",
-	);
+	]);
 	cols[6 + stats.length].title = "Your Team";
 	cols[7 + stats.length].title = "Current Team";
 
@@ -127,13 +126,6 @@ const UpcomingFreeAgents = ({
 			/>
 		</>
 	);
-};
-
-UpcomingFreeAgents.propTypes = {
-	phase: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	season: PropTypes.number.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
 
 export default UpcomingFreeAgents;

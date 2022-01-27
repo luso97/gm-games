@@ -1,8 +1,12 @@
-import { PLAYER, helpers as commonHelpers } from "../../common";
+import {
+	PLAYER,
+	helpers as commonHelpers,
+	timeBetweenGames,
+} from "../../common";
 import { idb } from "../db";
 import g from "./g";
 import type { DraftPick, PlayoffSeriesTeam } from "../../common/types";
-import defaultGameAttributes from "./defaultGameAttributes";
+import defaultGameAttributes from "../../common/defaultGameAttributes";
 
 const augmentSeries = async (
 	series: {
@@ -11,9 +15,12 @@ const augmentSeries = async (
 	}[][],
 	season: number = g.get("season"),
 ) => {
-	const teamSeasons = await idb.getCopies.teamSeasons({
-		season,
-	});
+	const teamSeasons = await idb.getCopies.teamSeasons(
+		{
+			season,
+		},
+		"noCopyCache",
+	);
 
 	const setAll = (obj: PlayoffSeriesTeam) => {
 		obj.abbrev = g.get("teamInfoCache")[obj.tid]?.abbrev;
@@ -26,12 +33,18 @@ const augmentSeries = async (
 			otl: g.get("otl", season) ? 0 : undefined,
 		};
 
+		const imgURLSmall = g.get("teamInfoCache")[obj.tid]?.imgURLSmall;
+		if (imgURLSmall) {
+			obj.imgURLSmall = imgURLSmall;
+		}
+
 		const teamSeason = teamSeasons.find(ts => ts.tid === obj.tid);
 		if (teamSeason) {
 			if (teamSeason.abbrev) {
 				obj.abbrev = teamSeason.abbrev;
 				obj.region = teamSeason.region;
 				obj.imgURL = teamSeason.imgURL;
+				obj.imgURLSmall = teamSeason.imgURLSmall;
 			}
 			obj.regularSeason.won = teamSeason.won;
 			obj.regularSeason.lost = teamSeason.lost;
@@ -139,7 +152,7 @@ const gb = (team0: teamWonLost, team: teamWonLost) => {
  */
 const getAbbrev = (tid: number | string): string => {
 	if (typeof tid === "string") {
-		tid = parseInt(tid, 10);
+		tid = parseInt(tid);
 	}
 
 	if (tid === PLAYER.FREE_AGENT) {
@@ -148,6 +161,10 @@ const getAbbrev = (tid: number | string): string => {
 
 	if (tid === PLAYER.UNDRAFTED) {
 		return "DP";
+	}
+
+	if (tid === PLAYER.DOES_NOT_EXIST) {
+		return "DNE";
 	}
 
 	if (tid < 0 || Number.isNaN(tid)) {
@@ -162,7 +179,7 @@ const getAbbrev = (tid: number | string): string => {
 	return g.get("teamInfoCache")[tid]?.abbrev;
 };
 
-const leagueUrl = (components: (number | string)[]): string =>
+const leagueUrl = (components: (number | string | undefined)[]): string =>
 	commonHelpers.leagueUrlFactory(g.get("lid"), components);
 
 /**
@@ -293,6 +310,18 @@ const quarterLengthFactor = () => {
 	);
 };
 
+const daysLeft = (freeAgents: boolean, days?: number) => {
+	const actualDays = days ?? g.get("daysLeft");
+
+	let dayWeek;
+	if (freeAgents) {
+		dayWeek = `day${actualDays === 1 ? "" : "s"}`;
+	} else {
+		dayWeek = timeBetweenGames(actualDays);
+	}
+	return `${actualDays} ${dayWeek} left`;
+};
+
 const helpers = {
 	...commonHelpers,
 	augmentSeries,
@@ -311,6 +340,7 @@ const helpers = {
 	resetG,
 	roundContract,
 	sigmoid,
+	daysLeft,
 };
 
 export default helpers;

@@ -122,6 +122,38 @@ const COMPOSITE_WEIGHTS: CompositeWeights<RatingKey> = {
 	},
 };
 
+const PLAYER_GAME_STATS = {
+	all: {
+		name: "All",
+		stats: [
+			"gs",
+			"min",
+			"fg",
+			"fga",
+			"fgp",
+			"tp",
+			"tpa",
+			"tpp",
+			"ft",
+			"fta",
+			"ftp",
+			"orb",
+			"drb",
+			"trb",
+			"ast",
+			"tov",
+			"stl",
+			"blk",
+			"ba",
+			"pf",
+			"pts",
+			"pm",
+			"gmsc",
+		],
+		sortBy: ["min"],
+	},
+};
+
 const PLAYER_SUMMARY = {
 	summary: {
 		name: "Summary",
@@ -131,7 +163,7 @@ const PLAYER_SUMMARY = {
 
 const PLAYER_STATS_TABLES = {
 	regular: {
-		name: "Stats",
+		name: "Per Game",
 		stats: [
 			"gp",
 			"gs",
@@ -541,6 +573,7 @@ export {
 	DEFAULT_CONFS,
 	DEFAULT_DIVS,
 	COMPOSITE_WEIGHTS,
+	PLAYER_GAME_STATS,
 	PLAYER_STATS_TABLES,
 	PLAYER_SUMMARY,
 	POSITION_COUNTS,

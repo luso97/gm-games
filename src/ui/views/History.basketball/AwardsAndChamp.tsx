@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { helpers } from "../../../ui/util";
 import type { ActualProps } from ".";
 import { AWARD_NAMES } from "../../../common";
@@ -49,14 +48,6 @@ const Winner = ({
 	return finals ? nameAndStats : <p>{nameAndStats}</p>;
 };
 
-Winner.propTypes = {
-	award: PropTypes.object,
-	defense: PropTypes.bool,
-	finals: PropTypes.bool,
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number.isRequired,
-};
-
 const AwardsAndChamp = ({
 	awards,
 	champ,
@@ -67,7 +58,7 @@ const AwardsAndChamp = ({
 	return (
 		<div className="row">
 			<div className="col-sm-12 col-6">
-				<h2>League Champions</h2>
+				<h2>League Champs</h2>
 				{champ ? (
 					<div>
 						<p>
@@ -144,14 +135,6 @@ const AwardsAndChamp = ({
 			</div>
 		</div>
 	);
-};
-
-AwardsAndChamp.propTypes = {
-	awards: PropTypes.object.isRequired,
-	champ: PropTypes.object.isRequired,
-	confs: PropTypes.arrayOf(PropTypes.object).isRequired,
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default AwardsAndChamp;

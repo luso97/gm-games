@@ -42,9 +42,7 @@ const attempt = async (valueChangeKey: number) => {
 
 	const otherTid = random.choice(otherTids);
 	const players = (
-		await idb.getCopies.players({
-			tid,
-		})
+		await idb.cache.players.indexGetAll("playersByTid", tid)
 	).filter(p => !isUntradable(p).untradable);
 	const draftPicks = await idb.cache.draftPicks.indexGetAll(
 		"draftPicksByTid",
@@ -86,7 +84,7 @@ const attempt = async (valueChangeKey: number) => {
 		},
 	];
 
-	const teams = await makeItWork(teams0, false, valueChangeKey);
+	const teams = await makeItWork(teams0, false, 5, valueChangeKey);
 
 	if (!teams) {
 		return false;
@@ -124,7 +122,7 @@ const attempt = async (valueChangeKey: number) => {
 	const finalTids: [number, number] = [teams[0].tid, teams[1].tid];
 	const finalPids: [number[], number[]] = [teams[0].pids, teams[1].pids];
 	const finalDpids: [number[], number[]] = [teams[0].dpids, teams[1].dpids];
-	await processTrade(tradeSummary, finalTids, finalPids, finalDpids);
+	await processTrade(finalTids, finalPids, finalDpids);
 
 	return true;
 };

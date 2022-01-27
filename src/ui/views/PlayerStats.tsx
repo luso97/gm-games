@@ -1,15 +1,14 @@
-import PropTypes from "prop-types";
 import { DataTable, MoreLinks, PlayerNameLabels } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import type { View } from "../../common/types";
 import { isSport } from "../../common";
+import { wrappedAgeAtDeath } from "../components/AgeAtDeath";
 
 export const formatStatGameHigh = (
 	ps: any,
 	stat: string,
 	statType?: string,
-	defaultSeason?: number,
 ) => {
 	if (stat.endsWith("Max")) {
 		if (!Array.isArray(ps[stat])) {
@@ -17,18 +16,13 @@ export const formatStatGameHigh = (
 		}
 
 		// Can be [max, gid] or (for career stats) [max, gid, abbrev, tid, season]
-		const row = (ps[stat] as unknown) as
+		const row = ps[stat] as unknown as
 			| [number, number]
 			| [number, number, string, number, number];
 
 		const abbrev = row.length > 3 ? row[2] : ps.abbrev;
 		const tid = row.length > 3 ? row[3] : ps.tid;
-		const season =
-			row.length > 3
-				? row[4]
-				: ps.season !== undefined
-				? ps.season
-				: defaultSeason;
+		const season = row.length > 3 ? row[4] : ps.season;
 
 		return (
 			<a
@@ -64,21 +58,22 @@ const PlayerStats = ({
 		dropdownView: "player_stats",
 		dropdownFields: {
 			teamsAndAllWatch: abbrev,
-			seasonsAndCareer: season === undefined ? "career" : season,
+			seasonsAndCareer: season,
 			statTypesAdv: statType,
 			playoffs,
 		},
 	});
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Age",
 		"Team",
+		...(season === "all" ? ["Season"] : []),
 		...stats.map(
 			stat => `stat:${stat.endsWith("Max") ? stat.replace("Max", "") : stat}`,
 		),
-	);
+	]);
 
 	if (statType === "shotLocations") {
 		cols[cols.length - 7].title = "M";
@@ -104,7 +99,7 @@ const PlayerStats = ({
 	const rows = players.map(p => {
 		let pos;
 		if (Array.isArray(p.ratings) && p.ratings.length > 0) {
-			pos = p.ratings[p.ratings.length - 1].pos;
+			pos = p.ratings.at(-1).pos;
 		} else if (p.ratings.pos) {
 			pos = p.ratings.pos;
 		} else {
@@ -114,7 +109,7 @@ const PlayerStats = ({
 		// HACKS to show right stats, info
 		let actualAbbrev;
 		let actualTid;
-		if (season === undefined) {
+		if (season === "career") {
 			p.stats = p.careerStats;
 			actualAbbrev = p.abbrev;
 			actualTid = p.tid;
@@ -127,11 +122,13 @@ const PlayerStats = ({
 		}
 
 		const statsRow = stats.map(stat =>
-			formatStatGameHigh(p.stats, stat, statType, season),
+			formatStatGameHigh(p.stats, stat, statType),
 		);
 
+		const key = season === "all" ? `${p.pid}-${p.stats.season}` : p.pid;
+
 		return {
-			key: p.pid,
+			key,
 			data: [
 				{
 					value: (
@@ -139,6 +136,7 @@ const PlayerStats = ({
 							injury={p.injury}
 							jerseyNumber={p.stats.jerseyNumber}
 							pid={p.pid}
+							season={season === "career" ? undefined : p.stats.season}
 							skills={p.ratings.skills}
 							watch={p.watch}
 						>
@@ -149,16 +147,24 @@ const PlayerStats = ({
 					searchValue: p.name,
 				},
 				pos,
-				p.age,
+
+				// Only show age at death for career totals, otherwise just use current age
+				season === "career"
+					? wrappedAgeAtDeath(p.age, p.ageAtDeath)
+					: p.stats.season - p.born.year,
+
 				<a
 					href={helpers.leagueUrl([
 						"roster",
 						`${actualAbbrev}_${actualTid}`,
-						...(season === undefined ? [] : [season]),
+						...(season === "career" ? [] : [p.stats.season]),
 					])}
 				>
 					{actualAbbrev}
 				</a>,
+
+				...(season === "all" ? [p.stats.season] : []),
+
 				...statsRow,
 			],
 			classNames: {
@@ -173,7 +179,7 @@ const PlayerStats = ({
 			<MoreLinks
 				type="playerStats"
 				page="player_stats"
-				season={season}
+				season={typeof season === "number" ? season : undefined}
 				statType={statType}
 				keepSelfLink
 			/>
@@ -183,9 +189,6 @@ const PlayerStats = ({
 				<span className="text-info">highlighted in blue</span>. Players in the
 				Hall of Fame are <span className="text-danger">highlighted in red</span>
 				.
-				{isSport("basketball")
-					? " Only players averaging more than 5 minutes per game are shown."
-					: null}
 			</p>
 
 			<DataTable
@@ -198,17 +201,6 @@ const PlayerStats = ({
 			/>
 		</>
 	);
-};
-
-PlayerStats.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	playoffs: PropTypes.oneOf(["playoffs", "regularSeason"]).isRequired,
-	season: PropTypes.number, // Undefined for career totals
-	statType: PropTypes.string.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	superCols: PropTypes.array,
-	userTid: PropTypes.number,
 };
 
 export default PlayerStats;

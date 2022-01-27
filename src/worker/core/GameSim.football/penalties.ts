@@ -10,7 +10,13 @@ type Penalty = {
 	yds: number;
 	automaticFirstDown?: true;
 	notBallCarrier?: true;
+
+	// Is penalty assessed from the spot of the foul?
 	spotFoul?: true;
+
+	// Is penalty assessed after the completion of the play?
+	tackOn?: true;
+
 	// undefined means no player is assigned the penalty (like delay of game). An empty object means all players will be given equal weight.
 	posOdds?: Partial<Record<Position, number>>;
 };
@@ -36,7 +42,6 @@ const penalties: Penalty[] = [
 			RB: 0.02,
 		},
 		notBallCarrier: true,
-		spotFoul: true,
 	},
 	{
 		name: "False start",
@@ -103,6 +108,7 @@ const penalties: Penalty[] = [
 			CB: 0.25,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Unnecessary roughness",
@@ -153,7 +159,7 @@ const penalties: Penalty[] = [
 	{
 		name: "Offsides",
 		side: "defense",
-		playTypes: ["fieldGoal", "punt", "puntReturn", "pass", "run"],
+		playTypes: ["fieldGoal", "punt", "pass", "run"],
 		probPerPlay: 0,
 		numPerSeason: 143,
 		yds: 5,
@@ -176,6 +182,7 @@ const penalties: Penalty[] = [
 			CB: 0.02,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Delay of game",
@@ -207,6 +214,7 @@ const penalties: Penalty[] = [
 			CB: 0.1,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Face mask",
@@ -221,6 +229,7 @@ const penalties: Penalty[] = [
 			OL: 0.25,
 			TE: 0.15,
 		},
+		tackOn: true,
 	},
 	{
 		name: "Pass interference",
@@ -276,6 +285,7 @@ const penalties: Penalty[] = [
 		yds: 15,
 		posOdds: {},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Unsportsmanlike conduct",
@@ -285,6 +295,7 @@ const penalties: Penalty[] = [
 		numPerSeason: 26,
 		yds: 15,
 		posOdds: {},
+		tackOn: true,
 	},
 	{
 		name: "Illegal shift",
@@ -350,6 +361,7 @@ const penalties: Penalty[] = [
 		numPerSeason: 12,
 		yds: 15,
 		posOdds: {},
+		tackOn: true,
 	},
 	{
 		name: "Taunting",
@@ -360,6 +372,7 @@ const penalties: Penalty[] = [
 		yds: 15,
 		posOdds: {},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Lowering the head to initiate contact",
@@ -375,6 +388,7 @@ const penalties: Penalty[] = [
 			DL: 0.1,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Ineligible receiver downfield",
@@ -401,6 +415,7 @@ const penalties: Penalty[] = [
 			DL: 0.2,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Chop block",
@@ -455,6 +470,7 @@ const penalties: Penalty[] = [
 			DL: 0.4,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Illegal Substitution",
@@ -509,6 +525,7 @@ const penalties: Penalty[] = [
 			S: 1,
 		},
 		automaticFirstDown: true,
+		tackOn: true,
 	},
 	{
 		name: "Illegal touching",

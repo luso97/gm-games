@@ -18,15 +18,21 @@ const updateAwards = async (
 	}
 
 	let season = inputs.season;
-	let awards = await idb.getCopy.awards({
-		season,
-	});
+	let awards = await idb.getCopy.awards(
+		{
+			season,
+		},
+		"noCopyCache",
+	);
 	if (!awards) {
 		if (g.get("season") === season && g.get("phase") <= PHASE.PLAYOFFS) {
 			season -= 1;
-			awards = await idb.getCopy.awards({
-				season,
-			});
+			awards = await idb.getCopy.awards(
+				{
+					season,
+				},
+				"noCopyCache",
+			);
 		}
 	}
 	if (
@@ -34,9 +40,12 @@ const updateAwards = async (
 		season !== state.season
 	) {
 		// Don't use cache, in case this is the current season and we want to include players who just retired
-		let playersAll = await idb.getCopies.players({
-			activeSeason: season,
-		});
+		let playersAll = await idb.getCopies.players(
+			{
+				activeSeason: season,
+			},
+			"noCopyCache",
+		);
 
 		playersAll = orderBy(playersAll, ["lastName", "firstName"]);
 

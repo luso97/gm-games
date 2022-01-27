@@ -1,13 +1,12 @@
-import PropTypes from "prop-types";
 import { useCallback, ChangeEvent, useRef } from "react";
 import { bySport, isSport, PHASE } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
-import { toWorker, logEvent } from "../util";
+import { toWorker, logEvent, helpers } from "../util";
 import type { View } from "../../common/types";
 import orderBy from "lodash-es/orderBy";
 
 const handleAutoSort = async (tids: number[]) => {
-	await toWorker("main", "autoSortRoster", undefined, tids);
+	await toWorker("main", "autoSortRoster", { tids });
 };
 
 const handleResetPT = async (tids: number[]) => {
@@ -15,25 +14,22 @@ const handleResetPT = async (tids: number[]) => {
 };
 
 const MultiTeamMode = ({
+	godMode,
 	phase,
 	teams,
 	userTid,
 	userTids,
 }: View<"multiTeamMode">) => {
-	const notificationProbablyShowing = useRef(false);
+	const notificationShown = useRef(false);
 
 	const showNotification = () => {
-		// Hacky attempt to not show this notification if it's already showing
-		if (!notificationProbablyShowing.current) {
-			notificationProbablyShowing.current = true;
+		if (!notificationShown.current) {
+			notificationShown.current = true;
 			logEvent({
 				saveToDb: false,
 				text: "Switch between teams you control using the menu below:",
 				type: "info",
 			});
-			window.setTimeout(() => {
-				notificationProbablyShowing.current = false;
-			}, 8000);
 		}
 	};
 
@@ -41,7 +37,7 @@ const MultiTeamMode = ({
 		async (event: ChangeEvent<HTMLSelectElement>) => {
 			const newUserTids = Array.from(event.target.options)
 				.filter(o => o.selected)
-				.map(o => parseInt(o.value, 10))
+				.map(o => parseInt(o.value))
 				.filter(n => !Number.isNaN(n));
 
 			if (newUserTids.length < 1) {
@@ -68,6 +64,18 @@ const MultiTeamMode = ({
 	);
 
 	useTitleBar({ title: "Multi Team Mode" });
+
+	if (!godMode) {
+		return (
+			<div>
+				<h2>Error</h2>
+				<p>
+					You cannot switch to a new team now unless you enable{" "}
+					<a href={helpers.leagueUrl(["god_mode"])}>God Mode</a>.
+				</p>
+			</div>
+		);
+	}
 
 	if (phase === PHASE.RESIGN_PLAYERS) {
 		return (
@@ -108,36 +116,24 @@ const MultiTeamMode = ({
 		<>
 			<p>
 				Here you can switch from controlling one team to controlling multiple
-				teams. Why would you want to do this? A few reasons I can think of:
+				teams. Why would you want to do this? Here's a few reasons:
 			</p>
 
 			<ul>
+				<li>Extreme control - if you want to control how other teams behave</li>
 				<li>
 					Live in-person multiplayer - two people sharing one computer can play
 					in the same league together
 				</li>
 				<li>
-					Extreme control - if you want to control how other teams behave, for
-					some reason
-				</li>
-				<li>
-					Online multiplayer - if you want to run a league where you are the
-					commissioner and other people email you roster moves to make manually,
-					you don't want AI fucking things up
+					<a href="https://www.reddit.com/r/BasketballGM/wiki/basketball_gm_multiplayer_league_list">
+						Online multiplayer
+					</a>{" "}
+					- a bunch of people coordinate on Discord/Reddit/etc to run a whole
+					league of teams, and then one person manually controls all the teams
+					in the game
 				</li>
 			</ul>
-
-			<p>
-				For more details,{" "}
-				<a href="https://basketball-gm.com/blog/2015/03/new-feature-multi-team-mode/">
-					read this blog post
-				</a>
-				. But basically,{" "}
-				<a href="https://www.youtube.com/watch?v=4kly-bxCBZg">
-					multi til the motherfucking sun die
-				</a>
-				.
-			</p>
 
 			<p>
 				{statusText} Use shift+click to select adjacent teams, or ctrl+click
@@ -167,7 +163,7 @@ const MultiTeamMode = ({
 							});
 						}}
 					>
-						Disable multi-team mode
+						Disable multi team mode
 					</button>
 				) : null}
 			</div>
@@ -175,7 +171,7 @@ const MultiTeamMode = ({
 			<div className="row">
 				<div className="col-sm-6">
 					<select
-						className="form-control"
+						className="form-select"
 						multiple
 						onChange={handleChange}
 						size={teams.length}
@@ -214,18 +210,6 @@ const MultiTeamMode = ({
 			</div>
 		</>
 	);
-};
-
-MultiTeamMode.propTypes = {
-	phase: PropTypes.number.isRequired,
-	teams: PropTypes.arrayOf(
-		PropTypes.shape({
-			name: PropTypes.string.isRequired,
-			tid: PropTypes.number.isRequired,
-		}),
-	).isRequired,
-	userTid: PropTypes.number.isRequired,
-	userTids: PropTypes.arrayOf(PropTypes.number).isRequired,
 };
 
 export default MultiTeamMode;

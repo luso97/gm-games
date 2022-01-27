@@ -1,3 +1,4 @@
+import type { PlayerInjury } from "../../../common/types";
 import type { Position } from "../../../common/types.football";
 
 export type PlayType =
@@ -9,6 +10,7 @@ export type PlayType =
 	| "kickoffReturn"
 	| "punt"
 	| "puntReturn"
+	| "extraPointAttempt"
 	| "extraPoint"
 	| "fieldGoal"
 	| "fumble"
@@ -22,10 +24,15 @@ export type PlayType =
 	| "run"
 	| "onsideKick"
 	| "onsideKickRecovery"
-	| "offsettingPenalties"
 	| "penalty"
+	| "penaltyCount"
 	| "timeout"
-	| "twoMinuteWarning";
+	| "twoMinuteWarning"
+	| "kneel"
+	| "flag"
+	| "twoPointConversion"
+	| "twoPointConversionFailed"
+	| "turnoverOnDowns";
 
 export type TeamNum = 0 | 1;
 
@@ -66,6 +73,10 @@ export type PlayerGameSim = {
 	compositeRating: any;
 	skills: string[];
 	injured: boolean;
+	newInjury: boolean;
+	injury: PlayerInjury & {
+		playingThrough: boolean;
+	};
 	ptModifier: number;
 	ovrs: Record<Position, number>;
 };

@@ -17,7 +17,6 @@ const getPlayerInfo = (p: PlayerFiltered): AwardPlayer => {
 		pid: p.pid,
 		name: p.name,
 		tid: p.tid,
-		abbrev: p.abbrev,
 		pos: p.pos,
 		g: p.currentStats.g,
 		a: p.currentStats.a,
@@ -123,34 +122,37 @@ export const royFilter = (p: PlayerFiltered) => {
 const doAwards = async (conditions: Conditions) => {
 	// Careful - this array is mutated in various functions called below
 	const awardsByPlayer: AwardsByPlayer = [];
-	const teams = await idb.getCopies.teamsPlus({
-		attrs: ["tid"],
-		seasonAttrs: [
-			"won",
-			"lost",
-			"tied",
-			"otl",
-			"wonDiv",
-			"lostDiv",
-			"tiedDiv",
-			"otlDiv",
-			"wonConf",
-			"lostConf",
-			"tiedConf",
-			"otlConf",
-			"winp",
-			"pts",
-			"playoffRoundsWon",
-			"abbrev",
-			"region",
-			"name",
-			"cid",
-			"did",
-		],
-		stats: ["pts", "oppPts", "gp"],
-		season: g.get("season"),
-		showNoStats: true,
-	});
+	const teams = await idb.getCopies.teamsPlus(
+		{
+			attrs: ["tid"],
+			seasonAttrs: [
+				"won",
+				"lost",
+				"tied",
+				"otl",
+				"wonDiv",
+				"lostDiv",
+				"tiedDiv",
+				"otlDiv",
+				"wonConf",
+				"lostConf",
+				"tiedConf",
+				"otlConf",
+				"winp",
+				"pts",
+				"playoffRoundsWon",
+				"abbrev",
+				"region",
+				"name",
+				"cid",
+				"did",
+			],
+			stats: ["pts", "oppPts", "gp"],
+			season: g.get("season"),
+			showNoStats: true,
+		},
+		"noCopyCache",
+	);
 	const players = await getPlayers(g.get("season"));
 	const { bestRecord, bestRecordConfs } = await teamAwards(teams);
 	const categories = [
@@ -241,6 +243,8 @@ const doAwards = async (conditions: Conditions) => {
 			champTid,
 		);
 
+		const noPlayoffs = g.get("numGamesPlayoffSeries", "current").length === 0;
+
 		const champPlayers = await idb.getCopies.playersPlus(champPlayersAll, {
 			// Only the champions, only playoff stats
 			attrs: ["pid", "name", "tid", "abbrev"],
@@ -264,8 +268,8 @@ const doAwards = async (conditions: Conditions) => {
 			],
 			ratings: ["pos"],
 			season: g.get("season"),
-			playoffs: true,
-			regularSeason: false,
+			playoffs: !noPlayoffs,
+			regularSeason: noPlayoffs,
 			tid: champTid,
 		});
 

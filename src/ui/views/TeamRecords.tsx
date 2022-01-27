@@ -12,7 +12,7 @@ const teamLink = (t: View<"teamRecords">["teams"][number]) => {
 				{t.region} {t.name}
 			</a>
 		) : (
-			<span className="ml-2">
+			<span className="ms-2">
 				{t.region} {t.name}
 			</span>
 		),
@@ -67,6 +67,7 @@ const TeamRecords = ({
 	teams,
 	ties,
 	otl,
+	usePts,
 	userTid,
 }: View<"teamRecords">) => {
 	const [showHistorical, setShowHistorical] = useState(true);
@@ -86,7 +87,7 @@ const TeamRecords = ({
 		displayName = "Team";
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		...(displayName === "Division" ? ["Conference"] : []),
 		displayName,
 		"Start",
@@ -96,7 +97,7 @@ const TeamRecords = ({
 		"L",
 		...(otl ? ["OTL"] : []),
 		...(ties ? ["T"] : []),
-		"%",
+		...(usePts ? ["PTS", "PTS%"] : ["%"]),
 		"Playoffs",
 		"Last",
 		"Finals",
@@ -104,7 +105,7 @@ const TeamRecords = ({
 		"Titles",
 		"Last",
 		...categories.map(category => `count:${category}`),
-	);
+	]);
 
 	const lasts = cols.filter(col => col.title === "Last");
 	lasts[0].desc = "Last Playoffs Appearance";
@@ -126,7 +127,9 @@ const TeamRecords = ({
 					t.lost,
 					...(otl ? [t.otl] : []),
 					...(ties ? [t.tied] : []),
-					helpers.roundWinp(t.winp),
+					...(usePts
+						? [t.pts, helpers.roundWinp(t.ptsPct)]
+						: [helpers.roundWinp(t.winp)]),
 					t.playoffs,
 					t.lastPlayoffs,
 					t.finals,

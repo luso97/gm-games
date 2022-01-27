@@ -1,12 +1,16 @@
-import PropTypes from "prop-types";
-
 const PlusMinus = ({
 	children,
 	decimalPlaces = 1,
+	includePlus,
 }: {
-	children: number;
+	children: number | null | undefined;
 	decimalPlaces?: number;
+	includePlus?: boolean;
 }) => {
+	if (children == undefined) {
+		return null;
+	}
+
 	const formattedNumber = children.toLocaleString("en-US", {
 		maximumFractionDigits: decimalPlaces,
 		minimumFractionDigits: decimalPlaces,
@@ -15,7 +19,16 @@ const PlusMinus = ({
 	return (
 		<>
 			{children !== 0 ? (
-				<span className={children < 0 ? "text-danger" : "text-success"}>
+				<span
+					className={
+						children < 0
+							? "text-danger"
+							: children > 0
+							? "text-success"
+							: undefined
+					}
+				>
+					{includePlus && children > 0 ? "+" : null}
 					{formattedNumber}
 				</span>
 			) : (
@@ -23,10 +36,6 @@ const PlusMinus = ({
 			)}
 		</>
 	);
-};
-
-PlusMinus.propTypes = {
-	children: PropTypes.number.isRequired,
 };
 
 export default PlusMinus;

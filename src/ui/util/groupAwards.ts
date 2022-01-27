@@ -1,4 +1,4 @@
-import groupBy from "lodash-es/groupBy";
+import { groupBy } from "../../common/groupBy";
 import type { Player } from "../../common/types";
 import helpers from "./helpers";
 
@@ -23,6 +23,8 @@ const awardsOrder = [
 	"All-Rookie Team",
 	"All-Star MVP",
 	"All-Star",
+	"Slam Dunk Contest Winner",
+	"Three-Point Contest Winner",
 	"League Scoring Leader",
 	"League Rebounding Leader",
 	"League Assists Leader",
@@ -70,6 +72,10 @@ const groupAwards = (awards: Player["awards"], shortNames?: boolean) => {
 			type = "OROY";
 		} else if (type === "Defensive Rookie of the Year") {
 			type = "DROY";
+		} else if (type === "Slam Dunk Contest Winner") {
+			type = "Slam Dunk Contest";
+		} else if (type === "Three-Point Contest Winner") {
+			type = "Three-Point Contest";
 		} else if (type.includes("All-League")) {
 			type = "All-League";
 		} else if (type.includes("All-Defensive")) {

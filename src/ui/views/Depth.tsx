@@ -1,7 +1,6 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { Fragment, useState } from "react";
-import arrayMove from "array-move";
+import { arrayMoveImmutable } from "array-move";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers, toWorker } from "../util";
 import { MoreLinks, PlayerNameLabels, SortableTable } from "../components";
@@ -10,11 +9,11 @@ import { bySport, isSport } from "../../common";
 import { NUM_LINES } from "../../common/constants.hockey";
 
 const handleAutoSort = async (pos: string) => {
-	await toWorker("main", "autoSortRoster", pos, undefined);
+	await toWorker("main", "autoSortRoster", { pos });
 };
 
 const handleAutoSortAll = async () => {
-	await toWorker("main", "autoSortRoster", undefined, undefined);
+	await toWorker("main", "autoSortRoster", undefined);
 };
 
 const numStartersByPos = bySport<
@@ -65,6 +64,7 @@ const Depth = ({
 	keepRosterSorted,
 	multiplePositionsWarning,
 	players,
+	playoffs,
 	pos,
 	ratings,
 	season,
@@ -82,7 +82,7 @@ const Depth = ({
 	useTitleBar({
 		title: isSport("hockey") ? "Lines" : "Depth Chart",
 		dropdownView: "depth",
-		dropdownFields: { teams: abbrev, depth: pos },
+		dropdownFields: { teams: abbrev, depth: pos, playoffs },
 		moreInfoAbbrev: abbrev,
 		moreInfoSeason: season,
 		moreInfoTid: tid,
@@ -110,8 +110,8 @@ const Depth = ({
 		playersSorted = players;
 	}
 
-	const ratingCols = getCols(...ratings.map(rating => `rating:${rating}`));
-	const statCols = getCols(...stats.map(stat => `stat:${stat}`));
+	const ratingCols = getCols(ratings.map(rating => `rating:${rating}`));
+	const statCols = getCols(stats.map(stat => `stat:${stat}`));
 
 	let numStarters = 0;
 	let positions: string[];
@@ -191,12 +191,10 @@ const Depth = ({
 								if (!keepRosterSorted) {
 									await handleAutoSortAll();
 								}
-								await toWorker(
-									"main",
-									"updateKeepRosterSorted",
+								await toWorker("main", "updateKeepRosterSorted", {
 									tid,
-									!keepRosterSorted,
-								);
+									keepRosterSorted: !keepRosterSorted,
+								});
 							}}
 						/>
 						<label className="form-check-label" htmlFor="ai-sort-user-roster">
@@ -239,16 +237,22 @@ const Depth = ({
 				}
 				onChange={async ({ oldIndex, newIndex }) => {
 					const pids = players.map(p => p.pid);
-					const newSortedPids = arrayMove(pids, oldIndex, newIndex);
+					const newSortedPids = arrayMoveImmutable(pids, oldIndex, newIndex);
 					setSortedPids(newSortedPids);
-					await toWorker("main", "reorderDepthDrag", pos, newSortedPids);
+					await toWorker("main", "reorderDepthDrag", {
+						pos,
+						sortedPids: newSortedPids,
+					});
 				}}
 				onSwap={async (index1, index2) => {
 					const newSortedPids = players.map(p => p.pid);
 					newSortedPids[index1] = players[index2].pid;
 					newSortedPids[index2] = players[index1].pid;
 					setSortedPids(newSortedPids);
-					await toWorker("main", "reorderDepthDrag", pos, newSortedPids);
+					await toWorker("main", "reorderDepthDrag", {
+						pos,
+						sortedPids: newSortedPids,
+					});
 				}}
 				cols={() => (
 					<>
@@ -338,16 +342,6 @@ const Depth = ({
 			/>
 		</>
 	);
-};
-
-Depth.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	editable: PropTypes.bool.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	pos: PropTypes.string.isRequired,
-	season: PropTypes.number.isRequired,
-	ratings: PropTypes.arrayOf(PropTypes.string).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
 
 export default Depth;

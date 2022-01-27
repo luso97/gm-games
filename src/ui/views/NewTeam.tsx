@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useState, ChangeEvent, FormEvent } from "react";
 import { PHASE } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
@@ -28,19 +27,21 @@ const NewTeam = ({
 	}
 
 	const handleTidChange = (event: ChangeEvent<HTMLSelectElement>) => {
-		setTid(parseInt(event.currentTarget.value, 10));
+		setTid(parseInt(event.currentTarget.value));
 	};
 
 	const handleNewTeam = async (event: FormEvent) => {
 		event.preventDefault();
 
-		await toWorker("main", "switchTeam", tid);
-		realtimeUpdate(
-			[],
-			expansion
-				? helpers.leagueUrl(["protect_players"])
-				: helpers.leagueUrl([]),
-		);
+		if (tid !== undefined) {
+			await toWorker("main", "switchTeam", tid);
+			realtimeUpdate(
+				[],
+				expansion
+					? helpers.leagueUrl(["protect_players"])
+					: helpers.leagueUrl([]),
+			);
+		}
 	};
 
 	let title;
@@ -87,6 +88,13 @@ const NewTeam = ({
 				<p>
 					Your old team no longer exists, but fortunately there are some new
 					teams willing to hire you.
+				</p>
+			);
+		} else if (gameOver) {
+			message = (
+				<p>
+					You've been fired by your current team, so pick an expansion team to
+					continue.
 				</p>
 			);
 		} else {
@@ -145,9 +153,9 @@ const NewTeam = ({
 		<>
 			{message}
 
-			<form className="form-inline" onSubmit={handleNewTeam}>
+			<form className="d-flex" onSubmit={handleNewTeam}>
 				<select
-					className="form-control mr-2"
+					className="form-select me-2"
 					style={{
 						width: "inherit",
 					}}
@@ -174,8 +182,8 @@ const NewTeam = ({
 				<div className="d-flex mt-3">
 					{t.imgURL ? (
 						<div
-							style={{ width: 90 }}
-							className="mr-3 d-flex align-items-center justify-content-center"
+							style={{ width: 128 }}
+							className="me-3 d-flex align-items-center justify-content-center"
 						>
 							<a href={helpers.leagueUrl(["roster", `${t.abbrev}_${t.tid}`])}>
 								<img className="mw-100 mh-100" src={t.imgURL} alt="Team logo" />
@@ -215,19 +223,6 @@ const NewTeam = ({
 			) : null}
 		</>
 	);
-};
-
-NewTeam.propTypes = {
-	gameOver: PropTypes.bool.isRequired,
-	godMode: PropTypes.bool.isRequired,
-	phase: PropTypes.number.isRequired,
-	teams: PropTypes.arrayOf(
-		PropTypes.shape({
-			name: PropTypes.string.isRequired,
-			region: PropTypes.string.isRequired,
-			tid: PropTypes.number.isRequired,
-		}),
-	).isRequired,
 };
 
 export default NewTeam;

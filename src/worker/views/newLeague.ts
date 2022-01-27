@@ -2,19 +2,27 @@ import { idb } from "../db";
 import type { ViewInput, RealTeamInfo } from "../../common/types";
 import {
 	defaultGameAttributes,
+	defaultInjuries,
+	defaultTragicDeaths,
+	env,
 	getNewLeagueLid,
 	newLeagueGodModeLimits,
 } from "../util";
 import type { Settings } from "./settings";
 import { unwrapGameAttribute } from "../../common";
+import goatFormula from "../util/goatFormula";
 
-const updateNewLeague = async ({ lid, type }: ViewInput<"newLeague">) => {
-	const godModeLimits = newLeagueGodModeLimits();
+const getDefaultRealStats = () => {
+	return env.mobile ? "none" : "allActiveHOF";
+};
 
+export const getDefaultSettings = () => {
 	const defaultSettings: Omit<Settings, "numActiveTeams"> = {
 		godMode: unwrapGameAttribute(defaultGameAttributes, "godMode"),
 		godModeInPast: unwrapGameAttribute(defaultGameAttributes, "godModeInPast"),
 		numGames: unwrapGameAttribute(defaultGameAttributes, "numGames"),
+		numGamesDiv: unwrapGameAttribute(defaultGameAttributes, "numGamesDiv"),
+		numGamesConf: unwrapGameAttribute(defaultGameAttributes, "numGamesConf"),
 		quarterLength: unwrapGameAttribute(defaultGameAttributes, "quarterLength"),
 		maxRosterSize: unwrapGameAttribute(defaultGameAttributes, "maxRosterSize"),
 		minRosterSize: unwrapGameAttribute(defaultGameAttributes, "minRosterSize"),
@@ -59,7 +67,7 @@ const updateNewLeague = async ({ lid, type }: ViewInput<"newLeague">) => {
 			defaultGameAttributes,
 			"forceRetireAge",
 		),
-		hardCap: unwrapGameAttribute(defaultGameAttributes, "hardCap"),
+		salaryCapType: unwrapGameAttribute(defaultGameAttributes, "salaryCapType"),
 		numGamesPlayoffSeries: unwrapGameAttribute(
 			defaultGameAttributes,
 			"numGamesPlayoffSeries",
@@ -191,13 +199,77 @@ const updateNewLeague = async ({ lid, type }: ViewInput<"newLeague">) => {
 			defaultGameAttributes,
 			"equalizeRegions",
 		),
+		hideDisabledTeams: unwrapGameAttribute(
+			defaultGameAttributes,
+			"hideDisabledTeams",
+		),
 		noStartingInjuries: false,
 		randomization: "none",
+		realStats: getDefaultRealStats(),
+		hofFactor: unwrapGameAttribute(defaultGameAttributes, "hofFactor"),
+		injuries: defaultInjuries,
+		inflationAvg: unwrapGameAttribute(defaultGameAttributes, "inflationAvg"),
+		inflationMax: unwrapGameAttribute(defaultGameAttributes, "inflationMax"),
+		inflationMin: unwrapGameAttribute(defaultGameAttributes, "inflationMin"),
+		inflationStd: unwrapGameAttribute(defaultGameAttributes, "inflationStd"),
+		playoffsByConf: unwrapGameAttribute(
+			defaultGameAttributes,
+			"playoffsByConf",
+		),
+		playoffsNumTeamsDiv: unwrapGameAttribute(
+			defaultGameAttributes,
+			"playoffsNumTeamsDiv",
+		),
+		playoffsReseed: unwrapGameAttribute(
+			defaultGameAttributes,
+			"playoffsReseed",
+		),
+		playerBioInfo: unwrapGameAttribute(defaultGameAttributes, "playerBioInfo"),
+		playIn: unwrapGameAttribute(defaultGameAttributes, "playIn"),
+		numPlayersDunk: unwrapGameAttribute(
+			defaultGameAttributes,
+			"numPlayersDunk",
+		),
+		numPlayersThree: unwrapGameAttribute(
+			defaultGameAttributes,
+			"numPlayersThree",
+		),
+		fantasyPoints: unwrapGameAttribute(defaultGameAttributes, "fantasyPoints"),
+		tragicDeaths: defaultTragicDeaths,
+		goatFormula: goatFormula.DEFAULT_FORMULA,
+		draftPickAutoContract: unwrapGameAttribute(
+			defaultGameAttributes,
+			"draftPickAutoContract",
+		),
+		draftPickAutoContractPercent: unwrapGameAttribute(
+			defaultGameAttributes,
+			"draftPickAutoContractPercent",
+		),
+		draftPickAutoContractRounds: unwrapGameAttribute(
+			defaultGameAttributes,
+			"draftPickAutoContractRounds",
+		),
 
 		// This can be undefined, but if the setting is ever displayed to the user, it should default to "rookie"
 		realDraftRatings:
 			unwrapGameAttribute(defaultGameAttributes, "realDraftRatings") ??
 			"rookie",
+	};
+
+	return defaultSettings;
+};
+
+const updateNewLeague = async ({ lid, type }: ViewInput<"newLeague">) => {
+	const godModeLimits = newLeagueGodModeLimits();
+
+	const overrides = (await idb.meta.get(
+		"attributes",
+		"defaultSettingsOverrides",
+	)) as Settings | undefined;
+
+	const defaultSettings = {
+		...getDefaultSettings(),
+		...overrides,
 	};
 
 	if (lid !== undefined) {

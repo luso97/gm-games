@@ -73,6 +73,14 @@ const optionsTmp = bySport({
 			key: "all_star_mvp",
 		},
 		{
+			val: "Slam Dunk Contest Winner",
+			key: "dunk",
+		},
+		{
+			val: "Three-Point Contest Winner",
+			key: "three",
+		},
+		{
 			val: "League Scoring Leader",
 			key: "ppg_leader",
 		},
@@ -256,7 +264,7 @@ function getPlayerAwards(p: LocalPlayer, awardType: string) {
 		const stats = p.stats.filter(s => s.season === season);
 
 		if (stats.length > 0) {
-			return stats[stats.length - 1].abbrev;
+			return stats.at(-1).abbrev;
 		}
 
 		return "???";
@@ -291,10 +299,13 @@ const updateAwardsRecords = async (
 		updateEvents.includes("firstRun") ||
 		inputs.awardType !== state.awardType
 	) {
-		const playersAll = await idb.getCopies.players({
-			activeAndRetired: true,
-			filter: p => p.awards.length > 0,
-		});
+		const playersAll = await idb.getCopies.players(
+			{
+				activeAndRetired: true,
+				filter: p => p.awards.length > 0,
+			},
+			"noCopyCache",
+		);
 		const players: LocalPlayer[] = await idb.getCopies.playersPlus(playersAll, {
 			attrs: ["awards", "firstName", "lastName", "pid", "retiredYear", "hof"],
 			stats: ["abbrev", "season"],

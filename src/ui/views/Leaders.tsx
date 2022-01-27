@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import useTitleBar from "../hooks/useTitleBar";
 import { helpers } from "../util";
 import { PlayerNameLabels, ResponsiveTableWrapper } from "../components";
@@ -29,11 +28,14 @@ const Row = ({
 			onClick={toggleClicked}
 		>
 			<td>
-				{rank}.{" "}
+				<div style={{ width: 18 }} className="me-1 float-start">
+					{rank}.
+				</div>
 				<PlayerNameLabels
 					pid={p.pid}
 					injury={p.injury}
 					jerseyNumber={p.jerseyNumber}
+					season={season}
 					skills={p.ratings.skills}
 					watch={p.watch}
 				>
@@ -41,13 +43,11 @@ const Row = ({
 				</PlayerNameLabels>
 				<a
 					href={helpers.leagueUrl(["roster", `${p.abbrev}_${p.tid}`, season])}
-					style={{
-						marginLeft: "6px",
-					}}
+					className="mx-2"
 				>
 					{p.abbrev}
 				</a>
-				{isSport("football") || isSport("hockey") ? ` ${p.ratings.pos}` : null}
+				{isSport("football") || isSport("hockey") ? `${p.ratings.pos}` : null}
 			</td>
 			<td>
 				{cat.stat === "WS/48"
@@ -93,7 +93,7 @@ const Leaders = ({ categories, playoffs, season }: View<"leaders">) => {
 						style={{ marginTop: 14 }}
 					>
 						<ResponsiveTableWrapper>
-							<table className="table table-striped table-bordered table-sm leaders">
+							<table className="table table-striped table-sm leaders">
 								<thead>
 									<tr title={cat.title}>
 										<th>{cat.name}</th>
@@ -118,12 +118,6 @@ const Leaders = ({ categories, playoffs, season }: View<"leaders">) => {
 			</div>
 		</>
 	);
-};
-
-Leaders.propTypes = {
-	categories: PropTypes.arrayOf(PropTypes.object).isRequired,
-	playoffs: PropTypes.oneOf(["playoffs", "regularSeason"]).isRequired,
-	season: PropTypes.number.isRequired,
 };
 
 export default Leaders;

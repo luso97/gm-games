@@ -16,6 +16,8 @@ const decreaseDemands = async () => {
 		PLAYER.FREE_AGENT,
 	);
 
+	const minContract = g.get("minContract");
+
 	for (const p of players) {
 		const baseAmount = 50 * Math.sqrt(g.get("maxContract") / 20000);
 
@@ -27,15 +29,15 @@ const decreaseDemands = async () => {
 			baseAmount,
 			Infinity,
 		);
-		p.contract.amount = 10 * Math.round(p.contract.amount / 10); // Round to nearest 10k
+		p.contract.amount = helpers.roundContract(p.contract.amount);
 
-		if (p.contract.amount < g.get("minContract")) {
-			p.contract.amount = g.get("minContract");
+		if (p.contract.amount < minContract) {
+			p.contract.amount = minContract;
 		}
 
 		if (g.get("phase") !== PHASE.FREE_AGENCY) {
 			// Since this is after the season has already started, ask for a short contract
-			if (p.contract.amount < 1000) {
+			if (p.contract.amount < 1.34 * minContract) {
 				p.contract.exp = g.get("season");
 			} else {
 				p.contract.exp = g.get("season") + 1;
@@ -46,13 +48,15 @@ const decreaseDemands = async () => {
 		p.numDaysFreeAgent += 1;
 
 		// Also, heal.
-		if (p.injury.gamesRemaining > 0) {
-			p.injury.gamesRemaining -= 1;
-		} else {
-			p.injury = {
-				type: "Healthy",
-				gamesRemaining: 0,
-			};
+		if (g.get("phase") <= PHASE.PLAYOFFS) {
+			if (p.injury.gamesRemaining > 0) {
+				p.injury.gamesRemaining -= 1;
+			} else {
+				p.injury = {
+					type: "Healthy",
+					gamesRemaining: 0,
+				};
+			}
 		}
 
 		await idb.cache.players.put(p);

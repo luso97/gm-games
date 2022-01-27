@@ -1,7 +1,7 @@
 import { bySport, helpers as commonHelpers } from "../../common";
 import { local } from "./local";
 
-const leagueUrl = (components: (number | string)[]): string => {
+const leagueUrl = (components: (number | string | undefined)[]): string => {
 	const lid = local.getState().lid;
 
 	if (typeof lid !== "number") {
@@ -34,6 +34,7 @@ const roundOverrides: Record<
 	basketball: {
 		gp: "noDecimalPlace",
 		gs: "noDecimalPlace",
+		min: "oneDecimalPlace",
 		yearsWithTeam: "noDecimalPlace",
 		gmsc: "oneDecimalPlace",
 		fgp: "oneDecimalPlace",
@@ -73,6 +74,10 @@ const roundOverrides: Record<
 		td: "noDecimalPlace",
 		qd: "noDecimalPlace",
 		fxf: "noDecimalPlace",
+		oppDd: "noDecimalPlace",
+		oppTd: "noDecimalPlace",
+		oppQd: "noDecimalPlace",
+		oppFxf: "noDecimalPlace",
 	},
 	football: {
 		gp: "noDecimalPlace",
@@ -120,6 +125,7 @@ const roundOverrides: Record<
 		defFmbRec: "noDecimalPlace",
 		defFmbYds: "noDecimalPlace",
 		defFmbTD: "noDecimalPlace",
+		defFmbLng: "noDecimalPlace",
 		defSk: "noDecimalPlace",
 		defTck: "noDecimalPlace",
 		defTckSolo: "noDecimalPlace",
@@ -176,9 +182,12 @@ const roundOverrides: Record<
 		tgt: "noDecimalPlace",
 		allPurposeYds: "noDecimalPlace",
 		av: "noDecimalPlace",
+		fp: "twoDecimalPlaces",
 	},
 	hockey: {
 		gp: "noDecimalPlace",
+		gpGoalie: "noDecimalPlace",
+		gpSkater: "noDecimalPlace",
 		gs: "noDecimalPlace",
 		yearsWithTeam: "noDecimalPlace",
 		w: "noDecimalPlace",
@@ -271,7 +280,7 @@ const roundOverrides: Record<
 		oppTk: "noDecimalPlace",
 		oppGv: "noDecimalPlace",
 		oppSv: "noDecimalPlace",
-		oppSvPct: "oneDecimalPlace",
+		oppSvPct: "roundWinp",
 		oppGaa: "twoDecimalPlaces",
 		oppSo: "noDecimalPlace",
 	},
@@ -356,10 +365,13 @@ const roundStat = (
 	}
 };
 
-const yearRanges = (arr: number[]): string[] => {
-	if (arr.length <= 1) {
-		return arr.map(String);
+const yearRanges = (arrInput: number[]): string[] => {
+	if (arrInput.length <= 1) {
+		return arrInput.map(String);
 	}
+
+	const arr = [...arrInput];
+	arr.sort((a, b) => a - b);
 
 	const runArr: string[] = [];
 	const tempArr = [[arr[0]]];
@@ -369,7 +381,7 @@ const yearRanges = (arr: number[]): string[] => {
 			tempArr.push([]);
 		}
 
-		tempArr[tempArr.length - 1].push(arr[i]);
+		tempArr.at(-1).push(arr[i]);
 	}
 
 	for (let i = 0; i < tempArr.length; i++) {
@@ -382,7 +394,7 @@ const yearRanges = (arr: number[]): string[] => {
 			}
 		} else {
 			// runs of 3 or more are displayed as a range
-			runArr.push(`${tempArr[i][0]}-${tempArr[i][tempArr[i].length - 1]}`);
+			runArr.push(`${tempArr[i][0]}-${tempArr[i].at(-1)}`);
 		}
 	}
 

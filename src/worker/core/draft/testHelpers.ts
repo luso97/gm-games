@@ -20,7 +20,7 @@ const loadTeamSeasons = async () => {
 
 	for (const st of sampleTiebreakers) {
 		const copied = helpers.deepCopy(st);
-		// @ts-ignore
+		// @ts-expect-error
 		delete copied.stats;
 		const { seasons, ...partialT } = copied;
 
@@ -30,6 +30,7 @@ const loadTeamSeasons = async () => {
 			disabled: false,
 			keepRosterSorted: true,
 			colors: ["#000000", "#000000", "#000000"],
+			playThroughInjuries: [0, 0],
 		} as Team;
 
 		const teamSeasons = seasons.map(teamSeason => ({

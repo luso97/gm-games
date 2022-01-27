@@ -1,29 +1,27 @@
-import PropTypes from "prop-types";
-import type { CSSProperties } from "react";
 import { helpers } from "../util";
 
 const RecordAndPlayoffs = ({
 	abbrev,
+	boldChamps,
 	lost,
 	numConfs,
 	numPlayoffRounds,
 	option,
 	playoffRoundsWon,
 	season,
-	style,
 	tied,
 	otl,
 	tid,
 	won,
 }: {
 	abbrev: string;
+	boldChamps?: boolean;
 	lost: number;
 	numConfs?: number;
 	numPlayoffRounds?: number;
 	option?: "noSeason";
 	playoffRoundsWon?: number;
 	season: number;
-	style?: CSSProperties;
 	tied?: number;
 	otl?: number;
 	tid: number;
@@ -39,13 +37,12 @@ const RecordAndPlayoffs = ({
 			</span>
 		) : null;
 
-	let record = `${won}-${lost}`;
-	if (typeof otl === "number" && !Number.isNaN(otl) && otl > 0) {
-		record += `-${otl}`;
-	}
-	if (typeof tied === "number" && !Number.isNaN(tied) && tied > 0) {
-		record += `-${tied}`;
-	}
+	const record = helpers.formatRecord({
+		won,
+		lost,
+		otl,
+		tied,
+	});
 
 	const recordText = (
 		<a href={helpers.leagueUrl(["standings", season])}>{record}</a>
@@ -65,26 +62,18 @@ const RecordAndPlayoffs = ({
 			</span>
 		) : null;
 	return (
-		<span style={style}>
+		<span
+			className={
+				boldChamps && playoffRoundsWon === numPlayoffRounds
+					? "fw-bold"
+					: undefined
+			}
+		>
 			{seasonText}
 			{recordText}
 			{extraText}
 		</span>
 	);
-};
-
-RecordAndPlayoffs.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	lost: PropTypes.number.isRequired,
-	numConfs: PropTypes.number,
-	numPlayoffRounds: PropTypes.number,
-	option: PropTypes.oneOf(["noSeason"]),
-	playoffRoundsWon: PropTypes.number,
-	season: PropTypes.number.isRequired,
-	style: PropTypes.object,
-	tid: PropTypes.number.isRequired,
-	tied: PropTypes.number,
-	won: PropTypes.number.isRequired,
 };
 
 export default RecordAndPlayoffs;

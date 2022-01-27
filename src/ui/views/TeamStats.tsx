@@ -1,13 +1,14 @@
-import PropTypes from "prop-types";
 import type { ReactNode } from "react";
 import { getCols, gradientStyleFactory, helpers, prefixStatOpp } from "../util";
 import useTitleBar from "../hooks/useTitleBar";
 import { DataTable, PlusMinus, MoreLinks } from "../components";
 import type { View } from "../../common/types";
 import { isSport } from "../../common";
+import { formatMaybeInteger } from "./LeagueStats";
 
 const TeamStats = ({
 	allStats,
+	averages,
 	playoffs,
 	season,
 	stats,
@@ -31,12 +32,18 @@ const TeamStats = ({
 		},
 	});
 
-	const basicColNames = ["Team", "stat:gp", "W", "L"];
+	const basicColNames = ["#", "Team", "stat:gp", "W", "L"];
 	if (otl) {
 		basicColNames.push("OTL");
+		if (superCols) {
+			superCols[0].colspan += 1;
+		}
 	}
 	if (ties) {
 		basicColNames.push("T");
+		if (superCols) {
+			superCols[0].colspan += 1;
+		}
 	}
 	if (usePts) {
 		basicColNames.push("PTS");
@@ -50,15 +57,32 @@ const TeamStats = ({
 			superCols[0].colspan += 1;
 		}
 	}
+	basicColNames.push("AvgAge");
+	if (superCols) {
+		superCols[0].colspan += 1;
+	}
+
+	// Account for # column
+	if (superCols) {
+		superCols[0].colspan += 1;
+	}
 
 	const cols = getCols(
-		...basicColNames,
-		...stats.map(stat => {
-			if (stat.startsWith("opp")) {
-				return `stat:${stat.charAt(3).toLowerCase()}${stat.slice(4)}`;
-			}
-			return `stat:${stat}`;
-		}),
+		[
+			...basicColNames,
+			...stats.map(stat => {
+				if (stat.startsWith("opp")) {
+					return `stat:${stat.charAt(3).toLowerCase()}${stat.slice(4)}`;
+				}
+				return `stat:${stat}`;
+			}),
+		],
+		{
+			"#": {
+				sortSequence: [],
+				noSearch: true,
+			},
+		},
 	);
 
 	if (teamOpponent.endsWith("ShotLocations")) {
@@ -67,7 +91,7 @@ const TeamStats = ({
 		cols[cols.length - 5].title = "%";
 	}
 
-	const otherStatColumns = ["won", "lost"];
+	const otherStatColumns = ["won", "lost", "age"];
 	if (otl) {
 		otherStatColumns.push("otl");
 	}
@@ -88,42 +112,38 @@ const TeamStats = ({
 		teams.length,
 	);
 
-	const rows = teams.map(t => {
-		// Create the cells for this row.
+	const makeRowObject = (
+		teamStats: typeof teams[number]["stats"],
+		teamSeasonAttrs: typeof teams[number]["seasonAttrs"],
+	) => {
 		const data: { [key: string]: ReactNode } = {
-			abbrev: (
-				<a
-					href={helpers.leagueUrl([
-						"roster",
-						`${t.seasonAttrs.abbrev}_${t.tid}`,
-						season,
-					])}
-				>
-					{t.seasonAttrs.abbrev}
-				</a>
-			),
-			gp: t.stats.gp,
-			won: t.seasonAttrs.won,
-			lost: t.seasonAttrs.lost,
+			gp: formatMaybeInteger(teamStats.gp),
+			won: formatMaybeInteger(teamSeasonAttrs.won),
+			lost: formatMaybeInteger(teamSeasonAttrs.lost),
 		};
 
 		if (otl) {
-			data.otl = t.seasonAttrs.otl;
+			data.otl = formatMaybeInteger(teamSeasonAttrs.otl);
 		}
 		if (ties) {
-			data.tied = t.seasonAttrs.tied;
+			data.tied = formatMaybeInteger(teamSeasonAttrs.tied);
 		}
 		if (usePts) {
-			data.pts = Math.round(t.seasonAttrs.pts);
-			data.ptsPct = helpers.roundWinp(t.seasonAttrs.ptsPct);
+			data.ptsPts = Math.round(teamSeasonAttrs.pts);
+			data.ptsPct = helpers.roundWinp(teamSeasonAttrs.ptsPct);
 		} else {
-			data.winp = helpers.roundWinp(t.seasonAttrs.winp);
+			data.winp = helpers.roundWinp(teamSeasonAttrs.winp);
 		}
 
+		data.avgAge =
+			teamSeasonAttrs.avgAge !== undefined
+				? teamSeasonAttrs.avgAge.toFixed(1)
+				: null;
+
 		for (const stat of stats) {
-			const value = t.stats.hasOwnProperty(stat)
-				? (t.stats as any)[stat]
-				: (t.seasonAttrs as any)[stat];
+			const value = teamStats.hasOwnProperty(stat)
+				? (teamStats as any)[stat]
+				: (teamSeasonAttrs as any)[stat];
 			data[stat] = helpers.roundStat(value, stat);
 		}
 
@@ -132,11 +152,17 @@ const TeamStats = ({
 			for (const plusMinusCol of plusMinusCols) {
 				if (data.hasOwnProperty(plusMinusCol)) {
 					data[plusMinusCol] = (
-						<PlusMinus>{(t.stats as any)[plusMinusCol]}</PlusMinus>
+						<PlusMinus>{(teamStats as any)[plusMinusCol]}</PlusMinus>
 					);
 				}
 			}
 		}
+
+		return data;
+	};
+
+	const rows = teams.map(t => {
+		const data = makeRowObject(t.stats, t.seasonAttrs);
 
 		// This is our team.
 		if (userTid === t.tid) {
@@ -160,18 +186,33 @@ const TeamStats = ({
 					value,
 				};
 			}
-
-			return {
-				key: t.tid,
-				data: Object.values(data),
-			};
 		}
 
 		return {
 			key: t.tid,
-			data: Object.values(data),
+			data: [
+				null,
+				<a
+					href={helpers.leagueUrl([
+						"roster",
+						`${t.seasonAttrs.abbrev}_${t.tid}`,
+						season,
+					])}
+				>
+					{t.seasonAttrs.abbrev}
+				</a>,
+				...Object.values(data),
+			],
 		};
 	});
+
+	const footer = averages
+		? [
+				null,
+				"Avg",
+				...Object.values(makeRowObject(averages as any, averages as any)),
+		  ]
+		: undefined;
 
 	return (
 		<>
@@ -179,32 +220,15 @@ const TeamStats = ({
 
 			<DataTable
 				cols={cols}
-				defaultSort={[2, "desc"]}
+				defaultSort={[3, "desc"]}
 				name={`TeamStats${teamOpponent}`}
+				rankCol={0}
 				rows={rows}
+				footer={footer}
 				superCols={superCols}
 			/>
 		</>
 	);
-};
-
-TeamStats.propTypes = {
-	allStats: PropTypes.object.isRequired,
-	playoffs: PropTypes.oneOf(["playoffs", "regularSeason"]).isRequired,
-	season: PropTypes.number.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	superCols: PropTypes.array,
-	teamOpponent: PropTypes.oneOf([
-		"advanced",
-		"opponent",
-		"team",
-		"teamShotLocations",
-		"opponentShotLocations",
-	]).isRequired,
-	teams: PropTypes.arrayOf(PropTypes.object).isRequired,
-	otl: PropTypes.bool.isRequired,
-	ties: PropTypes.bool.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default TeamStats;

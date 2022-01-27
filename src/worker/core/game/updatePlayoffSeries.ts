@@ -1,10 +1,8 @@
 import { idb } from "../../db";
 import { g, helpers, logEvent } from "../../util";
-import type {
-	Conditions,
-	GameResults,
-	PlayoffSeries,
-} from "../../../common/types";
+import type { Conditions, GameResults } from "../../../common/types";
+import season from "../season";
+import { findSeries } from "./writeGameStats";
 
 const updatePlayoffSeries = async (
 	results: GameResults,
@@ -14,23 +12,24 @@ const updatePlayoffSeries = async (
 	if (!playoffSeries) {
 		throw new Error("playoffSeries not found");
 	}
-	const playoffRound = playoffSeries.series[playoffSeries.currentRound];
-	const numGamesToWinSeries = helpers.numGamesToWinSeries(
-		g.get("numGamesPlayoffSeries", "current")[playoffSeries.currentRound],
-	);
+
+	const numGamesToWinSeries =
+		playoffSeries.currentRound === -1
+			? 1
+			: helpers.numGamesToWinSeries(
+					g.get("numGamesPlayoffSeries", "current")[playoffSeries.currentRound],
+			  );
 
 	for (const result of results) {
 		// Did the home (true) or away (false) team win this game? Here, "home" refers to this game, not the team which has homecourt advnatage in the playoffs, which is what series.home refers to below.
 		const won0 = result.team[0].stat.pts > result.team[1].stat.pts;
-		let series: PlayoffSeries["series"][0][0] | undefined;
-
-		for (let i = 0; i < playoffRound.length; i++) {
-			series = playoffRound[i];
+		const series = findSeries(
+			playoffSeries,
+			result.team[0].id,
+			result.team[1].id,
+		);
+		if (series && series.away) {
 			const { away, home } = series;
-
-			if (!away) {
-				continue;
-			}
 
 			if (home.pts === undefined) {
 				home.pts = 0;
@@ -39,8 +38,6 @@ const updatePlayoffSeries = async (
 			if (away.pts === undefined) {
 				away.pts = 0;
 			}
-
-			let found = false;
 
 			if (home.tid === result.team[0].id) {
 				home.pts += result.team[0].stat.pts;
@@ -51,8 +48,6 @@ const updatePlayoffSeries = async (
 				} else {
 					away.won += 1;
 				}
-
-				found = true;
 			} else if (away.tid === result.team[0].id) {
 				away.pts += result.team[0].stat.pts;
 				home.pts += result.team[1].stat.pts;
@@ -62,22 +57,13 @@ const updatePlayoffSeries = async (
 				} else {
 					home.won += 1;
 				}
-
-				found = true;
 			}
 
-			if (found) {
-				if (series.gids === undefined) {
-					series.gids = [];
-				}
-				series.gids.push(result.gid);
-
-				break;
+			if (series.gids === undefined) {
+				series.gids = [];
 			}
-		}
-
-		// For TypeScript, not really necessary
-		if (series === undefined || series.away === undefined) {
+			series.gids.push(result.gid);
+		} else {
 			continue;
 		}
 
@@ -108,25 +94,25 @@ const updatePlayoffSeries = async (
 
 			let currentRoundText = "";
 
-			const playoffsByConference = g.get("confs", "current").length === 2;
+			const playoffsByConf = await season.getPlayoffsByConf(g.get("season"));
 
 			let saveToDb = true;
-			if (playoffSeries.currentRound === 0) {
+			if (playoffSeries.currentRound === -1) {
+				currentRoundText = "play-in tournament";
+			} else if (playoffSeries.currentRound === 0) {
 				currentRoundText = `${helpers.ordinal(1)} round of the playoffs`;
 			} else if (
 				playoffSeries.currentRound ===
 				g.get("numGamesPlayoffSeries", "current").length - 3
 			) {
-				currentRoundText = playoffsByConference
+				currentRoundText = playoffsByConf
 					? "conference semifinals"
 					: "quarterfinals";
 			} else if (
 				playoffSeries.currentRound ===
 				g.get("numGamesPlayoffSeries", "current").length - 2
 			) {
-				currentRoundText = playoffsByConference
-					? "conference finals"
-					: "semifinals";
+				currentRoundText = playoffsByConf ? "conference finals" : "semifinals";
 
 				// Not needed, because individual game event in writeGameStats will cover this round
 				saveToDb = false;
@@ -179,6 +165,68 @@ const updatePlayoffSeries = async (
 				},
 				conditions,
 			);
+
+			if (playoffSeries.currentRound === -1 && playoffSeries.playIns) {
+				let playInsIndex;
+				let playInIndex;
+				for (let i = 0; i < playoffSeries.playIns.length; i++) {
+					const playIn = playoffSeries.playIns[i];
+					for (let j = 0; j < playIn.length; j++) {
+						const matchup = playIn[j];
+						if (matchup === series) {
+							playInsIndex = i;
+							playInIndex = j;
+							break;
+						}
+					}
+				}
+
+				if (playInIndex === undefined || playInsIndex === undefined) {
+					throw new Error("Play-in matchup not found");
+				}
+
+				// If this is the first game (top 2 teams) or last game (2nd round) of a play-in tournament, move the winner to the appropriate spot in the playoffs
+				let targetTid; // Team to replace in initial playoff matchups
+				if (playInIndex === 0) {
+					targetTid = playoffSeries.playIns[playInsIndex][0].home.tid;
+				} else if (playInIndex === 2) {
+					targetTid = playoffSeries.playIns[playInsIndex][0].away.tid;
+				}
+				if (targetTid !== undefined) {
+					const winner =
+						series.away.tid === winnerTid ? series.away : series.home;
+
+					// Find target team in playoffSeries and replace with winner of this game
+					for (const matchup of playoffSeries.series[0]) {
+						for (const type of ["home", "away"] as const) {
+							const matchupTeam = matchup[type];
+							if (
+								matchupTeam &&
+								matchupTeam.pendingPlayIn &&
+								matchupTeam.tid === targetTid
+							) {
+								matchup[type] = {
+									...winner,
+									seed: matchupTeam.seed,
+									won: 0,
+									pts: undefined,
+									pendingPlayIn: undefined,
+								};
+							}
+						}
+					}
+
+					// Update playoffRoundsWon, since now team has actually made the playoffs
+					const teamSeason = await idb.cache.teamSeasons.indexGet(
+						"teamSeasonsBySeasonTid",
+						[g.get("season"), winnerTid],
+					);
+					if (teamSeason) {
+						teamSeason.playoffRoundsWon = 0;
+						await idb.cache.teamSeasons.put(teamSeason);
+					}
+				}
+			}
 		}
 	}
 

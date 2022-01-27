@@ -40,10 +40,6 @@ class PlayByPlayLogger {
 
 	playByPlay: any[];
 
-	scoringSummary: any[];
-
-	twoPointConversionState: "attempting" | "converted" | undefined;
-
 	twoPointConversionTeam: number | undefined;
 
 	quarter: string;
@@ -51,14 +47,7 @@ class PlayByPlayLogger {
 	constructor(active: boolean) {
 		this.active = active;
 		this.playByPlay = [];
-		this.scoringSummary = [];
 		this.quarter = "Q1";
-	}
-
-	updateTwoPointConversionState(td: boolean) {
-		if (td && this.twoPointConversionState === "attempting") {
-			this.twoPointConversionState = "converted";
-		}
 	}
 
 	logEvent(
@@ -66,73 +55,59 @@ class PlayByPlayLogger {
 		{
 			automaticFirstDown,
 			clock,
+			count,
+			decision,
 			injuredPID,
 			lost,
 			made,
 			names,
 			offense,
+			offsetStatus,
 			penaltyName,
 			quarter,
 			overtimes,
 			safety,
 			success,
 			t,
+			tackOn,
 			td,
 			touchback,
-			twoPointConversionTeam,
 			yds,
+			spotFoul,
+			halfDistanceToGoal,
+			placeOnOne,
 		}: {
 			automaticFirstDown?: boolean;
 			clock: number;
+			count?: number;
+			decision?: "accept" | "decline";
 			injuredPID?: number;
 			lost?: boolean;
 			made?: boolean;
 			names?: string[];
 			offense?: boolean;
+			offsetStatus?: "offset" | "overrule";
 			penaltyName?: string;
 			quarter?: number;
 			overtimes?: number;
 			safety?: boolean;
 			success?: boolean;
 			t?: TeamNum;
+			tackOn?: boolean;
 			td?: boolean;
 			touchback?: boolean;
-			twoPointConversionTeam?: number;
 			yds?: number;
+			spotFoul?: boolean;
+			halfDistanceToGoal?: boolean;
+			placeOnOne?: boolean;
 		},
 	) {
-		// This needs to run for scoring log, even when play-by-play logging is not active
-		// Two point conversions are tricky because you can have multiple events occuring within them that could lead to scores, like if there is an interception and then a fumble. So in the most general case, it can't be assumed to be "failed" until we get another event after the two point conversion attempt.
-		if (twoPointConversionTeam === undefined) {
-			if (this.twoPointConversionState === "attempting") {
-				const previousEvent = this.playByPlay[this.playByPlay.length - 1];
-
-				if (previousEvent) {
-					const event = {
-						type: "text",
-						text: "Two point conversion failed",
-						t: this.twoPointConversionTeam,
-						time: previousEvent.time,
-						quarter: this.quarter,
-					};
-					this.playByPlay.push(event);
-					this.scoringSummary.push(event);
-				}
-			}
-
-			this.twoPointConversionState = undefined;
-			this.twoPointConversionTeam = undefined;
-		} else if (this.twoPointConversionState === undefined) {
-			this.twoPointConversionState = "attempting";
-			this.twoPointConversionTeam = twoPointConversionTeam;
-		}
-
 		// Handle touchdowns, 2 point conversions, and 2 point conversion returns by the defense
 		let touchdownText = "a touchdown";
 		let showYdsOnTD = true;
 
-		if (twoPointConversionTeam !== undefined) {
-			if (twoPointConversionTeam === t) {
+		if (this.twoPointConversionTeam !== undefined) {
+			if (this.twoPointConversionTeam === t) {
 				touchdownText = "a two point conversion";
 				showYdsOnTD = false;
 			} else {
@@ -270,10 +245,6 @@ class PlayByPlayLogger {
 					throw new Error("Missing names");
 				}
 
-				if (td === undefined) {
-					throw new Error("Missing td");
-				}
-
 				if (yds === undefined) {
 					throw new Error("Missing yds");
 				}
@@ -292,30 +263,28 @@ class PlayByPlayLogger {
 									td ? ` for ${touchdownText}!` : ""
 							  }`
 					}`;
-					this.updateTwoPointConversionState(td);
 				} else {
 					text = `${names[0]} recovered the fumble for the offense${
 						td ? ` and carried it into the endzone for ${touchdownText}!` : ""
 					}`;
-					this.updateTwoPointConversionState(td);
 				}
 			} else if (type === "interception") {
 				if (names === undefined) {
 					throw new Error("Missing names");
 				}
 
-				if (td === undefined) {
-					throw new Error("Missing td");
-				}
-
 				if (yds === undefined) {
 					throw new Error("Missing yds");
 				}
 
-				text = `${names[0]} intercepted the pass and returned it ${yds} yards${
-					td ? ` for ${touchdownText}!` : ""
-				}`;
-				this.updateTwoPointConversionState(td);
+				text = `${names[0]} intercepted the pass `;
+				if (touchback) {
+					text += "in the endzone";
+				} else {
+					text += `and returned it ${yds} yards${
+						td ? ` for ${touchdownText}!` : ""
+					}`;
+				}
 			} else if (type === "sack") {
 				if (names === undefined) {
 					throw new Error("Missing names");
@@ -352,7 +321,6 @@ class PlayByPlayLogger {
 				} else {
 					const result = descriptionYdsTD(yds, td, touchdownText, showYdsOnTD);
 					text = `${names[0]} completed a pass to ${names[1]} for ${result}`;
-					this.updateTwoPointConversionState(td);
 				}
 			} else if (type === "passIncomplete") {
 				if (names === undefined) {
@@ -387,11 +355,24 @@ class PlayByPlayLogger {
 				} else {
 					const result = descriptionYdsTD(yds, td, touchdownText, showYdsOnTD);
 					text = `${names[0]} rushed for ${result}`;
-					this.updateTwoPointConversionState(td);
 				}
-			} else if (type === "offsettingPenalties") {
-				text = "Offsetting penalties on the play";
+			} else if (type === "penaltyCount") {
+				if (count === undefined) {
+					throw new Error("Missing count");
+				}
+
+				text = `There are ${count} ${
+					offsetStatus === "offset" ? "offsetting " : ""
+				}fouls on the play${
+					offsetStatus === "offset"
+						? ", the previous down will be replayed"
+						: ""
+				}`;
 			} else if (type === "penalty") {
+				if (decision === undefined) {
+					throw new Error("Missing decision");
+				}
+
 				if (automaticFirstDown === undefined) {
 					throw new Error("Missing automaticFirstDown");
 				}
@@ -408,15 +389,56 @@ class PlayByPlayLogger {
 					throw new Error("Missing yds");
 				}
 
-				text = `Penalty: ${penaltyName.toLowerCase()}${
+				text = `Penalty, ABBREV${t} - ${penaltyName.toLowerCase()}${
 					names.length > 0 ? ` on ${names[0]}` : ""
-				}, ${yds} yards${
-					automaticFirstDown ? " and an automatic first down" : ""
 				}`;
+
+				if (offsetStatus !== "offset") {
+					const spotFoulText = tackOn
+						? " from the end of the play"
+						: spotFoul
+						? " from the spot of the foul"
+						: "";
+					const automaticFirstDownText = automaticFirstDown
+						? " and an automatic first down"
+						: "";
+					if (halfDistanceToGoal) {
+						text += `, half the distance to the goal${spotFoulText}`;
+					} else if (placeOnOne) {
+						text += `, the ball will be placed at the 1 yard line${automaticFirstDownText}`;
+					} else {
+						text += `, ${yds} yards${spotFoulText}${automaticFirstDownText}`;
+					}
+
+					let decisionText;
+					if (offsetStatus === "overrule") {
+						decisionText = decision === "accept" ? "enforced" : "overruled";
+					} else {
+						decisionText = decision === "accept" ? "accepted" : "declined";
+					}
+
+					text += ` - ${decisionText}`;
+				}
 			} else if (type === "timeout") {
 				text = `Time out, ${offense ? "offense" : "defense"}`;
 			} else if (type === "twoMinuteWarning") {
 				text = "Two minute warning";
+			} else if (type === "kneel") {
+				if (names === undefined) {
+					throw new Error("Missing names");
+				}
+
+				text = `${names[0]} kneels`;
+			} else if (type === "flag") {
+				text = "Flag on the play";
+			} else if (type === "extraPointAttempt") {
+				text = "Extra point attempt";
+			} else if (type === "twoPointConversion") {
+				text = "Two point conversion attempt";
+			} else if (type === "twoPointConversionFailed") {
+				text = "Two point conversion failed";
+			} else if (type === "turnoverOnDowns") {
+				text = "Turnover on downs";
 			} else {
 				throw new Error(`No text for "${type}"`);
 			}
@@ -434,16 +456,17 @@ class PlayByPlayLogger {
 					event.injuredPID = injuredPID;
 				}
 
-				this.playByPlay.push(event);
-
 				if (
 					safety ||
 					td ||
 					type === "extraPoint" ||
+					type === "twoPointConversionFailed" ||
 					(made && type === "fieldGoal")
 				) {
-					this.scoringSummary.push(event);
+					event.scoringSummary = true;
 				}
+
+				this.playByPlay.push(event);
 			}
 		}
 	}
@@ -511,6 +534,12 @@ class PlayByPlayLogger {
 			},
 			...this.playByPlay,
 		];
+	}
+
+	removeLastScore() {
+		this.playByPlay.push({
+			type: "removeLastScore",
+		});
 	}
 }
 

@@ -46,7 +46,7 @@ const moodInfo = async (
 	}
 
 	// Add some based on how long free agency has lasted and how good/bad the player is
-	let sumAndStuff = sumComponents;
+	let sumAndStuff = sumComponents - 0.5;
 	if (p.tid === PLAYER.FREE_AGENT) {
 		sumAndStuff += helpers.bound(p.numDaysFreeAgent, 0, 30) / 3;
 	}
@@ -96,8 +96,8 @@ const moodInfo = async (
 			tid +
 				p.pid +
 				p.stats.length +
-				p.ratings[p.ratings.length - 1].ovr +
-				(p.stats.length > 0 ? p.stats[p.stats.length - 1].min : 0),
+				p.ratings.at(-1).ovr +
+				(p.stats.length > 0 ? p.stats.at(-1).min : 0),
 		);
 		willing = rand < probWilling;
 	}

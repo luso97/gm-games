@@ -37,31 +37,20 @@ const updatePlayers = async (
 			hockey: ["gp", "keyStats", "ops", "dps", "ps"],
 		});
 
-		const playersAll = await idb.getCopies.players({
-			// In Firefox, objects have a "watch" function
-			filter: p => {
-				if (inputs.flagNote === "flag" || inputs.flagNote === "either") {
-					const watch = p.watch && typeof p.watch !== "function";
-					if (watch) {
-						return true;
-					}
-				}
-
-				if (inputs.flagNote === "note" || inputs.flagNote === "either") {
-					if (p.note !== undefined && p.note !== "") {
-						return true;
-					}
-				}
-
-				return false;
+		const playersAll = await idb.getCopies.players(
+			{
+				watch: inputs.flagNote === "flag" || inputs.flagNote === "either",
+				note: inputs.flagNote === "note" || inputs.flagNote === "either",
 			},
-		});
+			"noCopyCache",
+		);
 
 		const players = await idb.getCopies.playersPlus(playersAll, {
 			attrs: [
 				"pid",
 				"name",
 				"age",
+				"ageAtDeath",
 				"injury",
 				"tid",
 				"abbrev",
@@ -81,6 +70,7 @@ const updatePlayers = async (
 			showNoStats: true,
 			showRookies: true,
 			showRetired: true,
+			showDraftProspectRookieRatings: true,
 			oldStats: true,
 		});
 

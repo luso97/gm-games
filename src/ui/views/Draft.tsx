@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { useState } from "react";
 import useTitleBar from "../hooks/useTitleBar";
 import { confirm, getCols, helpers, toWorker, useLocal } from "../util";
@@ -27,7 +26,7 @@ const DraftButtons = ({
 				className="btn btn-light-bordered"
 				disabled={usersTurn && !spectator}
 				onClick={async () => {
-					await toWorker("playMenu", "onePick");
+					await toWorker("playMenu", "onePick", undefined);
 				}}
 			>
 				Sim one pick
@@ -37,7 +36,7 @@ const DraftButtons = ({
 					className="btn btn-light-bordered"
 					disabled={usersTurn && !spectator}
 					onClick={async () => {
-						await toWorker("playMenu", "untilYourNextPick");
+						await toWorker("playMenu", "untilYourNextPick", undefined);
 					}}
 				>
 					To your next pick
@@ -59,52 +58,13 @@ const DraftButtons = ({
 							return;
 						}
 					}
-					await toWorker("playMenu", "untilEnd");
+					await toWorker("playMenu", "untilEnd", undefined);
 				}}
 			>
 				To end of draft
 			</button>
 		</div>
 	);
-};
-
-DraftButtons.propTypes = {
-	userRemaining: PropTypes.bool.isRequired,
-	usersTurn: PropTypes.bool.isRequired,
-};
-
-const TradeButton = ({
-	disabled,
-	dpid,
-	tid,
-	visible,
-}: {
-	disabled: boolean;
-	dpid: number;
-	tid: number;
-	visible: boolean;
-}) => {
-	return visible ? (
-		<button
-			className="btn btn-xs btn-light-bordered"
-			disabled={disabled}
-			onClick={async () => {
-				await toWorker("actions", "tradeFor", {
-					dpid,
-					tid,
-				});
-			}}
-		>
-			Trade For Pick
-		</button>
-	) : null;
-};
-
-TradeButton.propTypes = {
-	disabled: PropTypes.bool.isRequired,
-	dpid: PropTypes.number.isRequired,
-	tid: PropTypes.number.isRequired,
-	visible: PropTypes.bool.isRequired,
 };
 
 const Draft = ({
@@ -129,7 +89,7 @@ const Draft = ({
 		setDrafting(false);
 
 		if (simToNextUserPick) {
-			await toWorker("playMenu", "untilYourNextPick");
+			await toWorker("playMenu", "untilYourNextPick", undefined);
 		}
 	};
 
@@ -147,26 +107,24 @@ const Draft = ({
 		userTids.includes(p.draft.tid),
 	);
 	const colsUndrafted = getCols(
-		"#",
-		"Name",
-		"Pos",
-		"Age",
-		"Ovr",
-		"Pot",
-		"Draft",
+		["#", "Name", "Pos", "Age", "Ovr", "Pot", "Draft"],
+		{
+			Name: {
+				width: "100%",
+			},
+		},
 	);
-	colsUndrafted[1].width = "100%";
 
 	if (fantasyDraft || expansionDraft) {
 		colsUndrafted.splice(
 			6,
 			0,
-			...getCols("Contract", "Exp", ...stats.map(stat => `stat:${stat}`)),
+			...getCols(["Contract", "Exp", ...stats.map(stat => `stat:${stat}`)]),
 		);
 	}
 
 	if (expansionDraft) {
-		colsUndrafted.splice(3, 0, ...getCols("Team"));
+		colsUndrafted.splice(3, 0, ...getCols(["Team"]));
 	}
 
 	const rowsUndrafted = undrafted.map(p => {
@@ -205,7 +163,7 @@ const Draft = ({
 						onClick={() => draftUser(p.pid, true)}
 						title="Draft player and sim to your next pick or end of draft"
 					>
-						And Sim
+						and sim
 					</button>
 				</div>
 			),
@@ -241,13 +199,13 @@ const Draft = ({
 		};
 	});
 
-	const colsDrafted = getCols("Pick", "Team").concat(
+	const colsDrafted = getCols(["Pick", "Team"]).concat(
 		colsUndrafted.slice(1, -1),
 	);
 
 	if (expansionDraft) {
 		colsDrafted.splice(4, 1);
-		colsDrafted.splice(2, 0, getCols("From")[0]);
+		colsDrafted.splice(2, 0, getCols(["From"])[0]);
 	}
 
 	const teamInfoCache = useLocal(state => state.teamInfoCache);
@@ -274,17 +232,70 @@ const Draft = ({
 					{p.name}
 				</PlayerNameLabels>
 			) : (
-				<TradeButton
-					dpid={p.draft.dpid}
-					disabled={drafting}
-					tid={p.draft.tid}
-					visible={
-						!fantasyDraft &&
-						!expansionDraft &&
-						!userTids.includes(p.draft.tid) &&
-						!spectator
-					}
-				/>
+				<>
+					<button
+						className="btn btn-xs btn-light-bordered"
+						disabled={drafting}
+						onClick={async () => {
+							if (!spectator) {
+								let numUserPicksBefore = 0;
+								for (const p2 of drafted) {
+									if (p2.draft.dpid === p.draft.dpid) {
+										break;
+									}
+
+									if (userTids.includes(p2.draft.tid)) {
+										numUserPicksBefore += 1;
+									}
+								}
+
+								if (numUserPicksBefore > 0) {
+									const multipleTeams = userTids.length > 1;
+									const multiplePicks = numUserPicksBefore > 1;
+
+									const proceed = await confirm(
+										`Your team${multipleTeams ? "s" : ""} control${
+											multipleTeams ? "" : "s"
+										} ${numUserPicksBefore} pick${
+											multiplePicks ? "s" : ""
+										} before this one. The AI will make ${
+											multiplePicks ? "those draft picks" : "that draft pick"
+										} for you if you choose to sim to this pick.`,
+										{
+											okText: `Let AI Make My Pick${multiplePicks ? "s" : ""}`,
+											cancelText: "Cancel",
+										},
+									);
+
+									if (!proceed) {
+										return;
+									}
+								}
+							}
+
+							await toWorker("actions", "untilPick", p.draft.dpid);
+						}}
+					>
+						Sim to pick
+					</button>
+					{!fantasyDraft &&
+					!expansionDraft &&
+					!userTids.includes(p.draft.tid) &&
+					!spectator ? (
+						<button
+							className="btn btn-xs btn-light-bordered ms-2"
+							disabled={drafting}
+							onClick={async () => {
+								await toWorker("actions", "tradeFor", {
+									dpid: p.draft.dpid,
+									tid: p.draft.tid,
+								});
+							}}
+						>
+							Trade for pick
+						</button>
+					) : null}
+				</>
 			),
 			p.pid >= 0 ? p.ratings.pos : null,
 			p.pid >= 0 ? p.age : null,
@@ -393,14 +404,14 @@ const Draft = ({
 					)}
 				</div>
 
-				<RosterComposition className="mb-3 ml-sm-3" players={userPlayers} />
+				<RosterComposition className="mb-3 ms-sm-3" players={userPlayers} />
 			</div>
 
 			<div className={wrapperClasses}>
 				<div className={undraftedColClasses}>
 					<h2>
 						Undrafted Players
-						<span className="float-right">
+						<span className="float-end">
 							<button
 								type="button"
 								className={buttonClasses}
@@ -430,7 +441,7 @@ const Draft = ({
 				<div className={draftedColClasses} id="table-draft-results">
 					<h2>
 						Draft Results
-						<span className="float-right">
+						<span className="float-end">
 							<button
 								type="button"
 								className={buttonClasses}
@@ -460,15 +471,6 @@ const Draft = ({
 			</div>
 		</>
 	);
-};
-
-Draft.propTypes = {
-	draftType: PropTypes.string,
-	drafted: PropTypes.arrayOf(PropTypes.object).isRequired,
-	fantasyDraft: PropTypes.bool.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	undrafted: PropTypes.arrayOf(PropTypes.object).isRequired,
-	userTids: PropTypes.arrayOf(PropTypes.number).isRequired,
 };
 
 export default Draft;

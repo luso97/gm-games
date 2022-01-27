@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { DataTable } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, gradientStyleFactory } from "../util";
@@ -17,24 +16,22 @@ const RosterContinuity = ({
 	abbrevs,
 	season,
 	seasons,
-	userTid,
+	userAbbrev,
 }: View<"rosterContinuity">) => {
 	useTitleBar({
 		title: "Roster Continuity",
 		customMenu: frivolitiesMenu,
 	});
 	const cols = [
-		...getCols("Season"),
-		...abbrevs.map(
-			(abbrev, i): Col => {
-				return {
-					classNames: userTid === i ? "table-info" : undefined,
-					sortSequence: ["desc", "asc"],
-					sortType: "number",
-					title: abbrev,
-				};
-			},
-		),
+		...getCols(["Season"]),
+		...abbrevs.map((abbrev): Col => {
+			return {
+				classNames: userAbbrev === abbrev ? "table-info" : undefined,
+				sortSequence: ["desc", "asc"],
+				sortType: "number",
+				title: abbrev,
+			};
+		}),
 	];
 	const rows = seasons.map((seasonRow, i) => {
 		return {
@@ -70,13 +67,6 @@ const RosterContinuity = ({
 			/>
 		</>
 	);
-};
-
-RosterContinuity.propTypes = {
-	abbrevs: PropTypes.arrayOf(PropTypes.string).isRequired,
-	season: PropTypes.number.isRequired,
-	seasons: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.number)).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default RosterContinuity;

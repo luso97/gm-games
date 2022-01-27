@@ -4,7 +4,7 @@ import useTitleBar from "../hooks/useTitleBar";
 import { DataTable, MoreLinks } from "../components";
 import type { View } from "../../common/types";
 
-const formatMaybeInteger = (x: number) =>
+export const formatMaybeInteger = (x: number) =>
 	Number.isInteger(x) ? String(x) : x.toFixed(1);
 
 const LeagueStats = ({
@@ -45,6 +45,10 @@ const LeagueStats = ({
 	} else {
 		basicColNames.push("%");
 	}
+	basicColNames.push("AvgAge");
+	if (superCols) {
+		superCols[0].colspan += 1;
+	}
 
 	if (superCols) {
 		superCols[0].colspan += 1;
@@ -64,7 +68,7 @@ const LeagueStats = ({
 		}
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		...basicColNames,
 		...stats.map(stat => {
 			if (stat.startsWith("opp")) {
@@ -72,7 +76,7 @@ const LeagueStats = ({
 			}
 			return `stat:${stat}`;
 		}),
-	);
+	]);
 
 	if (teamOpponent.endsWith("ShotLocations")) {
 		cols[cols.length - 7].title = "M";
@@ -131,11 +135,15 @@ const LeagueStats = ({
 			data.tied = formatMaybeInteger(s.stats.tied);
 		}
 		if (usePts) {
-			data.pts = formatMaybeInteger(s.stats.pts);
+			data.ptsPts = formatMaybeInteger(s.stats.ptsPts);
 			data.ptsPct = helpers.roundWinp(s.stats.ptsPct);
 		} else {
 			data.winp = helpers.roundWinp(s.stats.winp);
 		}
+
+		data.avgAge = Number.isNaN(s.stats.avgAge)
+			? null
+			: s.stats.avgAge.toFixed(1);
 
 		for (const stat of stats) {
 			data[stat] = helpers.roundStat(s.stats[stat], stat);
@@ -155,7 +163,7 @@ const LeagueStats = ({
 			<DataTable
 				cols={cols}
 				defaultSort={[0, "desc"]}
-				name={`TeamStats${teamOpponent}`}
+				name={`LeagueStats${teamOpponent}`}
 				pagination={pagination}
 				rows={rows}
 				superCols={superCols}

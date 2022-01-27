@@ -1,15 +1,18 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import type { MouseEvent } from "react";
 import useClickable from "../../hooks/useClickable";
 // eslint-disable-next-line import/no-unresolved
-import type { ClassValue } from "classnames/types";
+import type { Argument } from "classnames";
 
 const Row = ({
+	clickable,
+	highlightCols,
 	row,
 }: {
+	clickable?: boolean;
+	highlightCols: number[];
 	row: {
-		classNames?: ClassValue;
+		classNames?: Argument;
 		data: any[];
 	};
 }) => {
@@ -17,9 +20,9 @@ const Row = ({
 	return (
 		<tr
 			className={classNames(row.classNames, {
-				"table-warning": clicked,
+				"table-warning": clickable && clicked,
 			})}
-			onClick={toggleClicked}
+			onClick={clickable ? toggleClicked : undefined}
 		>
 			{row.data.map((value = null, i) => {
 				// Value is either the value, or an object containing the value as a property
@@ -28,8 +31,14 @@ const Row = ({
 
 				const props: any = {};
 
+				const highlightCol = highlightCols.includes(i);
 				if (value && value.classNames) {
-					props.className = classNames(value.classNames);
+					props.className = classNames(
+						value.classNames,
+						highlightCol ? "sorting_highlight" : undefined,
+					);
+				} else if (highlightCol) {
+					props.className = "sorting_highlight";
 				}
 
 				if (value && value.title) {
@@ -77,12 +86,6 @@ const Row = ({
 			})}
 		</tr>
 	);
-};
-
-Row.propTypes = {
-	row: PropTypes.shape({
-		data: PropTypes.array.isRequired,
-	}).isRequired,
 };
 
 export default Row;

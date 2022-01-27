@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useState, CSSProperties } from "react";
 import {
 	RecordAndPlayoffs,
@@ -7,6 +6,7 @@ import {
 } from "../../components";
 import { helpers } from "../../util";
 import InstructionsAndSortButtons from "./InstructionsAndSortButtons";
+import PlayThroughInjurySliders from "./PlayThroughInjuriesSliders";
 import type { View } from "../../../common/types";
 import { isSport } from "../../../common";
 
@@ -45,11 +45,6 @@ const TeamRating = ({
 	);
 };
 
-TeamRating.propTypes = {
-	ovr: PropTypes.number.isRequired,
-	ovrCurrent: PropTypes.number.isRequired,
-};
-
 const TopStuff = ({
 	abbrev,
 	budget,
@@ -64,8 +59,10 @@ const TopStuff = ({
 	players,
 	profit,
 	salaryCap,
+	salaryCapType,
 	season,
 	showTradeFor,
+	showTradingBlock,
 	t,
 	tid,
 }: Pick<
@@ -81,8 +78,10 @@ const TopStuff = ({
 	| "payroll"
 	| "players"
 	| "salaryCap"
+	| "salaryCapType"
 	| "season"
 	| "showTradeFor"
+	| "showTradingBlock"
 	| "t"
 	| "tid"
 > & {
@@ -135,43 +134,61 @@ const TopStuff = ({
 					{t.seasonAttrs.region} {t.seasonAttrs.name}
 				</h3>
 			) : null}
-			<div className="d-flex mb-3">
-				<div className="team-picture" style={logoStyle} />
-				<div>
+			<div className="d-sm-flex mb-3">
+				<div className="d-flex">
+					<div className="team-picture" style={logoStyle} />
 					<div>
-						<span style={fontSizeLarger}>{recordAndPlayoffs}</span>
-						<br />
-						{!challengeNoRatings ? (
-							<>
-								Team rating:{" "}
-								<TeamRating ovr={t.ovr} ovrCurrent={t.ovrCurrent} />
-								<br />
-							</>
-						) : null}
-						<span title="Average margin of victory">Average MOV</span>:{" "}
-						<PlusMinus>{marginOfVictory}</PlusMinus>
-					</div>
-
-					{season === currentSeason || isSport("football") ? (
-						<div className="d-flex mt-3">
-							{season === currentSeason ? (
-								<div>
-									{openRosterSpots} open roster spots
+						<div>
+							<span style={fontSizeLarger}>{recordAndPlayoffs}</span>
+							<br />
+							{!challengeNoRatings ? (
+								<>
+									Team rating:{" "}
+									<TeamRating ovr={t.ovr} ovrCurrent={t.ovrCurrent} />
 									<br />
-									Payroll: {helpers.formatCurrency(payroll || 0, "M")}
-									<br />
-									Salary cap: {helpers.formatCurrency(salaryCap, "M")}
-									<br />
-									{budget ? (
-										<>
-											Profit: {helpers.formatCurrency(profit, "M")}
-											<br />
-										</>
-									) : null}
-									{showTradeFor ? `Strategy: ${t.strategy}` : null}
-								</div>
+								</>
 							) : null}
-							<RosterComposition className="ml-3" players={players} />
+							<span title="Average margin of victory">Average MOV</span>:{" "}
+							<PlusMinus>{marginOfVictory}</PlusMinus>
+							<br />
+							<span title="Average age, weighted by minutes played">
+								Average age
+							</span>
+							: {t.seasonAttrs.avgAge!.toFixed(1)}
+						</div>
+
+						{season === currentSeason ? (
+							<div className="mt-3">
+								{openRosterSpots} open roster spots
+								<br />
+								Payroll: {helpers.formatCurrency(payroll || 0, "M")}
+								<br />
+								{salaryCapType !== "none" ? (
+									<>
+										Salary cap: {helpers.formatCurrency(salaryCap, "M")}
+										<br />
+									</>
+								) : null}
+								{budget ? (
+									<>
+										Profit: {helpers.formatCurrency(profit, "M")}
+										<br />
+									</>
+								) : null}
+								{showTradeFor ? `Strategy: ${t.strategy}` : null}
+							</div>
+						) : null}
+					</div>
+				</div>
+				<div className="d-md-flex">
+					{season === currentSeason ? (
+						<div className="ms-sm-5 mt-3 mt-sm-0">
+							<RosterComposition players={players} />
+						</div>
+					) : null}
+					{showTradingBlock ? (
+						<div className="ms-sm-5 mt-3 mt-md-0">
+							<PlayThroughInjurySliders key={tid} t={t} />
 						</div>
 					) : null}
 				</div>
@@ -193,24 +210,6 @@ const TopStuff = ({
 			) : null}
 		</>
 	);
-};
-
-TopStuff.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	budget: PropTypes.bool.isRequired,
-	currentSeason: PropTypes.number.isRequired,
-	editable: PropTypes.bool.isRequired,
-	numConfs: PropTypes.number.isRequired,
-	numPlayoffRounds: PropTypes.number.isRequired,
-	openRosterSpots: PropTypes.number.isRequired,
-	payroll: PropTypes.number,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	profit: PropTypes.number.isRequired,
-	salaryCap: PropTypes.number.isRequired,
-	season: PropTypes.number.isRequired,
-	showTradeFor: PropTypes.bool.isRequired,
-	t: PropTypes.object.isRequired,
-	tid: PropTypes.number.isRequired,
 };
 
 export default TopStuff;

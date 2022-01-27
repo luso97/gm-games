@@ -21,7 +21,13 @@ const DIFFICULTY = {
 	Insane: 1,
 };
 
-const MAX_SUPPORTED_LEAGUE_VERSION = 43;
+const DRAFT_BY_TEAM_OVR = bySport({
+	basketball: false,
+	football: true,
+	hockey: true,
+});
+
+const MAX_SUPPORTED_LEAGUE_VERSION = 51;
 
 const NO_LOTTERY_DRAFT_TYPES: DraftType[] = [
 	"freeAgents",
@@ -60,7 +66,12 @@ const PLAYER = {
 	FREE_AGENT: -1,
 	UNDRAFTED: -2,
 	RETIRED: -3,
-	UNDRAFTED_FANTASY_TEMP: -6, // Store current draft class here during fantasy draft
+
+	// Store current draft class here during fantasy draft
+	UNDRAFTED_FANTASY_TEMP: -6,
+
+	// Used for realStats when a team has been contracted
+	DOES_NOT_EXIST: -7,
 
 	// THESE ARE OBSOLETE!
 	UNDRAFTED_2: -4, // Next year's draft class
@@ -94,6 +105,18 @@ const COMPOSITE_WEIGHTS = bySport<CompositeWeights>({
 	basketball: constantsBasketball.COMPOSITE_WEIGHTS,
 	football: constantsFootball.COMPOSITE_WEIGHTS,
 	hockey: constantsHockey.COMPOSITE_WEIGHTS,
+});
+
+const PLAYER_GAME_STATS = bySport<{
+	[key: string]: {
+		name: string;
+		stats: string[];
+		sortBy: string[];
+	};
+}>({
+	basketball: constantsBasketball.PLAYER_GAME_STATS,
+	football: constantsFootball.PLAYER_GAME_STATS,
+	hockey: constantsHockey.PLAYER_GAME_STATS,
 });
 
 const PLAYER_SUMMARY = bySport<{
@@ -202,11 +225,7 @@ const COURT = bySport({
 	hockey: "ice",
 });
 
-const EMAIL_ADDRESS = bySport({
-	basketball: "commissioner@basketball-gm.com",
-	football: "commissioner@football-gm.com",
-	hockey: "commissioner@zengm.com",
-});
+const EMAIL_ADDRESS = "jeremy@zengm.com";
 
 const GAME_ACRONYM = bySport({
 	basketball: "BBGM",
@@ -321,6 +340,7 @@ const JERSEYS = bySport({
 	football: {
 		football: "Default",
 		football2: "Shoulder flair",
+		football5: "Shoulder flair 2",
 		football3: "Shoulder stripes",
 		football4: "Low flair",
 	},
@@ -332,17 +352,31 @@ const JERSEYS = bySport({
 	},
 });
 
+// Target: 90% in playThroughInjuriesFactor
+const DEFAULT_PLAY_THROUGH_INJURIES = bySport<[number, number]>({
+	basketball: [0, 4],
+	football: [0, 2],
+	hockey: [0, 4],
+});
+
+const DAILY_SCHEDULE = `${
+	TIME_BETWEEN_GAMES === "week" ? "Weekly" : "Daily"
+} Schedule`;
+
 export {
 	AD_DIVS,
 	AWARD_NAMES,
 	COURT,
+	DAILY_SCHEDULE,
 	DEFAULT_CONFS,
 	DEFAULT_DIVS,
 	DEFAULT_JERSEY,
+	DEFAULT_PLAY_THROUGH_INJURIES,
 	DEFAULT_POINTS_FORMULA,
 	DEFAULT_STADIUM_CAPACITY,
 	ACCOUNT_API_URL,
 	DIFFICULTY,
+	DRAFT_BY_TEAM_OVR,
 	EMAIL_ADDRESS,
 	FACEBOOK_USERNAME,
 	GAME_ACRONYM,
@@ -359,6 +393,7 @@ export {
 	SPORT_HAS_REAL_PLAYERS,
 	STRIPE_PUBLISHABLE_KEY,
 	COMPOSITE_WEIGHTS,
+	PLAYER_GAME_STATS,
 	PLAYER_SUMMARY,
 	PLAYER_STATS_TABLES,
 	RATINGS,

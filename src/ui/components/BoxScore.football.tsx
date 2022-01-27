@@ -1,8 +1,11 @@
-import PropTypes from "prop-types";
-import { memo, Fragment, ReactNode } from "react";
+import { memo, Fragment, MouseEvent, ReactNode, useState } from "react";
 import ResponsiveTableWrapper from "./ResponsiveTableWrapper";
-import { getCols } from "../util";
-import { getPeriodName, helpers, processPlayerStats } from "../../common";
+import { getCols, processPlayerStats } from "../util";
+import { filterPlayerStats, getPeriodName, helpers } from "../../common";
+import { PLAYER_GAME_STATS } from "../../common/constants.football";
+import type { Col, SortBy } from "./DataTable";
+import updateSortBys from "./DataTable/updateSortBys";
+import { getSortClassName } from "./DataTable/Header";
 
 type Quarter = `Q${number}` | "OT";
 
@@ -29,62 +32,144 @@ type BoxScore = {
 	numPeriods?: number;
 };
 
-const statsByType = {
-	passing: [
-		"pssCmp",
-		"pss",
-		"cmpPct",
-		"pssYds",
-		"pssTD",
-		"pssInt",
-		"pssSk",
-		"pssSkYds",
-		"qbRat",
-		"fmbLost",
-	],
-	rushing: ["rus", "rusYds", "rusYdsPerAtt", "rusLng", "rusTD", "fmbLost"],
-	receiving: ["tgt", "rec", "recYds", "recYdsPerAtt", "recLng", "recTD"],
-	kicking: ["fg", "fga", "fgPct", "fgLng", "xp", "xpa", "xpPct", "kickingPts"],
-	punting: ["pnt", "pntYdsPerAtt", "pntIn20", "pntTB", "pntLng", "pntBlk"],
-	returns: [
-		"kr",
-		"krYds",
-		"krYdsPerAtt",
-		"krLng",
-		"krTD",
-		"pr",
-		"prYds",
-		"prYdsPerAtt",
-		"prLng",
-		"prTD",
-	],
-	defense: [
-		"defTckSolo",
-		"defTckAst",
-		"defTck",
-		"defTckLoss",
-		"defSk",
-		"defSft",
-		"defPssDef",
-		"defInt",
-		"defIntYds",
-		"defIntTD",
-		"defIntLng",
-		"defFmbFrc",
-		"defFmbRec",
-		"defFmbYds",
-		"defFmbTD",
-	],
+export const StatsHeader = ({
+	cols,
+	onClick,
+	sortBys,
+	sortable,
+}: {
+	cols: Col[];
+	onClick: (b: MouseEvent, a: number) => void;
+	sortBys: SortBy[];
+	sortable: boolean;
+}) => {
+	return (
+		<>
+			{cols.map((col, i) => {
+				const { desc, title } = col;
+
+				let className: string | undefined;
+
+				if (sortable) {
+					className = getSortClassName(sortBys, i);
+				}
+
+				return (
+					<th
+						className={className}
+						key={i}
+						onClick={event => {
+							onClick(event, i);
+						}}
+						title={desc}
+					>
+						{title}
+					</th>
+				);
+			})}
+		</>
+	);
 };
 
-const sortsByType = {
-	passing: ["pssYds"],
-	rushing: ["rusYds"],
-	receiving: ["recYds"],
-	kicking: ["kickingPts"],
-	punting: ["pnt"],
-	returns: ["krYds", "prYds"],
-	defense: ["defTck"],
+export const sortByStats = (
+	stats: string[],
+	sortBys: SortBy[],
+	getValue?: (p: any, stat: string) => number,
+) => {
+	return (a: any, b: any) => {
+		for (const [index, order] of sortBys) {
+			const stat = stats[index];
+
+			const aValue = getValue?.(a, stat) ?? a.processed[stat];
+			const bValue = getValue?.(b, stat) ?? b.processed[stat];
+
+			if (bValue !== aValue) {
+				const diff = bValue - aValue;
+				if (order === "asc") {
+					return -diff;
+				}
+				return diff;
+			}
+		}
+		return 0;
+	};
+};
+
+const StatsTableIndividual = ({
+	Row,
+	t,
+	type,
+}: {
+	Row: any;
+	t: BoxScore["teams"][number];
+	type: keyof typeof PLAYER_GAME_STATS;
+}) => {
+	const stats = PLAYER_GAME_STATS[type].stats;
+	const cols = getCols(stats.map(stat => `stat:${stat}`));
+
+	const [sortBys, setSortBys] = useState(() => {
+		return PLAYER_GAME_STATS[type].sortBy.map(
+			stat => [stats.indexOf(stat), "desc"] as SortBy,
+		);
+	});
+
+	const onClick = (event: MouseEvent, i: number) => {
+		setSortBys(
+			prevSortBys =>
+				updateSortBys({
+					cols,
+					event,
+					i,
+					prevSortBys,
+				}) ?? [],
+		);
+	};
+
+	const players = t.players
+		.map(p => {
+			return {
+				...p,
+				processed: processPlayerStats(p, stats),
+			};
+		})
+		.filter(p => filterPlayerStats(p, stats, type))
+		.sort(sortByStats(stats, sortBys));
+
+	const sortable = players.length > 1;
+	const highlightCols = sortable ? sortBys.map(sortBy => sortBy[0]) : undefined;
+
+	return (
+		<div className="mb-3">
+			<ResponsiveTableWrapper>
+				<table className="table table-striped table-sm table-hover">
+					<thead>
+						<tr>
+							<th colSpan={2}>
+								{t.region} {t.name}
+							</th>
+							<StatsHeader
+								cols={cols}
+								onClick={onClick}
+								sortBys={sortBys}
+								sortable={sortable}
+							/>
+						</tr>
+					</thead>
+					<tbody>
+						{players.map((p, i) => (
+							<Row
+								key={p.pid}
+								i={i}
+								p={p}
+								stats={stats}
+								highlightCols={highlightCols}
+							/>
+						))}
+					</tbody>
+				</table>
+			</ResponsiveTableWrapper>
+		</div>
+	);
 };
 
 const StatsTable = ({
@@ -94,76 +179,15 @@ const StatsTable = ({
 }: {
 	Row: any;
 	boxScore: BoxScore;
-	type: keyof typeof sortsByType;
+	type: keyof typeof PLAYER_GAME_STATS;
 }) => {
-	const stats = statsByType[type];
-	const cols = getCols(...stats.map(stat => `stat:${stat}`));
-	const sorts = sortsByType[type];
-
 	return (
 		<>
-			{boxScore.teams.map(t => (
-				<div key={t.abbrev} className="mb-3">
-					<ResponsiveTableWrapper>
-						<table className="table table-striped table-bordered table-sm table-hover">
-							<thead>
-								<tr>
-									<th colSpan={2}>
-										{t.region} {t.name}
-									</th>
-									{cols.map(({ desc, title, width }, i) => {
-										return (
-											<th key={i} title={desc} style={{ width }}>
-												{title}
-											</th>
-										);
-									})}
-								</tr>
-							</thead>
-							<tbody>
-								{t.players
-									.map(p => {
-										return {
-											...p,
-											processed: processPlayerStats(p, stats),
-										};
-									})
-									.filter(p => {
-										// Filter based on if player has any stats
-										for (const stat of stats) {
-											if (
-												p.processed[stat] !== undefined &&
-												p.processed[stat] !== 0 &&
-												stat !== "fmbLost"
-											) {
-												return true;
-											}
-										}
-										return false;
-									})
-									.sort((a, b) => {
-										for (const sort of sorts) {
-											if (b.processed[sort] !== a.processed[sort]) {
-												return b.processed[sort] - a.processed[sort];
-											}
-										}
-										return 0;
-									})
-									.map((p, i) => (
-										<Row key={p.pid} i={i} p={p} stats={stats} />
-									))}
-							</tbody>
-						</table>
-					</ResponsiveTableWrapper>
-				</div>
+			{boxScore.teams.map((t, i) => (
+				<StatsTableIndividual key={i} Row={Row} t={t} type={type} />
 			))}
 		</>
 	);
-};
-StatsTable.propTypes = {
-	boxScore: PropTypes.object.isRequired,
-	Row: PropTypes.any,
-	type: PropTypes.string.isRequired,
 };
 
 // Condenses TD + XP/2P into one event rather than two
@@ -211,7 +235,7 @@ const processEvents = (events: ScoringSummaryEvent[]) => {
 			score[otherT] += 2;
 		}
 
-		const prevEvent: any = processedEvents[processedEvents.length - 1];
+		const prevEvent: any = processedEvents.at(-1);
 
 		if (prevEvent && scoreType === "XP") {
 			prevEvent.score = score.slice();
@@ -330,12 +354,6 @@ const ScoringSummary = memo(
 	},
 );
 
-// @ts-ignore
-ScoringSummary.propTypes = {
-	events: PropTypes.array.isRequired,
-	teams: PropTypes.array.isRequired,
-};
-
 const BoxScore = ({ boxScore, Row }: { boxScore: BoxScore; Row: any }) => {
 	return (
 		<div className="mb-3">
@@ -367,11 +385,6 @@ const BoxScore = ({ boxScore, Row }: { boxScore: BoxScore; Row: any }) => {
 			))}
 		</div>
 	);
-};
-
-BoxScore.propTypes = {
-	boxScore: PropTypes.object.isRequired,
-	Row: PropTypes.any,
 };
 
 export default BoxScore;

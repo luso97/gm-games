@@ -1,4 +1,6 @@
+import Bugsnag from "@bugsnag/browser";
 import { useEffect, useRef } from "react";
+import { NextPrevButtons } from "../../components";
 import { logEvent } from "../../util";
 import type { LeagueInfo } from "./types";
 
@@ -38,9 +40,7 @@ const LeagueMenu = <Value extends string>({
 			}
 		} catch (error) {
 			console.error(error);
-			if (window.bugsnagClient) {
-				window.bugsnagClient.notify(error);
-			}
+			Bugsnag.notify(error);
 			logEvent({
 				type: "error",
 				text: `Error loading real team data: ${error.message}`,
@@ -61,15 +61,24 @@ const LeagueMenu = <Value extends string>({
 	return (
 		<>
 			<div className="d-flex">
-				<label htmlFor="new-league-season" className="flex-grow-1">
-					Season
-				</label>
+				<div className="flex-grow-1">
+					<label className="form-label me-2" htmlFor="new-league-season">
+						Season
+					</label>
+					<NextPrevButtons
+						currentItem={value}
+						items={values.map(value => value.key).reverse()}
+						onChange={async newValue => {
+							await handleNewValue(newValue, value2);
+						}}
+					/>
+				</div>
 				{quickValues
 					? quickValues.map(key => (
 							<button
 								key={key}
 								type="button"
-								className="btn btn-link border-0 p-0 mb-1 ml-2"
+								className="btn btn-link border-0 p-0 mb-1 ms-2"
 								style={quickValuesStyle}
 								onClick={() => {
 									handleNewValue(key, value2);
@@ -83,11 +92,11 @@ const LeagueMenu = <Value extends string>({
 			<div className="input-group mb-1">
 				<select
 					id="new-league-season"
-					className="form-control"
+					className="form-select"
 					value={value}
 					onChange={async event => {
 						await handleNewValue(
-							(event.target.value as unknown) as Value,
+							event.target.value as unknown as Value,
 							value2,
 						);
 					}}
@@ -102,7 +111,7 @@ const LeagueMenu = <Value extends string>({
 				</select>
 				{value2 !== undefined && values2 && onNewValue2 ? (
 					<select
-						className="form-control"
+						className="form-select"
 						onChange={event => {
 							const value2 = parseInt(event.target.value);
 							onNewValue2(value2);
@@ -117,26 +126,24 @@ const LeagueMenu = <Value extends string>({
 						))}
 					</select>
 				) : null}
-				<div className="input-group-append">
-					<button
-						className="btn btn-secondary"
-						type="button"
-						onClick={() => {
-							const keys = values.map(v => v.key);
-							const random = keys[Math.floor(Math.random() * keys.length)];
+				<button
+					className="btn btn-light-bordered"
+					type="button"
+					onClick={() => {
+						const keys = values.map(v => v.key);
+						const random = keys[Math.floor(Math.random() * keys.length)];
 
-							if (value2 !== undefined && values2 && onNewValue2) {
-								const keys2 = values2.map(v => v.key);
-								const random2 = keys2[Math.floor(Math.random() * keys2.length)];
-								onNewValue2(random2);
-							}
+						if (value2 !== undefined && values2 && onNewValue2) {
+							const keys2 = values2.map(v => v.key);
+							const random2 = keys2[Math.floor(Math.random() * keys2.length)];
+							onNewValue2(random2);
+						}
 
-							handleNewValue(random, value2);
-						}}
-					>
-						Random
-					</button>
-				</div>
+						handleNewValue(random, value2);
+					}}
+				>
+					Random
+				</button>
 			</div>
 		</>
 	);

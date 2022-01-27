@@ -6,6 +6,7 @@ import local from "./local";
 import lock from "./lock";
 import toUI from "./toUI";
 import type { Option } from "../../common/types";
+import { idb } from "../db";
 
 const updatePlayMenu = async () => {
 	if (typeof it === "function") {
@@ -41,16 +42,20 @@ const updatePlayMenu = async () => {
 			key: "m",
 		},
 		untilAllStarGame: {
-			label: "Until All-Star Game",
+			label: "Until All-Star events",
 			key: "a",
 		},
 		untilTradeDeadline: {
 			label: "Until trade deadline",
 			key: "r",
 		},
-		viewAllStarSelections: {
-			url: helpers.leagueUrl(["all_star_draft"]),
-			label: "View All-Star draft",
+		viewAllStar: {
+			url: helpers.leagueUrl(["all_star"]),
+			label: "All-Star events",
+		},
+		viewSlam: {
+			url: helpers.leagueUrl(["slam"]),
+			label: "Slam dunk contest",
 		},
 		untilPlayoffs: {
 			label: "Until playoffs",
@@ -60,17 +65,21 @@ const updatePlayMenu = async () => {
 			label: "Until end of round",
 			key: "w",
 		},
+		untilEndOfPlayIn: {
+			label: "Until end of play-in tournament",
+			key: "m",
+		},
 		throughPlayoffs: {
 			label: "Through playoffs",
 			key: "y",
 		},
 		dayLive: {
-			url: helpers.leagueUrl(["live"]),
+			url: helpers.leagueUrl(["daily_schedule", "today"]),
 			label: "One day (live)",
 			key: "l",
 		},
 		weekLive: {
-			url: helpers.leagueUrl(["live"]),
+			url: helpers.leagueUrl(["daily_schedule", "today"]),
 			label: "One week (live)",
 			key: "l",
 		},
@@ -96,9 +105,10 @@ const updatePlayMenu = async () => {
 			label: "View draft",
 		},
 		untilResignPlayers: {
-			label: g.get("hardCap")
-				? "Re-sign players and sign rookies"
-				: "Re-sign players with expiring contracts",
+			label:
+				g.get("salaryCapType") === "hard" || !g.get("draftPickAutoContract")
+					? "Re-sign players and sign rookies"
+					: "Re-sign players with expiring contracts",
 		},
 		untilFreeAgency: {
 			label: "Until free agency",
@@ -160,8 +170,11 @@ const updatePlayMenu = async () => {
 		const draftPicks = await draft.getOrder();
 		const nextPick = draftPicks[0];
 
-		// eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-		if (nextPick && g.get("userTids").includes(nextPick.tid)) {
+		if (
+			nextPick &&
+			g.get("userTids").includes(nextPick.tid) &&
+			!g.get("spectator")
+		) {
 			keys = ["viewDraft"];
 		} else if (draftPicks.some(dp => g.get("userTids").includes(dp.tid))) {
 			keys = ["onePick", "untilYourNextPick", "viewDraft"];
@@ -212,20 +225,41 @@ const updatePlayMenu = async () => {
 		});
 
 		if (allStarIndex === 0) {
-			keys.unshift("viewAllStarSelections");
+			keys.unshift("viewAllStar");
 		}
 	} else if (g.get("phase") === PHASE.PLAYOFFS) {
 		// Playoffs
 		if (isSport("basketball") || isSport("hockey")) {
-			keys = ["day", "dayLive", "untilEndOfRound", "throughPlayoffs"];
+			keys = [
+				"day",
+				"dayLive",
+				"untilEndOfRound",
+				"untilEndOfPlayIn",
+				"throughPlayoffs",
+			];
 		} else {
-			keys = ["week", "weekLive", "untilEndOfRound", "throughPlayoffs"];
+			keys = [
+				"week",
+				"weekLive",
+				"untilEndOfRound",
+				"untilEndOfPlayIn",
+				"throughPlayoffs",
+			];
 		}
 
 		// If playoff contains no rounds with more than one game, then untilEndOfRound is not needed
 		const maxGames = Math.max(...g.get("numGamesPlayoffSeries", "current"));
 		if (maxGames <= 1) {
 			keys = keys.filter(key => key !== "untilEndOfRound");
+		}
+
+		if (g.get("playIn")) {
+			const playoffSeries = await idb.cache.playoffSeries.get(g.get("season"));
+			if (!playoffSeries || playoffSeries.currentRound > -1) {
+				keys = keys.filter(key => key !== "untilEndOfPlayIn");
+			}
+		} else {
+			keys = keys.filter(key => key !== "untilEndOfPlayIn");
 		}
 	} else if (g.get("phase") === PHASE.DRAFT_LOTTERY) {
 		if (g.get("repeatSeason")) {
@@ -259,6 +293,10 @@ const updatePlayMenu = async () => {
 	const unreadMessage = await lock.unreadMessage();
 	const negotiationInProgress = await lock.negotiationInProgress();
 
+	if (g.get("expansionDraft").phase === "protection") {
+		keys = ["expansionDraft"];
+	}
+
 	if (unreadMessage) {
 		keys = ["message"];
 	}
@@ -275,10 +313,6 @@ const updatePlayMenu = async () => {
 		keys = ["contractNegotiation"];
 	}
 
-	if (g.get("expansionDraft").phase === "protection") {
-		keys = ["expansionDraft"];
-	}
-
 	if (lock.get("newPhase")) {
 		keys = [];
 	}
@@ -293,15 +327,8 @@ const updatePlayMenu = async () => {
 	}
 
 	const someOptions: Option[] = keys.map(id => {
-		let code;
-		if (allOptions[id].key) {
-			// @ts-ignore
-			code = `Key${allOptions[id].key.toUpperCase()}`;
-		}
-
 		return {
 			...allOptions[id],
-			code,
 			id,
 		};
 	});
@@ -309,7 +336,6 @@ const updatePlayMenu = async () => {
 	// Set first key to always be p
 	if (someOptions.length > 0) {
 		someOptions[0].key = "p";
-		someOptions[0].code = "KeyP";
 	}
 
 	toUI("updateLocal", [

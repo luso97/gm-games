@@ -1,4 +1,4 @@
-import { PHASE } from "../../../common";
+import { PHASE, WEBSITE_ROOT } from "../../../common";
 import finalize from "./finalize";
 import newPhasePreseason from "./newPhasePreseason";
 import newPhaseRegularSeason from "./newPhaseRegularSeason";
@@ -99,6 +99,11 @@ const newPhase = async (phase: Phase, conditions: Conditions, extra?: any) => {
 						local.autoPlayUntil.phase === PHASE.PRESEASON &&
 						phase === PHASE.PRESEASON))
 			) {
+				console.log(
+					`Auto play done in ${
+						(Date.now() - local.autoPlayUntil.start) / 1000
+					} seconds`,
+				);
 				local.autoPlayUntil = undefined;
 			}
 
@@ -118,8 +123,7 @@ const newPhase = async (phase: Phase, conditions: Conditions, extra?: any) => {
 			logEvent(
 				{
 					type: "error",
-					text:
-						'Critical error during phase change. <a href="https://basketball-gm.com/manual/debugging/"><b>Read this to learn about debugging.</b></a>',
+					text: `Critical error during phase change. <a href="https://${WEBSITE_ROOT}/manual/debugging/"><b>Read this to learn about debugging.</b></a>`,
 					saveToDb: false,
 					persistent: true,
 				},

@@ -19,7 +19,8 @@ const TitleBar = () => {
 		hideNewWindow,
 		jumpTo,
 		jumpToSeason,
-		dropdownExtraParam,
+		dropdownCustomOptions,
+		dropdownCustomURL,
 		dropdownView,
 		dropdownFields,
 		moreInfoAbbrev,
@@ -32,7 +33,8 @@ const TitleBar = () => {
 		hideNewWindow: state.hideNewWindow,
 		jumpTo: state.jumpTo,
 		jumpToSeason: state.jumpToSeason,
-		dropdownExtraParam: state.dropdownExtraParam,
+		dropdownCustomOptions: state.dropdownCustomOptions,
+		dropdownCustomURL: state.dropdownCustomURL,
 		dropdownView: state.dropdownView,
 		dropdownFields: state.dropdownFields,
 		moreInfoAbbrev: state.moreInfoAbbrev,
@@ -136,7 +138,7 @@ const TitleBar = () => {
 		menuItems.push({
 			type: "header",
 			long: "More Info",
-			short: "More Info",
+			short: "More",
 			league: true,
 			children: [
 				{
@@ -178,21 +180,23 @@ const TitleBar = () => {
 	}
 
 	return (
-		<aside className="navbar navbar-border navbar-light title-bar flex-shrink-0">
-			<h1 className="mb-0">
+		<aside className="navbar navbar-border navbar-light justify-content-start title-bar flex-shrink-0 ps-3 pe-sm-3 py-0">
+			<h1>
 				{title}
 				{!hideNewWindow ? <NewWindowLink /> : null}
 			</h1>
 			{dropdownView && dropdownFields ? (
 				<Dropdown
-					extraParam={dropdownExtraParam}
+					customURL={dropdownCustomURL}
+					customOptions={dropdownCustomOptions}
 					view={dropdownView}
 					fields={dropdownFields}
 				/>
 			) : null}
 			<DropdownLinks
-				className="ml-auto"
+				className="ms-auto"
 				hideTitle
+				inLeague
 				lid={lid}
 				menuItems={menuItems}
 			/>

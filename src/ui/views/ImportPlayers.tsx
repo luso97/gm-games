@@ -83,48 +83,45 @@ const ImportPlayers = ({
 	}
 
 	const cols = getCols(
-		"",
-		"#",
-		"Name",
-		"Pos",
-		"Ovr",
-		"Pot",
-		"Age",
-		"Team",
-		"Contract",
-		"Exp",
+		["", "#", "Name", "Pos", "Ovr", "Pot", "Age", "Team", "Contract", "Exp"],
+		{
+			Name: {
+				width: "100%",
+			},
+		},
 	);
-	cols[2].width = "100%";
 
-	const handleChange = (
-		name:
-			| "age"
-			| "checked"
-			| "contractAmount"
-			| "contractExp"
-			| "draftYear"
-			| "tid",
-		index: number,
-	) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-		const player = {
-			...players[index],
+	const handleChange =
+		(
+			name:
+				| "age"
+				| "checked"
+				| "contractAmount"
+				| "contractExp"
+				| "draftYear"
+				| "tid",
+			index: number,
+		) =>
+		(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+			const player = {
+				...players[index],
+			};
+
+			if (name === "checked") {
+				player.checked = !player.checked;
+			} else if (name === "age") {
+				player.season = parseInt(event.target.value);
+			} else if (name === "tid") {
+				player.tid = parseInt(event.target.value);
+			} else {
+				player[name] = event.target.value;
+			}
+
+			const newPlayers = [...players];
+			newPlayers[index] = player;
+
+			setPlayers(newPlayers);
 		};
-
-		if (name === "checked") {
-			player.checked = !player.checked;
-		} else if (name === "age") {
-			player.season = parseInt(event.target.value);
-		} else if (name === "tid") {
-			player.tid = parseInt(event.target.value);
-		} else {
-			player[name] = event.target.value;
-		}
-
-		const newPlayers = [...players];
-		newPlayers[index] = player;
-
-		setPlayers(newPlayers);
-	};
 
 	const disableButtons = status !== undefined && status !== "success";
 
@@ -144,7 +141,7 @@ const ImportPlayers = ({
 
 		// const abbrev = helpers.getAbbrev(tid, teamInfoCache);
 
-		let ratings = p.ratings[p.ratings.length - 1];
+		let ratings = p.ratings.at(-1);
 
 		for (let i = p.ratings.length - 1; i--; i >= 0) {
 			if (p.ratings[i].season + seasonOffset === season) {
@@ -195,7 +192,7 @@ const ImportPlayers = ({
 								{name}
 							</PlayerNameLabels>
 							<button
-								className="btn btn-secondary btn-sm ml-2"
+								className="btn btn-secondary btn-sm ms-2"
 								disabled={disableButtons}
 								onClick={() => {
 									const newPlayers = [...players];
@@ -215,7 +212,7 @@ const ImportPlayers = ({
 				{
 					value: (
 						<select
-							className="form-control"
+							className="form-select"
 							onChange={handleChange("age", i)}
 							style={{ minWidth: 60 }}
 							value={season}
@@ -235,7 +232,7 @@ const ImportPlayers = ({
 					value: (
 						<div className="d-flex" style={{ minWidth: 200 }}>
 							<select
-								className="form-control"
+								className="form-select"
 								onChange={handleChange("tid", i)}
 								value={tid}
 							>
@@ -267,18 +264,14 @@ const ImportPlayers = ({
 								className="input-group input-group"
 								style={{ minWidth: 180 }}
 							>
-								<div className="input-group-prepend">
-									<div className="input-group-text">$</div>
-								</div>
+								<div className="input-group-text">$</div>
 								<input
 									type="text"
 									className="form-control"
 									onChange={handleChange("contractAmount", i)}
 									value={contractAmount}
 								/>
-								<div className="input-group-append">
-									<div className="input-group-text">M per year</div>
-								</div>
+								<div className="input-group-text">M per year</div>
 							</div>
 						),
 						sortValue: `$${contractAmount}M`,
@@ -320,15 +313,18 @@ const ImportPlayers = ({
 
 			<LeagueFileUpload
 				disabled={disableButtons}
+				includePlayersInBasicInfo
 				onLoading={() => {
 					setStatus("loading");
 				}}
-				onDone={async (error, leagueFile) => {
+				onDone={async (error, output) => {
 					setStatus(undefined);
 
-					if (error) {
+					if (error || !output) {
 						return;
 					}
+
+					const leagueFile = output.basicInfo;
 
 					let startingSeason = leagueFile.startingSeason;
 					if (typeof startingSeason !== "number" && leagueFile.gameAttributes) {
@@ -348,9 +344,10 @@ const ImportPlayers = ({
 						version: leagueFile.version,
 					});
 
-					leagueFile.players = leagueFile.players ? leagueFile.players : [];
+					console.log("leagueFile", leagueFile);
+					const rawPlayers: any[] = leagueFile.players ?? [];
 
-					const players = leagueFile.players.map((p: any) => {
+					const players = rawPlayers.map(p => {
 						const exportedSeason: number | undefined =
 							typeof p.exportedSeason === "number"
 								? p.exportedSeason
@@ -359,7 +356,7 @@ const ImportPlayers = ({
 						const season =
 							exportedSeason !== undefined
 								? p.exportedSeason
-								: p.ratings[p.ratings.length - 1].season;
+								: p.ratings.at(-1).season;
 
 						let tid;
 						if (
@@ -384,18 +381,13 @@ const ImportPlayers = ({
 							tid = p.tid;
 						}
 
-						let checked = true;
-						if (tid < PLAYER.UNDRAFTED) {
+						if (tid < PLAYER.UNDRAFTED || tid >= teamInfoCache.length) {
 							tid = PLAYER.FREE_AGENT;
-							checked = false;
 						}
 
 						let contractAmount = 1;
 						let contractExp = season + 1;
-						if (
-							p.contract &&
-							season === p.ratings[p.ratings.length - 1].season
-						) {
+						if (p.contract && season === p.ratings.at(-1).season) {
 							// Exported the latest season for this player
 							contractAmount = p.contract.amount / 1000;
 							contractExp = p.contract.exp;
@@ -413,7 +405,7 @@ const ImportPlayers = ({
 
 						return {
 							p,
-							checked,
+							checked: false,
 							contractAmount: String(contractAmount),
 							contractExp: String(contractExp + seasonOffset),
 							draftYear: String(currentSeason + (phase >= PHASE.DRAFT ? 1 : 0)),
@@ -476,12 +468,10 @@ const ImportPlayers = ({
 							setErrorMessage(undefined);
 
 							try {
-								await toWorker(
-									"main",
-									"importPlayers",
+								await toWorker("main", "importPlayers", {
 									leagueFile,
-									players.filter(p => p.checked),
-								);
+									players: players.filter(p => p.checked),
+								});
 								setStatus("success");
 							} catch (error) {
 								console.error(error);

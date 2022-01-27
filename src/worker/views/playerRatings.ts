@@ -17,16 +17,17 @@ export const getPlayers = async (
 		playersAll = await idb.cache.players.getAll();
 		playersAll = playersAll.filter(p => p.tid !== PLAYER.RETIRED); // Normally won't be in cache, but who knows...
 	} else {
-		playersAll = await idb.getCopies.players({
-			activeSeason: season,
-		});
+		playersAll = await idb.getCopies.players(
+			{
+				activeSeason: season,
+			},
+			"noCopyCache",
+		);
 	}
 
 	// Show all teams
 	if (tid === undefined && abbrev === "watch") {
-		playersAll = playersAll.filter(
-			p => p.watch && typeof p.watch !== "function",
-		);
+		playersAll = playersAll.filter(p => p.watch);
 	}
 
 	let players = await idb.getCopies.playersPlus(playersAll, {

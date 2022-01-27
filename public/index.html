@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <title>GAME_NAME</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#FF7F2A"/>
 
     <link rel="manifest" href="/manifest.webmanifest">
@@ -15,11 +15,10 @@
     <link rel="modulepreload" href="/gen/ui-REV_GOES_HERE.js">
     <link rel="modulepreload" href="/gen/worker-REV_GOES_HERE.js">
 
-    <script src="//d2wy8f7a9ursnm.cloudfront.net/v6/bugsnag.min.js"></script>
-
     <script>
 window.bbgmVersion = "REV_GOES_HERE";
 window.useSharedWorker = typeof SharedWorker !== 'undefined';
+window.mobile = window.screen.width < 768 || window.screen.height < 768;
 
 function loadCSS(filename){
   var el = document.createElement("link");
@@ -65,7 +64,7 @@ if (window.enableLogging) {
     var ARTICLE_URL = articleUrl;
     var CONTENT_ID = contentId || '';
     var el = document.createElement('script');
-    var url = '//survey.g.doubleclick.net/survey?site=5945171946504192' +
+    var url = 'https://survey.g.doubleclick.net/survey?site=GOOGLE_SURVEYS_ID' +
               '&url=' + encodeURIComponent(ARTICLE_URL) +
               (CONTENT_ID ? '&cid=' + encodeURIComponent(CONTENT_ID) : '') +
               '&random=' + (new Date).getTime() +
@@ -77,79 +76,42 @@ if (window.enableLogging) {
   };
 }
 
-var releaseStage = "unknown";
+window.releaseStage = "unknown";
 if (location.host.indexOf("localhost") === 0) {
-  releaseStage = "development";
+  window.releaseStage = "development";
 } else if (location.host.indexOf("BETA_SUBDOMAIN") === 0) {
-  releaseStage = "beta";
+  window.releaseStage = "beta";
 } else if (location.host.indexOf("PLAY_SUBDOMAIN") === 0) {
-  releaseStage = "production";
+  window.releaseStage = "production";
 }
 
-if (window.bugsnag) {
-  window.bugsnagClient = window.bugsnag({
-    apiKey: "BUGSNAG_API_KEY",
-    appVersion: window.bbgmVersion,
-    autoCaptureSessions: false,
-    beforeSend: function (report) {
-      // Normalize league URLs to all look the same
-      if (report && typeof report.context === "string") {
-        report.context = report.context.replace(/^\/l\/[0-9]+?\//, "/l/0/");
-      }
-
-      if (report && typeof report.errorMessage === "string") {
-        var skip = ["ResizeObserver loop limit exceeded"];
-        for (var i = 0; i < skip.length; i++) {
-          if (report.errorMessage.includes(skip[i])) {
-            report.ignore();
-          }
-        }
-      }
-    },
-    notifyReleaseStages: ["beta", "production"],
-    releaseStage: releaseStage
-  });
-}
+window.bugsnagKey = "BUGSNAG_API_KEY";
     </script>
 BANNER_ADS_CODE
 QUANTCAST_CODE
 FACEBOOK_PIXEL_CODE
   </head>
 
-  <body class="h-100">
+  <body class="h-100" style="padding-top: 52px">
 
     <div id="content" class="h-100 d-flex flex-column">
       <div style="margin: 0 15px">
         <div style="max-width: 360px; margin: 0 auto">
-          <h1 style="text-align: center">Loading...</h1>
-
-          <p style="clear: both; margin-bottom: 3em"></p>
-
-          <div style="display: flex; flex-wrap: wrap; justify-content: center; margin: 0 -15px">
-            <div class="team-picture-splash" id="team-picture-0"></div>
-            <div class="team-picture-splash" id="team-picture-1"></div>
-            <div class="team-picture-splash" id="team-picture-2"></div>
-            <div class="team-picture-splash" id="team-picture-3"></div>
-            <div class="team-picture-splash" id="team-picture-4"></div>
-            <div class="team-picture-splash" id="team-picture-5"></div>
-            <div class="team-picture-splash" id="team-picture-6"></div>
-            <div class="team-picture-splash" id="team-picture-7"></div>
-            <div class="team-picture-splash" id="team-picture-8"></div>
-            <div class="team-picture-splash" id="team-picture-9"></div>
-            <div class="team-picture-splash" id="team-picture-10"></div>
-            <div class="team-picture-splash" id="team-picture-11"></div>
+          <div style="text-align: center; margin: 48px 0 100px 0">
+            <img id="loading-icon" src="/ico/icon.svg" width="48" height="48" class="spin" style="animation-play-state: runnung" alt="">
           </div>
-
-          <p style="clear: both; margin-bottom: 3em"></p>
 
           <p>GAME_NAME vREV_GOES_HERE</p>
           <div id="startup-browser">Checking browser...</div>
+          <noscript>
+            <p><b>Error!</b> JavaScript is disabled in your browser. Please enable JavaScript to play GAME_NAME.</p>
+          </noscript>
           <div id="startup-ui"></div>
-          <p id="startup-worker"></p>
+          <div id="startup-worker"></div>
 
-          <div class="alert alert-danger" id="startup-error" style="display: none"></div>
+          <div class="alert alert-danger mt-3" id="startup-error" style="display: none"></div>
 
-          <div class="alert alert-danger" id="startup-error-unknown" style="display: none">
+          <div class="alert alert-danger mt-3" id="startup-error-unknown" style="display: none">
             <p>This should only take a few seconds on a fast connection.</p>
             <p>If it gets stuck for a while, read <a href="https://WEBSITE_ROOT/manual/debugging/">the debugging instructions</a> and <a href="https://WEBSITE_ROOT/contact/">ask for help</a> if it still isn't working.</p>
           </div>
@@ -158,14 +120,11 @@ FACEBOOK_PIXEL_CODE
     </div>
 
     <script>
-var startupBrowser = document.getElementById("startup-browser");
 var startupUI = document.getElementById("startup-ui");
 var startupWorker = document.getElementById("startup-worker");
-var startupError = document.getElementById("startup-error");
-var startupErrorUnknown = document.getElementById("startup-error-unknown");
 
 var timeoutID = setTimeout(function () {
-  startupErrorUnknown.style.display = "block";
+  document.getElementById("startup-error-unknown").style.display = "block";
 }, 6000);
 
 function checkModern() {
@@ -178,20 +137,25 @@ function checkModern() {
 };
 
 function withGoodBrowser() {
-  startupBrowser.innerHTML += " done!";
+  document.getElementById("startup-browser").innerHTML += " done!";
   startupUI.innerHTML = "Loading UI...";
   startupWorker.innerHTML = "Loading backend...";
 
   var body = document.getElementsByTagName('body').item(0);
-  var script = document.createElement('script');
   if (checkModern()) {
-    // Needs to be module for modulepreload
-    script.type = "module";
+    var script = document.createElement('script');
+    script.type = "module"; // Needs to be module for modulepreload
     script.src = "/gen/ui-" + bbgmVersion + ".js";
+    body.appendChild(script);
   } else  {
-    script.src = "/gen/ui-legacy-" + bbgmVersion + ".js";
+    // Need SystemJS for chunk loading
+    var systemJsLoaderTag = document.createElement("script");
+    systemJsLoaderTag.src = "https://unpkg.com/systemjs@6.11.0/dist/s.min.js";
+    systemJsLoaderTag.addEventListener("load", function () {
+      System.import("/gen/ui-legacy-" + bbgmVersion + ".js");
+    });
+    body.appendChild(systemJsLoaderTag);
   }
-  body.appendChild(script);
 }
 
 var count = 0;
@@ -208,23 +172,6 @@ function withGoodWorker() {
   if (count === 2) {
     clearTimeout(timeoutID);
   }
-}
-
-function shuffle(array) {
-  var counter = array.length;
-  while (counter > 0) {
-    var index = Math.floor(Math.random() * counter);
-    counter--;
-    var temp = array[counter];
-    array[counter] = array[index];
-    array[index] = temp;
-  }
-  return array;
-}
-
-var abbrevs = shuffle(["ATL", "BAL", "BKN", "BOS", "CHA", "CHI", "CIN", "CLE", "DAL", "DEN", "DET", "HOU", "IND", "KC", "LA", "LAE", "LV", "MEM", "MIA", "MIL", "MIN", "MON", "MXC", "NOL", "NYC", "OKC", "ORL", "PHI", "PHO", "PIT", "POR", "SA", "SAC", "SD", "SEA", "SF", "STL", "TOR", "TPA", "UTA", "VAN", "WAS"]);
-for (var i = 0; i < 12; i++) {
-  document.getElementById('team-picture-' + i).style.backgroundImage = 'url(/img/logos/' + abbrevs[i] + '.png)';
 }
 
 // Browser compatibility checks! https://gist.github.com/jensarps/15f270874889e1717b3d
@@ -308,7 +255,8 @@ function goodIDB(cb) {
 
 function checkBrowser() {
   try {
-    eval("const s = Symbol(); let f = x => 1");
+    // Safari 10 https://bugs.webkit.org/show_bug.cgi?id=171041
+    eval("const s = Symbol(); let e = (e) => { for (let e of []) {}; }");
     return true;
   } catch (err) {
     return false;
@@ -321,16 +269,20 @@ goodIDB(function (idbResult) {
     if (idbResult === "open-failed") {
       errorMsg = '<p><b>Error!</b> Cannot store data.</p><p>If you have disabled cookies in your browser, you must enable them to play GAME_NAME.</p><p>If you\'re using Firefox\'s Private Browsing mode, there is currently a bug in Firefox that prevents GAME_NAME from running. Either load GAME_NAME outside of Private Browsing mode, or try using <a href="https://www.google.com/chrome/">Google Chrome</a> instead.</p>';
     } else {
-      errorMsg = '<p><b>Error!</b> Your browser is not modern enough to run GAME_NAME. The latest versions of <a href="https://www.google.com/chrome/">Google Chrome</a> and <a href="https://www.mozilla.org/en-US/firefox/">Mozilla Firefox</a> work best.</p>';
+      errorMsg = '<p><b>Error!</b> Your browser is not modern enough to run GAME_NAME. Current supported browsers include:</p><ul class="list-unstyled mb-0"><li>Chrome 49+</li><li>Firefox 78+</li><li>Safari 12+</li></ul>';
     }
 
     // Special error for Apple's mobile devices, as that's the only platform that is totally unsupported (no alternative browser to install)
     if (/(iPad|iPhone|iPod)/.test(navigator.userAgent)) {
-      errorMsg += '<p>If you\'re on an iPhone/iPad, upgrade to iOS 10.3 or higher to play GAME_NAME. If you can\'t do that, then please come back on a desktop/laptop or a non-Apple mobile device!</p>';
+      errorMsg += '<p>If you\'re on an iPhone/iPad, upgrade to iOS 12 or higher to play GAME_NAME. If you can\'t do that, then please come back on a desktop/laptop or a non-Apple mobile device!</p>';
     }
 
+    var startupError = document.getElementById("startup-error");
     startupError.innerHTML = errorMsg;
     startupError.style.display = "block";
+
+    document.getElementById("loading-icon").style.animationPlayState = "paused";
+
     clearTimeout(timeoutID);
   } else {
     localStorage.setItem("goodIDB", "1")

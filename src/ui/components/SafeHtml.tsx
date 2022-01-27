@@ -1,10 +1,15 @@
 import createDOMPurify from "dompurify";
-import PropTypes from "prop-types";
 const DOMPurify = createDOMPurify(window);
 DOMPurify.setConfig({ ADD_ATTR: ["target"] });
 
-const SafeHtml = ({ dirty }: { dirty: string }) => {
-	const clean = DOMPurify.sanitize(dirty);
+const SafeHtml = ({
+	dirty,
+	htmlIsSafe,
+}: {
+	dirty: string;
+	htmlIsSafe?: boolean;
+}) => {
+	const clean = htmlIsSafe ? dirty : DOMPurify.sanitize(dirty);
 
 	return (
 		<span
@@ -13,10 +18,6 @@ const SafeHtml = ({ dirty }: { dirty: string }) => {
 			}}
 		/>
 	);
-};
-
-SafeHtml.propTypes = {
-	dirty: PropTypes.string.isRequired,
 };
 
 export default SafeHtml;

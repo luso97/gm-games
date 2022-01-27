@@ -27,8 +27,8 @@ const initAutoPlay = async (conditions: Conditions) => {
 		return false;
 	}
 
-	const season = parseInt(result.season, 10);
-	const phase = parseInt(result.phase, 10);
+	const season = parseInt(result.season);
+	const phase = parseInt(result.phase);
 
 	if (
 		season > g.get("season") ||
@@ -37,6 +37,7 @@ const initAutoPlay = async (conditions: Conditions) => {
 		local.autoPlayUntil = {
 			season,
 			phase,
+			start: Date.now(),
 		};
 		autoPlay(conditions);
 	} else {

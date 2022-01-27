@@ -2,6 +2,7 @@ import { idb } from "../db";
 import { g, helpers, orderTeams } from "../util";
 import type { UpdateEvents, ViewInput } from "../../common/types";
 import { getTiebreakers } from "../util/orderTeams";
+import { season } from "../core";
 
 const updateStandings = async (
 	inputs: ViewInput<"standings">,
@@ -17,11 +18,10 @@ const updateStandings = async (
 		const divs = g.get("divs", inputs.season);
 		const numPlayoffByes = g.get("numPlayoffByes", inputs.season);
 
-		const numPlayoffTeams =
-			2 ** g.get("numGamesPlayoffSeries", inputs.season).length -
-			numPlayoffByes;
-		const playoffsByConference = confs.length === 2;
-		const maxPlayoffSeed = playoffsByConference
+		const numPlayoffTeams = await season.getNumPlayoffTeams(inputs.season);
+
+		const playoffsByConf = await season.getPlayoffsByConf(inputs.season);
+		const maxPlayoffSeed = playoffsByConf
 			? numPlayoffTeams / 2
 			: numPlayoffTeams;
 
@@ -29,45 +29,50 @@ const updateStandings = async (
 		const usePts = pointsFormula !== "";
 
 		const teams = (
-			await idb.getCopies.teamsPlus({
-				attrs: ["tid"],
-				seasonAttrs: [
-					"won",
-					"lost",
-					"tied",
-					"otl",
-					"winp",
-					"pts",
-					"ptsPct",
-					"wonHome",
-					"lostHome",
-					"tiedHome",
-					"otlHome",
-					"wonAway",
-					"lostAway",
-					"tiedAway",
-					"otlAway",
-					"wonDiv",
-					"lostDiv",
-					"tiedDiv",
-					"otlDiv",
-					"wonConf",
-					"lostConf",
-					"tiedConf",
-					"otlConf",
-					"lastTen",
-					"streak",
-					"cid",
-					"did",
-					"abbrev",
-					"region",
-					"name",
-					"clinchedPlayoffs",
-				],
-				stats: ["pts", "oppPts", "gp"],
-				season: inputs.season,
-				showNoStats: true,
-			})
+			await idb.getCopies.teamsPlus(
+				{
+					attrs: ["tid"],
+					seasonAttrs: [
+						"won",
+						"lost",
+						"tied",
+						"otl",
+						"winp",
+						"pts",
+						"ptsPct",
+						"wonHome",
+						"lostHome",
+						"tiedHome",
+						"otlHome",
+						"wonAway",
+						"lostAway",
+						"tiedAway",
+						"otlAway",
+						"wonDiv",
+						"lostDiv",
+						"tiedDiv",
+						"otlDiv",
+						"wonConf",
+						"lostConf",
+						"tiedConf",
+						"otlConf",
+						"lastTen",
+						"streak",
+						"cid",
+						"did",
+						"abbrev",
+						"region",
+						"name",
+						"clinchedPlayoffs",
+						"imgURL",
+						"imgURLSmall",
+					],
+					stats: ["pts", "oppPts", "gp"],
+					season: inputs.season,
+					showNoStats: true,
+				},
+				"noCopyCache",
+			)
 		).map(t => ({
 			...t,
 			gb: {
@@ -124,7 +129,7 @@ const updateStandings = async (
 		}
 
 		for (const t of teams) {
-			t.rank.playoffs = playoffsByConference ? t.rank.conf : t.rank.league;
+			t.rank.playoffs = playoffsByConf ? t.rank.conf : t.rank.league;
 			if (t.rank.playoffs > maxPlayoffSeed) {
 				t.rank.playoffs = -1;
 			}
@@ -158,12 +163,20 @@ const updateStandings = async (
 			}
 		}
 
+		const playIn =
+			inputs.season === g.get("season")
+				? g.get("playIn")
+				: rankingGroups.league[0].some(
+						t => t.seasonAttrs.clinchedPlayoffs === "w",
+				  );
+
 		return {
 			confs,
 			divs,
 			maxPlayoffSeed,
 			numPlayoffByes,
-			playoffsByConference,
+			playIn,
+			playoffsByConf,
 			pointsFormula,
 			rankingGroups,
 			season: inputs.season,

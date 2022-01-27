@@ -1,7 +1,7 @@
 import { idb } from "../db";
-import { g, helpers } from "../util";
+import { g, helpers, processPlayerStats } from "../util";
 import type { UpdateEvents, ViewInput } from "../../common/types";
-import { bySport, isSport, processPlayerStats } from "../../common";
+import { bySport, isSport } from "../../common";
 
 const updatePlayers = async (
 	inputs: ViewInput<"playerFeats">,
@@ -58,6 +58,12 @@ const updatePlayers = async (
 				}
 			}
 
+			const pts = feat.score.split("-").map(x => parseInt(x));
+			let diff = -Infinity;
+			if (!Number.isNaN(pts[0]) && !Number.isNaN(pts[1])) {
+				diff = pts[0] - pts[1];
+			}
+
 			if (feat.overtimes === 1) {
 				feat.score += " (OT)";
 			} else if (feat.overtimes > 1) {
@@ -78,6 +84,7 @@ const updatePlayers = async (
 				abbrev: g.get("teamInfoCache")[feat.tid]?.abbrev,
 				oppAbbrev: g.get("teamInfoCache")[feat.oppTid]?.abbrev,
 				type,
+				diff,
 			};
 		});
 
@@ -157,6 +164,7 @@ const updatePlayers = async (
 		return {
 			abbrev: inputs.abbrev,
 			feats: featsProcessed,
+			quarterLengthFactor: helpers.quarterLengthFactor(),
 			season: inputs.season,
 			stats,
 			userTid: g.get("userTid"),

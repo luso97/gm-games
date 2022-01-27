@@ -33,7 +33,7 @@ const addNewTeamToExistingLeague = async (
 
 	let div = divs.find(d => d.did === teamInfo.did);
 	if (!div) {
-		div = divs[divs.length - 1];
+		div = divs.at(-1);
 	}
 	const cid = div.cid;
 
@@ -55,7 +55,7 @@ const addNewTeamToExistingLeague = async (
 			pop: teamInfo.pop,
 		},
 	]);
-	const popRank = popRanks[popRanks.length - 1];
+	const popRank = popRanks.at(-1);
 
 	const t = prevT
 		? {
@@ -87,6 +87,7 @@ const addNewTeamToExistingLeague = async (
 			abbrev: t.abbrev,
 			disabled: t.disabled,
 			imgURL: t.imgURL,
+			imgURLSmall: t.imgURLSmall,
 			name: t.name,
 			region: t.region,
 		})),
@@ -117,7 +118,10 @@ const addNewTeamToExistingLeague = async (
 	// Manually adding a new team can mess with scheduled events, because they are indexed on tid. Let's try to adjust them.
 	if (!fromScheduledEvent && !prevT) {
 		// This means a new team was added, with a newly generated tid. Increment tids in future scheduled events to account for this
-		const scheduledEvents = await idb.getCopies.scheduledEvents();
+		const scheduledEvents = await idb.getCopies.scheduledEvents(
+			undefined,
+			"noCopyCache",
+		);
 		for (const scheduledEvent of scheduledEvents) {
 			if (scheduledEvent.season < g.get("season")) {
 				await idb.cache.scheduledEvents.delete(scheduledEvent.id);

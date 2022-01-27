@@ -571,9 +571,12 @@ const updateLeaders = async (
 	) {
 		const { categories, stats } = getCategoriesAndStats(); // Calculate the number of games played for each team, which is used later to test if a player qualifies as a league leader
 
-		const teamSeasons = await idb.getCopies.teamSeasons({
-			season: inputs.season,
-		});
+		const teamSeasons = await idb.getCopies.teamSeasons(
+			{
+				season: inputs.season,
+			},
+			"noCopyCache",
+		);
 		const gps: Record<number, number | undefined> = {};
 		for (const teamSeason of teamSeasons) {
 			if (inputs.playoffs === "playoffs") {
@@ -599,9 +602,12 @@ const updateLeaders = async (
 				Infinity,
 			]);
 		} else {
-			players = await idb.getCopies.players({
-				activeSeason: inputs.season,
-			});
+			players = await idb.getCopies.players(
+				{
+					activeSeason: inputs.season,
+				},
+				"noCopyCache",
+			);
 		}
 
 		players = await idb.getCopies.playersPlus(players, {
@@ -615,11 +621,21 @@ const updateLeaders = async (
 		});
 		const userAbbrev = helpers.getAbbrev(g.get("userTid"));
 
-		// minStats and minValues are the NBA requirements to be a league leader for each stat http://www.nba.com/leader_requirements.html. If any requirement is met, the player can appear in the league leaders
+		// In theory this should be the same for all sports, like basketball. But for a while FBGM set it to the same value as basketball, which didn't matter since it doesn't influence game sim, but it would mess this up.
+		const numPlayersOnCourtFactor = bySport({
+			basketball:
+				defaultGameAttributes.numPlayersOnCourt / g.get("numPlayersOnCourt"),
+			football: 1,
+			hockey: 1,
+		});
+
+		// To handle changes in number of games, playing time, etc
 		const factor =
 			(g.get("numGames") / defaultGameAttributes.numGames) *
-			helpers.quarterLengthFactor(); // To handle changes in number of games and playing time
+			numPlayersOnCourtFactor *
+			helpers.quarterLengthFactor();
 
+		// minStats and minValues are the NBA requirements to be a league leader for each stat http://www.nba.com/leader_requirements.html. If any requirement is met, the player can appear in the league leaders
 		for (const cat of categories) {
 			if (cat.sortAscending) {
 				players.sort((a, b) => a.stats[cat.statProp] - b.stats[cat.statProp]);
@@ -643,15 +659,29 @@ const updateLeaders = async (
 
 						// Compare against value normalized for team games played
 						const gpTeam = gps[p.stats.tid];
-						if (
-							gpTeam !== undefined &&
-							playerValue >=
+
+						if (gpTeam !== undefined) {
+							// Special case GP
+							if (cat.minStats[k] === "gp") {
+								if (
+									playerValue / gpTeam >=
+									cat.minValue[k] / g.get("numGames")
+								) {
+									pass = true;
+									break; // If one is true, don't need to check the others
+								}
+							}
+
+							// Other stats
+							if (
+								playerValue >=
 								Math.ceil(
 									(cat.minValue[k] * factor * gpTeam) / g.get("numGames"),
 								)
-						) {
-							pass = true;
-							break; // If one is true, don't need to check the others
+							) {
+								pass = true;
+								break; // If one is true, don't need to check the others
+							}
 						}
 					}
 				}
@@ -661,7 +691,6 @@ const updateLeaders = async (
 					leader.stat = leader.stats[cat.statProp];
 					leader.abbrev = leader.stats.abbrev;
 					leader.tid = leader.stats.tid;
-					// @ts-ignore
 					delete leader.stats;
 					leader.userTeam = userAbbrev === leader.abbrev;
 					cat.data.push(leader);
@@ -673,10 +702,10 @@ const updateLeaders = async (
 				}
 			}
 
-			// @ts-ignore
+			// @ts-expect-error
 			delete cat.minStats;
 
-			// @ts-ignore
+			// @ts-expect-error
 			delete cat.minValue;
 
 			delete cat.filter;

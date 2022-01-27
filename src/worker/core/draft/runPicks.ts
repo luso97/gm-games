@@ -1,4 +1,4 @@
-import { PHASE, PLAYER } from "../../../common";
+import { DRAFT_BY_TEAM_OVR, PHASE, PLAYER } from "../../../common";
 import afterPicks from "./afterPicks";
 import getOrder from "./getOrder";
 import selectPlayer from "./selectPlayer";
@@ -8,7 +8,53 @@ import type {
 	Conditions,
 	MinimalPlayerRatings,
 	Player,
+	PlayerWithoutKey,
 } from "../../../common/types";
+import { player, team } from "..";
+
+export const getTeamOvrDiffs = (
+	teamPlayers: PlayerWithoutKey<MinimalPlayerRatings>[],
+	players: PlayerWithoutKey<MinimalPlayerRatings>[],
+) => {
+	if (!DRAFT_BY_TEAM_OVR) {
+		return [];
+	}
+
+	const teamPlayers2 = teamPlayers.map(p => ({
+		value: p.value,
+		ratings: {
+			ovr: player.fuzzRating(p.ratings.at(-1).ovr, p.ratings.at(-1).fuzz),
+			ovrs: player.fuzzOvrs(p.ratings.at(-1).ovrs, p.ratings.at(-1).fuzz),
+			pos: p.ratings.at(-1).pos,
+		},
+	}));
+
+	const baseline = team.ovr(teamPlayers2, {
+		wholeRoster: true,
+	});
+
+	return players.map(p => {
+		const ratings = p.ratings.at(-1);
+		const newOvr = team.ovr(
+			[
+				...teamPlayers2,
+				{
+					value: p.value,
+					ratings: {
+						ovr: ratings.ovr,
+						ovrs: ratings.ovrs,
+						pos: ratings.pos,
+					},
+				},
+			],
+			{
+				wholeRoster: true,
+			},
+		);
+
+		return newOvr - baseline;
+	});
+};
 
 /**
  * Simulate draft picks until it's the user's turn or the draft is over.
@@ -20,7 +66,14 @@ import type {
  * @return {Promise.[Array.<Object>, Array.<number>]} Resolves to an array of player IDs who were drafted during this function call, in order.
  */
 const runPicks = async (
-	type: "onePick" | "untilYourNextPick" | "untilEnd",
+	action:
+		| {
+				type: "onePick" | "untilYourNextPick" | "untilEnd";
+		  }
+		| {
+				type: "untilPick";
+				dpid: number;
+		  },
 	conditions?: Conditions,
 ) => {
 	if (lock.get("drafting")) {
@@ -75,13 +128,18 @@ const runPicks = async (
 				const dp = draftPicks[0];
 
 				const singleUserPickInSpectatorMode =
-					g.get("spectator") && type === "onePick";
+					g.get("spectator") && action.type === "onePick";
 				const pauseForUserPick =
 					g.get("userTids").includes(dp.tid) &&
 					!local.autoPlayUntil &&
 					!singleUserPickInSpectatorMode &&
-					type !== "untilEnd";
-				if (pauseForUserPick) {
+					action.type !== "untilEnd" &&
+					action.type !== "untilPick";
+
+				const pauseForDpid =
+					action.type === "untilPick" && dp.dpid === action.dpid;
+
+				if (pauseForUserPick || pauseForDpid) {
 					return afterDoneAuto();
 				}
 
@@ -107,15 +165,37 @@ const runPicks = async (
 					}
 				}
 
-				const selection = random.choice(playersAll, p => p.value ** 69);
+				const teamPlayers = await idb.cache.players.indexGetAll(
+					"playersByTid",
+					dp.tid,
+				);
+				const teamOvrDiffs = await getTeamOvrDiffs(teamPlayers, playersAll);
 
-				// 0=best prospect, 1=next best prospect, etc.
+				const score = (p: Player<MinimalPlayerRatings>, i: number) => {
+					if (DRAFT_BY_TEAM_OVR) {
+						return (teamOvrDiffs[i] + 0.05 * p.value) ** 40;
+					}
+
+					return p.value ** 69;
+				};
+				/*let sum = 0;
+				for (const p of playersAll) {
+					sum += score(p);
+				}
+				for (let i = 0; i < playersAll.length; i++) {
+					const p = playersAll[i];
+					console.log(p.firstName, p.lastName, teamOvrDiffs[i], 0.05 * p.value, score(p) / sum);
+				}
+				console.log(sum);*/
+
+				const selection = random.choice(playersAll, score);
+
 				const pid = selection.pid;
 				await selectPlayer(dp, pid);
 				pids.push(pid);
 				playersAll = playersAll.filter(p => p !== selection); // Delete from the list of undrafted players
 
-				if (type !== "onePick") {
+				if (action.type !== "onePick") {
 					return autoSelectPlayer();
 				}
 			}

@@ -1,10 +1,10 @@
-import {
+import { unwrap } from "idb";
+import type {
 	IDBPObjectStore,
 	IDBPIndex,
 	StoreNames,
 	StoreValue,
 	IndexNames,
-	unwrap,
 	StoreKey,
 } from "idb";
 import type { LeagueDB } from "./connectLeague";
@@ -13,21 +13,27 @@ import type { LeagueDB } from "./connectLeague";
 // If you don't care about Firefox <60 for a feature and want to use await in the callback, just use a cursor and loop from idb https://github.com/jakearchibald/idb#idbcursor-enhancements
 const iterate = async <StoreName extends StoreNames<LeagueDB>>(
 	store:
-		| IDBPObjectStore<LeagueDB, StoreNames<LeagueDB>[], StoreName>
+		| IDBPObjectStore<
+				LeagueDB,
+				StoreNames<LeagueDB>[],
+				StoreName,
+				IDBTransactionMode
+		  >
 		| IDBPIndex<
 				LeagueDB,
 				StoreNames<LeagueDB>[],
 				StoreName,
-				IndexNames<LeagueDB, StoreName>
+				IndexNames<LeagueDB, StoreName>,
+				IDBTransactionMode
 		  >,
-	key: StoreKey<LeagueDB, StoreName> | IDBKeyRange | undefined = undefined,
+	key: StoreKey<LeagueDB, StoreName> | IDBKeyRange | undefined,
 	direction: "next" | "nextunique" | "prev" | "prevunique" = "next",
 	callback: (
 		value: StoreValue<LeagueDB, StoreName>,
 		shortCircuit: () => void,
 	) => StoreValue<LeagueDB, StoreName> | void,
 ) => {
-	// @ts-ignore
+	// @ts-expect-error
 	const unwrapped: IDBObjectStore | IDBIndex = unwrap(store);
 
 	return new Promise<void>((resolve, reject) => {

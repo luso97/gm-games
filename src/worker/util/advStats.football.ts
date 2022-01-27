@@ -3,7 +3,11 @@ import { idb } from "../db";
 import g from "./g";
 import type { TeamFiltered } from "../../common/types";
 import { getPlayers, getTopPlayers } from "../core/season/awards";
-import { avScore, makeTeams } from "../core/season/doAwards.football";
+import {
+	dpoyScore,
+	makeTeams,
+	mvpScore,
+} from "../core/season/doAwards.football";
 import advStatsSave from "./advStatsSave";
 
 type Team = TeamFiltered<
@@ -139,7 +143,7 @@ const calculateAV = (players: any[], teamsInput: Team[], league: any) => {
 				4 * p.stats.defInt +
 				5 * (p.stats.defIntTD + p.stats.defFmbTD) +
 				// https://github.com/microsoft/TypeScript/issues/21732
-				// @ts-ignore
+				// @ts-expect-error
 				TCK_CONSTANT[p.ratings.pos] * p.stats.defTck +
 				(allProLevel * 80 * t.stats.gp) / g.get("numGames");
 
@@ -351,15 +355,18 @@ const advStats = async () => {
 		"pntYds",
 		"pntBlk",
 	] as const;
-	const teams = await idb.getCopies.teamsPlus({
-		attrs: ["tid"],
-		stats: teamStats,
-		season: g.get("season"),
-		playoffs: PHASE.PLAYOFFS === g.get("phase"),
-		regularSeason: PHASE.PLAYOFFS !== g.get("phase"),
-		addDummySeason: true,
-		active: true,
-	});
+	const teams = await idb.getCopies.teamsPlus(
+		{
+			attrs: ["tid"],
+			stats: teamStats,
+			season: g.get("season"),
+			playoffs: PHASE.PLAYOFFS === g.get("phase"),
+			regularSeason: PHASE.PLAYOFFS !== g.get("phase"),
+			addDummySeason: true,
+			active: true,
+		},
+		"noCopyCache",
+	);
 	const league: any = teams.reduce((memo: any, t) => {
 		for (const key of teamStats) {
 			if (memo.hasOwnProperty(key)) {
@@ -391,14 +398,21 @@ const advStats = async () => {
 	// Hackily account for AV of award winners, for OL and defense. These will not exactly correspond to the "real" AV formulas, they're just intended to be simple and good enough.
 	if (PHASE.PLAYOFFS !== g.get("phase")) {
 		const players2 = await getPlayers(g.get("season"));
-		const avPlayers = getTopPlayers(
+		const mvpPlayers = getTopPlayers(
 			{
 				amount: Infinity,
-				score: avScore,
+				score: mvpScore,
 			},
 			players2,
 		);
-		const allLeague = makeTeams(avPlayers);
+		const dpoyPlayers = getTopPlayers(
+			{
+				amount: Infinity,
+				score: dpoyScore,
+			},
+			players2,
+		);
+		const allLeague = makeTeams(mvpPlayers, dpoyPlayers);
 
 		for (let i = 0; i < allLeague.length; i++) {
 			for (const p2 of allLeague[i].players) {

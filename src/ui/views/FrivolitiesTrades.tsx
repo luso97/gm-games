@@ -23,7 +23,7 @@ const PlayerInfo = ({
 }) => {
 	return (
 		<>
-			<span className="d-inline-block text-right mr-1" style={{ minWidth: 19 }}>
+			<span className="d-inline-block text-end me-1" style={{ minWidth: 19 }}>
 				{asset.pos}
 			</span>
 			<a href={helpers.leagueUrl(["player", asset.pid])}>{asset.name}</a> (
@@ -53,7 +53,7 @@ const FrivolitiesTrades = ({
 		},
 	});
 
-	const cols = getCols(
+	const cols = getCols([
 		"#",
 		"Season",
 		"Team",
@@ -63,7 +63,7 @@ const FrivolitiesTrades = ({
 		"Received",
 		`stat:${bySport({ basketball: "ws", football: "av", hockey: "ps" })}`,
 		"Links",
-	);
+	]);
 	for (const i of [4, 7]) {
 		if (cols[i].desc) {
 			cols[i].desc += " (Total After Trade)";

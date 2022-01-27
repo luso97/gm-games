@@ -21,12 +21,14 @@ const updateCustomizePlayer = async (
 	}
 
 	if (updateEvents.includes("firstRun")) {
-		const teams = (await idb.cache.teams.getAll()).map(t => {
-			return {
-				tid: t.tid,
-				text: `${t.region} ${t.name}`,
-			};
-		});
+		const teams = (await idb.cache.teams.getAll())
+			.filter(t => !t.disabled)
+			.map(t => {
+				return {
+					tid: t.tid,
+					text: `${t.region} ${t.name}`,
+				};
+			});
 
 		let appearanceOption;
 		let originalTid;
@@ -46,6 +48,7 @@ const updateCustomizePlayer = async (
 				"expenses",
 				"scouting",
 			);
+			const name = await player.name();
 			p = player.generate(
 				PLAYER.FREE_AGENT,
 				20,
@@ -54,6 +57,7 @@ const updateCustomizePlayer = async (
 					: g.get("season"),
 				false,
 				scoutingRank,
+				name,
 			);
 			appearanceOption = "Cartoon Face";
 			p.imgURL = "http://";
@@ -104,6 +108,7 @@ const updateCustomizePlayer = async (
 
 		return {
 			appearanceOption,
+			challengeNoRatings: g.get("challengeNoRatings"),
 			godMode: g.get("godMode"),
 			minContract: g.get("minContract"),
 			originalTid,

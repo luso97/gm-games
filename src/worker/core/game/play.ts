@@ -1,4 +1,4 @@
-import { PHASE, TIME_BETWEEN_GAMES } from "../../../common";
+import { isSport, PHASE } from "../../../common";
 import {
 	GameSim,
 	allStar,
@@ -33,6 +33,7 @@ import type {
 	ScheduleGame,
 	UpdateEvents,
 } from "../../../common/types";
+import allowForceTie from "../../../common/allowForceTie";
 
 /**
  * Play one or more days of games.
@@ -42,13 +43,15 @@ import type {
  * @memberOf core.game
  * @param {number} numDays An integer representing the number of days to be simulated. If numDays is larger than the number of days remaining, then all games will be simulated up until either the end of the regular season or the end of the playoffs, whichever happens first.
  * @param {boolean} start Is this a new request from the user to play games (true) or a recursive callback to simulate another day (false)? If true, then there is a check to make sure simulating games is allowed. Default true.
- * @param {number?} gidPlayByPlay If this number matches a game ID number, then an array of strings representing the play-by-play game simulation are included in the api.realtimeUpdate raw call.
+ * @param {number?} gidOneGame Game ID number if we just want to sim one game rather than the whole day. Must be defined if playByPlay is true.
+ * @param {boolean?} playByPlay When true, an array of strings representing the play-by-play game simulation are included in the api.realtimeUpdate raw call.
  */
 const play = async (
 	numDays: number,
 	conditions: Conditions,
 	start: boolean = true,
-	gidPlayByPlay?: number,
+	gidOneGame?: number,
+	playByPlay?: boolean,
 ) => {
 	// This is called when there are no more games to play, either due to the user's request (e.g. 1 week) elapsing or at the end of the regular season
 	const cbNoGames = async (playoffsOver: boolean = false) => {
@@ -65,15 +68,15 @@ const play = async (
 				await phase.newPhase(
 					PHASE.PLAYOFFS,
 					conditions,
-					gidPlayByPlay !== undefined,
+					gidOneGame !== undefined,
 				);
 			} else {
 				const allStarNext = await allStar.nextGameIsAllStar(schedule);
 
-				if (allStarNext && gidPlayByPlay === undefined) {
+				if (allStarNext && gidOneGame === undefined) {
 					toUI(
 						"realtimeUpdate",
-						[[], helpers.leagueUrl(["all_star_draft"])],
+						[[], helpers.leagueUrl(["all_star"])],
 						conditions,
 					);
 				}
@@ -82,7 +85,7 @@ const play = async (
 			await phase.newPhase(
 				PHASE.DRAFT_LOTTERY,
 				conditions,
-				gidPlayByPlay !== undefined,
+				gidOneGame !== undefined,
 			);
 		}
 
@@ -92,16 +95,13 @@ const play = async (
 	// Saves a vector of results objects for a day, as is output from cbSimGames
 	const cbSaveResults = async (results: any[], dayOver: boolean) => {
 		// Before writeGameStats, so LeagueTopBar can not update with game result
-		if (gidPlayByPlay !== undefined) {
+		if (gidOneGame !== undefined && playByPlay) {
 			await toUI("updateLocal", [{ liveGameInProgress: true }]);
 		}
 
 		// Before writeGameStats, so injury is set correctly
-		const {
-			injuryTexts,
-			pidsInjuredOneGameOrLess,
-			stopPlay,
-		} = await writePlayerStats(results, conditions);
+		const { injuryTexts, pidsInjuredOneGameOrLess, stopPlay } =
+			await writePlayerStats(results, conditions);
 
 		const gidsFinished = await Promise.all(
 			results.map(async result => {
@@ -157,7 +157,8 @@ const play = async (
 				await trade.betweenAiTeams();
 			}
 
-			await finances.updateRanks(["expenses", "revenues"]);
+			// Budget is just for ticket prices
+			await finances.updateRanks(["budget", "expenses", "revenues"]);
 
 			local.minFractionDiffs = undefined;
 
@@ -186,7 +187,7 @@ const play = async (
 					};
 					changed = true;
 					const healedText = `${
-						p.ratings[p.ratings.length - 1].pos
+						p.ratings.at(-1).pos
 					} <a href="${helpers.leagueUrl(["player", p.pid])}">${p.firstName} ${
 						p.lastName
 					}</a>`;
@@ -266,11 +267,11 @@ const play = async (
 		let url;
 
 		// If there was a play by play done for one of these games, get it
-		if (gidPlayByPlay !== undefined) {
+		if (gidOneGame !== undefined && playByPlay) {
 			for (let i = 0; i < results.length; i++) {
 				if (results[i].playByPlay !== undefined) {
 					raw = {
-						gidPlayByPlay,
+						gidOneGame,
 						playByPlay: results[i].playByPlay,
 					};
 					url = helpers.leagueUrl(["live_game"]);
@@ -291,12 +292,21 @@ const play = async (
 		}
 	};
 
-	const getResult = (
-		gid: number,
-		teams: [any, any],
-		doPlayByPlay: boolean,
-		homeCourtFactor?: number,
-	) => {
+	const getResult = ({
+		gid,
+		day,
+		teams,
+		doPlayByPlay = false,
+		homeCourtFactor = 1,
+		disableHomeCourtAdvantage = false,
+	}: {
+		gid: number;
+		day: number | undefined;
+		teams: [any, any];
+		doPlayByPlay?: boolean;
+		homeCourtFactor?: number;
+		disableHomeCourtAdvantage?: boolean;
+	}) => {
 		// In FBGM, need to do depth chart generation here (after deepCopy in forceWin case) to maintain referential integrity of players (same object in depth and team).
 		for (const t of teams) {
 			if (t.depth !== undefined) {
@@ -304,7 +314,14 @@ const play = async (
 			}
 		}
 
-		return new GameSim(gid, teams, doPlayByPlay, homeCourtFactor).run();
+		return new GameSim({
+			gid,
+			day,
+			teams,
+			doPlayByPlay,
+			homeCourtFactor,
+			disableHomeCourtAdvantage,
+		}).run();
 	};
 
 	// Simulates a day of games (whatever is in schedule) and passes the results to cbSaveResults
@@ -316,11 +333,23 @@ const play = async (
 		const results: any[] = [];
 
 		for (const game of schedule) {
-			const doPlayByPlay = gidPlayByPlay === game.gid;
+			const doPlayByPlay = gidOneGame === game.gid && playByPlay;
 
 			const teamsInput = [teams[game.homeTid], teams[game.awayTid]] as any;
 
-			if (g.get("godMode") && game.forceWin !== undefined) {
+			const forceTie = game.forceWin === "tie";
+			const invalidForceTie =
+				forceTie &&
+				!allowForceTie({
+					homeTid: game.homeTid,
+					awayTid: game.awayTid,
+					ties: g.get("ties", "current"),
+					phase: g.get("phase"),
+					elam: g.get("elam"),
+					elamASG: g.get("elamASG"),
+				});
+
+			if (g.get("godMode") && game.forceWin !== undefined && !invalidForceTie) {
 				const NUM_TRIES = 2000;
 				const START_CHANGING_HOME_COURT_ADVANTAGE = NUM_TRIES / 4;
 
@@ -328,34 +357,59 @@ const play = async (
 				let homeCourtFactor = 1;
 
 				let found = false;
+				let homeWonLastGame = false;
+				let homeWonCounter = 0;
 				for (let i = 0; i < NUM_TRIES; i++) {
 					if (i >= START_CHANGING_HOME_COURT_ADVANTAGE) {
-						// Scale from 1x to 3x linearly, after staying at 1x for some time
-						homeCourtFactor =
-							1 +
-							(2 * (i - START_CHANGING_HOME_COURT_ADVANTAGE)) /
-								(NUM_TRIES - START_CHANGING_HOME_COURT_ADVANTAGE);
+						if (!forceTie) {
+							// Scale from 1x to 3x linearly, after staying at 1x for some time
+							homeCourtFactor =
+								1 +
+								(2 * (i - START_CHANGING_HOME_COURT_ADVANTAGE)) /
+									(NUM_TRIES - START_CHANGING_HOME_COURT_ADVANTAGE);
 
-						if (!forceWinHome) {
-							homeCourtFactor = 1 / homeCourtFactor;
+							if (!forceWinHome) {
+								homeCourtFactor = 1 / homeCourtFactor;
+							}
+						} else {
+							// Keep track of homeWonCounter only after START_CHANGING_HOME_COURT_ADVANTAGE
+							if (homeWonLastGame) {
+								homeWonCounter += 1;
+							} else {
+								homeWonCounter -= 1;
+							}
+
+							// Scale from 1 to 3, where 3 happens when homeWonCounter is 1000
+							homeCourtFactor =
+								1 + Math.min(2, (Math.abs(homeWonCounter) * 2) / 1000);
+
+							if (homeWonCounter > 0) {
+								homeCourtFactor = 1 / homeCourtFactor;
+							}
 						}
 					}
 
-					const result = getResult(
-						game.gid,
-						helpers.deepCopy(teamsInput), // So stats start at 0 each time
+					const result = getResult({
+						gid: game.gid,
+						day: game.day,
+						teams: helpers.deepCopy(teamsInput), // So stats start at 0 each time
 						doPlayByPlay,
 						homeCourtFactor,
-					);
+					});
 
 					let wonTid: number | undefined;
 					if (result.team[0].stat.pts > result.team[1].stat.pts) {
 						wonTid = result.team[0].id;
+						homeWonLastGame = true;
 					} else if (result.team[0].stat.pts < result.team[1].stat.pts) {
 						wonTid = result.team[1].id;
+						homeWonLastGame = false;
 					}
 
-					if (wonTid === game.forceWin) {
+					if (
+						(forceTie && wonTid === undefined) ||
+						(!forceTie && wonTid === game.forceWin)
+					) {
 						found = true;
 						(result as any).forceWin = i + 1;
 						results.push(result);
@@ -365,18 +419,30 @@ const play = async (
 
 				if (!found) {
 					const teamInfoCache = g.get("teamInfoCache");
-					const otherTid = forceWinHome ? game.awayTid : game.homeTid;
+
+					let suffix: string;
+					if (game.forceWin === "tie") {
+						suffix = `the ${teamInfoCache[game.homeTid].region} ${
+							teamInfoCache[game.homeTid].name
+						} tied the ${teamInfoCache[game.awayTid].region} ${
+							teamInfoCache[game.awayTid].name
+						}`;
+					} else {
+						const otherTid = forceWinHome ? game.awayTid : game.homeTid;
+
+						suffix = `the ${teamInfoCache[game.forceWin].region} ${
+							teamInfoCache[game.forceWin].name
+						} beat the ${teamInfoCache[otherTid].region} ${
+							teamInfoCache[otherTid].name
+						}`;
+					}
 
 					logEvent(
 						{
 							type: "error",
 							text: `Could not find a simulation in ${helpers.numberWithCommas(
 								NUM_TRIES,
-							)} tries where the ${teamInfoCache[game.forceWin].region} ${
-								teamInfoCache[game.forceWin].name
-							} beat the ${teamInfoCache[otherTid].region} ${
-								teamInfoCache[otherTid].name
-							}.`,
+							)} tries where ${suffix}.`,
 							showNotification: true,
 							persistent: true,
 							saveToDb: false,
@@ -386,7 +452,35 @@ const play = async (
 					await lock.set("stopGameSim", true);
 				}
 			} else {
-				const result = getResult(game.gid, teamsInput, doPlayByPlay);
+				let disableHomeCourtAdvantage = false;
+				if (isSport("football") && g.get("phase") === PHASE.PLAYOFFS) {
+					const numGamesPlayoffSeries = g.get(
+						"numGamesPlayoffSeries",
+						"current",
+					);
+					const numFinalsGames = numGamesPlayoffSeries.at(-1);
+
+					// If finals is 1 game, then no home court advantage
+					if (numFinalsGames === 1) {
+						const playoffSeries = await idb.cache.playoffSeries.get(
+							g.get("season"),
+						);
+						if (
+							playoffSeries &&
+							playoffSeries.currentRound === numGamesPlayoffSeries.length - 1
+						) {
+							disableHomeCourtAdvantage = true;
+						}
+					}
+				}
+
+				const result = getResult({
+					gid: game.gid,
+					day: game.day,
+					teams: teamsInput,
+					doPlayByPlay,
+					disableHomeCourtAdvantage,
+				});
 				results.push(result);
 			}
 		}
@@ -397,19 +491,15 @@ const play = async (
 	// Simulates a day of games. If there are no games left, it calls cbNoGames.
 	// Promise is resolved after games are run
 	const cbPlayGames = async () => {
-		if (numDays === 1) {
-			await updateStatus(`Playing (1 ${TIME_BETWEEN_GAMES} left)`);
-		} else {
-			await updateStatus(`Playing (${numDays} ${TIME_BETWEEN_GAMES}s left)`);
-		}
+		await updateStatus(`Playing (${helpers.daysLeft(false, numDays)})`);
 
 		let schedule = await season.getSchedule(true);
 
 		// If live game sim, only do that one game, not the whole day
 		let dayOver = true;
-		if (gidPlayByPlay !== undefined) {
+		if (gidOneGame !== undefined) {
 			const lengthBefore = schedule.length;
-			schedule = schedule.filter(game => game.gid === gidPlayByPlay);
+			schedule = schedule.filter(game => game.gid === gidOneGame);
 			const lengthAfter = schedule.length;
 
 			if (lengthBefore - lengthAfter > 0) {
@@ -447,7 +537,7 @@ const play = async (
 				tids.add(matchup.awayTid);
 			}
 
-			const teams = await loadTeams(Array.from(tids)); // Play games
+			const teams = await loadTeams(Array.from(tids), conditions); // Play games
 
 			await cbSimGames(schedule, teams, dayOver);
 		}

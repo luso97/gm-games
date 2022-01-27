@@ -1,5 +1,4 @@
-import PropTypes from "prop-types";
-import { useEffect, MouseEvent } from "react";
+import { useEffect, MouseEvent, forwardRef } from "react";
 import { Dropdown, Nav } from "react-bootstrap";
 import { confirm, local, realtimeUpdate, toWorker } from "../util";
 import type { Option } from "../../common/types";
@@ -14,11 +13,11 @@ type Props = {
 const handleOptionClick = (option: Option, event: MouseEvent) => {
 	if (!option.url) {
 		event.preventDefault();
-		toWorker("playMenu", option.id as any);
+		toWorker("playMenu", option.id as any, undefined);
 	}
 };
 
-const PlayMenu = ({ lid, spectator, options }: Props) => {
+const PlayMenu = forwardRef(({ lid, spectator, options }: Props, ref) => {
 	useEffect(() => {
 		const handleKeydown = async (event: KeyboardEvent) => {
 			// alt + letter
@@ -29,7 +28,8 @@ const PlayMenu = ({ lid, spectator, options }: Props) => {
 				!event.isComposing &&
 				!event.metaKey
 			) {
-				const option = options.find(option2 => option2.code === event.code);
+				const key = event.key.toLowerCase();
+				const option = options.find(option2 => option2.key === key);
 
 				if (!option) {
 					return;
@@ -54,7 +54,7 @@ const PlayMenu = ({ lid, spectator, options }: Props) => {
 				if (option.url) {
 					realtimeUpdate([], option.url);
 				} else {
-					toWorker("playMenu", option.id as any);
+					toWorker("playMenu", option.id as any, undefined);
 				}
 			}
 		};
@@ -70,11 +70,17 @@ const PlayMenu = ({ lid, spectator, options }: Props) => {
 	}
 
 	return (
-		<Dropdown className="play-button-wrapper" as={Nav.Item}>
+		<Dropdown
+			className={`play-button-wrapper${
+				window.mobile ? " dropdown-mobile" : ""
+			}`}
+			as={Nav.Item}
+			ref={ref}
+		>
 			<Dropdown.Toggle
 				className={classNames(
-					"play-button text-white",
-					spectator ? "bg-danger" : "bg-success",
+					"play-button",
+					spectator ? "play-button-danger" : "play-button-success",
 				)}
 				id="play-button"
 				as={Nav.Link}
@@ -104,18 +110,6 @@ const PlayMenu = ({ lid, spectator, options }: Props) => {
 			</Dropdown.Menu>
 		</Dropdown>
 	);
-};
-
-PlayMenu.propTypes = {
-	lid: PropTypes.number,
-	options: PropTypes.arrayOf(
-		PropTypes.shape({
-			id: PropTypes.string.isRequired,
-			label: PropTypes.string.isRequired,
-			url: PropTypes.string,
-			key: PropTypes.string,
-		}),
-	).isRequired,
-};
+});
 
 export default PlayMenu;

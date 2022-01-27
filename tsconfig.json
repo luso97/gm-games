@@ -10,12 +10,16 @@
 		"moduleResolution": "node",
 		"baseUrl": ".",
 		"paths": {
-			"player-names": ["src/worker/data/names-test.json"],
 			"league-schema": ["build/files/league-schema.json"],
-			"bbgm-polyfills": ["src/worker/common/polyfills-noop.ts"]
+			"bbgm-polyfills": ["src/common/polyfills-modern.ts"],
+			"bbgm-debug": ["src/worker/core/debug/index.ts"],
+			"ajv-hack": ["src/worker/ajvHack/index.ts"]
 		},
 		"esModuleInterop": true,
 		"strict": true,
-		"importsNotUsedAsValues": "error"
+		"useUnknownInCatchVariables": false,
+		"importsNotUsedAsValues": "error",
+		"module": "es2020",
+		"noImplicitOverride": true
 	}
 }

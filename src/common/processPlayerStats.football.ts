@@ -1,5 +1,5 @@
 import helpers from "./helpers";
-import type { PlayerStats, PlayerStatType } from "./types";
+import type { GameAttributesLeague, PlayerStats } from "./types";
 
 const qbRat = (ps: PlayerStats) => {
 	const a = helpers.bound((ps.pssCmp / ps.pss - 0.3) * 5, 0, 2.375);
@@ -12,8 +12,8 @@ const qbRat = (ps: PlayerStats) => {
 const processStats = (
 	ps: PlayerStats,
 	stats: string[],
-	statType?: PlayerStatType,
-	bornYear?: number,
+	bornYear: number | undefined,
+	getFantasyPoints: () => GameAttributesLeague["fantasyPoints"],
 ) => {
 	const row: any = {};
 
@@ -107,6 +107,26 @@ const processStats = (
 				ps.krYds +
 				ps.defIntYds +
 				ps.defFmbYds;
+		} else if (stat === "fp") {
+			row[stat] =
+				ps.pssYds / 25 +
+				4 * ps.pssTD +
+				(ps.rusYds + ps.recYds) / 10 +
+				6 * (ps.rusTD + ps.recTD + ps.prTD + ps.krTD) -
+				2 * (ps.pssInt + ps.fmbLost) +
+				ps.xp +
+				3 * ps.fg0 +
+				3 * ps.fg20 +
+				3 * ps.fg30 +
+				4 * ps.fg40 +
+				5 * ps.fg50;
+
+			const fantasyPoints = getFantasyPoints();
+			if (fantasyPoints === "ppr") {
+				row[stat] += ps.rec;
+			} else if (fantasyPoints === "halfPpr") {
+				row[stat] += 0.5 * ps.rec;
+			}
 		} else if (stat === "keyStats") {
 			const defTck = ps.defTckSolo + ps.defTckAst;
 			const fga = ps.fga0 + ps.fga20 + ps.fga30 + ps.fga40 + ps.fga50;

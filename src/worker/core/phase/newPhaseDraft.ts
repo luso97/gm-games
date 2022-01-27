@@ -38,12 +38,24 @@ const newPhaseDraft = async (conditions: Conditions): Promise<PhaseReturn> => {
 
 	if (g.get("draftType") !== "freeAgents") {
 		// Run lottery only if it hasn't been done yet
-		const draftLotteryResult = await idb.getCopy.draftLotteryResults({
-			season: g.get("season"),
-		});
+		const draftLotteryResult = await idb.getCopy.draftLotteryResults(
+			{
+				season: g.get("season"),
+			},
+			"noCopyCache",
+		);
 
 		if (!draftLotteryResult) {
-			await draft.genOrder(false, conditions);
+			try {
+				await draft.genOrder(false, conditions);
+			} catch (error) {
+				if (!(error as any).notEnoughTeams) {
+					throw error;
+				}
+
+				// If not enough teams, do no lottery
+				await draft.genOrder(false, conditions, "noLottery");
+			}
 		}
 
 		// This is a hack to handle weird cases where already-drafted players have draft.year set to the current season, which fucks up the draft UI

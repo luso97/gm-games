@@ -29,7 +29,7 @@ const getMoodScore = (total: number, deltas: boolean = false) => {
 };
 
 const genMessage = async (deltas: OwnerMood, cappedDeltas: OwnerMood) => {
-	// If auto play seasons or multi team mode, no messages
+	// If auto play seasons or multi team mode, no messages - keep in sync with updateOwnerMood
 	if (
 		local.autoPlayUntil ||
 		g.get("spectator") ||
@@ -43,18 +43,21 @@ const genMessage = async (deltas: OwnerMood, cappedDeltas: OwnerMood) => {
 		g.get("season"),
 		Math.max(g.get("gracePeriodEnd") - 2, g.get("season") - 9),
 	);
-	const teamSeasons = await idb.getCopies.teamSeasons({
-		tid: g.get("userTid"),
-		seasons: [minSeason, g.get("season")],
-	});
+	const teamSeasons = await idb.getCopies.teamSeasons(
+		{
+			tid: g.get("userTid"),
+			seasons: [minSeason, g.get("season")],
+		},
+		"noCopyCache",
+	);
 	const moods = teamSeasons.map(ts => {
-		return ts.ownerMood
-			? ts.ownerMood
-			: {
-					money: 0,
-					playoffs: 0,
-					wins: 0,
-			  };
+		return (
+			ts.ownerMood ?? {
+				money: 0,
+				playoffs: 0,
+				wins: 0,
+			}
+		);
 	});
 
 	let m = "";
@@ -62,7 +65,7 @@ const genMessage = async (deltas: OwnerMood, cappedDeltas: OwnerMood) => {
 
 	// Check for some challenge modes that can result in being fired
 	if (g.get("challengeFiredLuxuryTax")) {
-		const latestSeason = teamSeasons[teamSeasons.length - 1];
+		const latestSeason = teamSeasons.at(-1);
 		if (latestSeason.expenses.luxuryTax.amount > 0) {
 			m +=
 				'<p>You paid the luxury tax with the "You\'re fired if you pay the luxury tax" challenge mode enabled!</p>';
@@ -70,7 +73,7 @@ const genMessage = async (deltas: OwnerMood, cappedDeltas: OwnerMood) => {
 		}
 	}
 	if (g.get("challengeFiredMissPlayoffs")) {
-		const latestSeason = teamSeasons[teamSeasons.length - 1];
+		const latestSeason = teamSeasons.at(-1);
 		if (latestSeason.playoffRoundsWon < 0) {
 			m +=
 				'<p>You missed the playoffs with the "You\'re fired if you miss the playoffs" challenge mode enabled!</p>';
@@ -82,7 +85,7 @@ const genMessage = async (deltas: OwnerMood, cappedDeltas: OwnerMood) => {
 	if (!fired) {
 		const currentMood =
 			moods.length > 0
-				? moods[moods.length - 1]
+				? moods.at(-1)
 				: {
 						money: 0,
 						playoffs: 0,

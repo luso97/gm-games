@@ -1,3 +1,4 @@
+const path = require("path");
 const alias = require("@rollup/plugin-alias");
 const babel = require("@rollup/plugin-babel").default;
 const blacklist = require("rollup-plugin-blacklist");
@@ -11,10 +12,13 @@ const getSport = require("./getSport");
 
 const extensions = [".mjs", ".js", ".json", ".node", ".ts", ".tsx"];
 
-module.exports = (nodeEnv, blacklistOptions, statsFilename) => {
+module.exports = (
+	nodeEnv,
+	{ blacklistOptions, statsFilename, legacy } = {},
+) => {
 	const sport = getSport();
 
-	// This gets used in babel.config.js, except we don't want it set to "test" in karma because then it will activate @babel/plugin-transform-modules-commonjs
+	// This gets used in babel.config.mjs, except we don't want it set to "test" in karma because then it will activate @babel/plugin-transform-modules-commonjs
 	if (nodeEnv !== "test") {
 		process.env.NODE_ENV = nodeEnv;
 	}
@@ -24,17 +28,18 @@ module.exports = (nodeEnv, blacklistOptions, statsFilename) => {
 			resolve: [".json"],
 			entries: {
 				// This is assumed to be generated prior to rollup being started
-				"league-schema": `./../../../build/files/league-schema.json`,
+				"league-schema": "./../../../build/files/league-schema.json",
 
-				// This is so Karma doesn't crash when using the big names file.
-				"player-names":
-					nodeEnv === "test"
-						? "./../data/names-test.json"
-						: `./../data/names.json`,
-
-				"bbgm-polyfills": process.env.LEGACY
+				"bbgm-polyfills": legacy
 					? "./../common/polyfills.ts"
-					: "./../common/polyfills-noop.ts",
+					: "./../common/polyfills-modern.ts",
+
+				"bbgm-debug":
+					nodeEnv === "production"
+						? "./../../common/polyfills-modern.ts"
+						: "./../../worker/core/debug/index.ts",
+
+				"ajv-hack": "./../../worker/ajvHack/esbuild.js",
 			},
 		}),
 		replace({
@@ -46,8 +51,14 @@ module.exports = (nodeEnv, blacklistOptions, statsFilename) => {
 		}),
 		babel({
 			babelHelpers: "bundled",
-			exclude: "node_modules/!(d3|idb)**",
+			exclude: legacy
+				? "node_modules/!(d3|idb|react-bootstrap|streamsaver)**"
+				: "node_modules/**",
 			extensions: extensions.filter(extension => extension !== ".json"),
+			configFile: path.join(
+				__dirname,
+				`../../babel.config${legacy ? ".legacy" : ""}.js`,
+			),
 		}),
 		json({
 			compact: true,
@@ -66,7 +77,6 @@ module.exports = (nodeEnv, blacklistOptions, statsFilename) => {
 				output: {
 					comments: /^I DON'T WANT ANY COMMENTS$/,
 				},
-				safari10: true,
 			}),
 		);
 	}

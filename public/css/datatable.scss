@@ -19,7 +19,7 @@
 		width: 200px;
 	}
 }
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(sm) {
 	.datatable-controls {
 		input {
 			width: 158px;
@@ -76,13 +76,15 @@ table.table {
 	thead {
 		.sorting,
 		.sorting_asc,
-		.sorting_desc,
-		.sorting_asc_disabled,
-		.sorting_desc_disabled {
+		.sorting_desc {
 			cursor: pointer;
 			user-select: none;
 			position: relative;
 		}
+	}
+
+	.sorting_highlight {
+		background-color: var(--bs-table-hover-bg) !important;
 	}
 }
 

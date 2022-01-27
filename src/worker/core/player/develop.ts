@@ -17,23 +17,38 @@ export const bootstrapPot = async ({
 	age,
 	srID,
 	pos,
+	usePotEstimator,
 }: {
 	ratings: MinimalPlayerRatings;
 	age: number;
 	srID?: string;
 	pos?: string;
+	usePotEstimator?: boolean;
 }): Promise<number> => {
 	if (age >= 29) {
 		return pos ? ratings.ovrs[pos] : ratings.ovr;
 	}
 
-	if (isSport("football") || isSport("hockey")) {
-		if (pos === undefined) {
-			throw new Error("pos is required for potEstimator");
+	if (
+		isSport("football") ||
+		isSport("hockey") ||
+		(isSport("basketball") && usePotEstimator)
+	) {
+		let ovr;
+		let pot;
+
+		if (isSport("football") || isSport("hockey")) {
+			if (pos === undefined) {
+				throw new Error("pos is required for potEstimator");
+			}
+
+			ovr = ratings.ovrs[pos];
+			pot = potEstimator(ovr, age, pos);
+		} else {
+			ovr = ratings.ovr;
+			pot = potEstimator(ovr, age);
 		}
 
-		const ovr = ratings.ovrs[pos];
-		let pot = potEstimator(ovr, age, pos);
 		pot += random.randInt(-2, 2);
 
 		if (ovr > pot) {
@@ -99,7 +114,7 @@ const develop = async (
 	coachingRank: number = (g.get("numActiveTeams") + 1) / 2,
 	skipPot: boolean = false, // Only for making testing or core/debug faster
 ) => {
-	const ratings = p.ratings[p.ratings.length - 1];
+	const ratings = p.ratings.at(-1);
 	let age = ratings.season - p.born.year;
 
 	for (let i = 0; i < years; i++) {

@@ -10,7 +10,7 @@ const shouldRetire = (
 	p: Player<MinimalPlayerRatings> | PlayerWithoutKey<MinimalPlayerRatings>,
 ): boolean => {
 	const age = g.get("season") - p.born.year;
-	const { pos } = p.ratings[p.ratings.length - 1];
+	const { ovr, pos } = p.ratings.at(-1);
 
 	// Originally this used pot, but pot is about 1.1*value, and value is consistent in leagues with different ratings distributions
 	const pot = 1.1 * p.value;
@@ -41,11 +41,23 @@ const shouldRetire = (
 			if (prob > Math.random()) {
 				return true;
 			}
+
+			// Second condition, for aging stars who are still pretty good, but clearly past their prime
+			if (age > maxAge) {
+				const maxOvr = Math.max(...p.ratings.map(row => row.ovr));
+				const ovrFraction = ovr / maxOvr;
+				if (ovrFraction < 0.7) {
+					const prob2 = 0.2 + (0.7 - ovrFraction);
+					if (prob2 > Math.random()) {
+						return true;
+					}
+				}
+			}
 		}
 	} else {
 		const maxAge = bySport({
 			basketball: 0,
-			football: pos === "QB" || pos === "P" || pos === "K" ? 33 : 29,
+			football: pos === "QB" || pos === "P" || pos === "K" ? 35 : 32,
 			hockey: 36,
 		});
 		const minPot = 50;
@@ -67,7 +79,7 @@ const shouldRetire = (
 	}
 
 	const forceRetireAge = g.get("forceRetireAge");
-	if (forceRetireAge > g.get("draftAges")[1] && age >= forceRetireAge) {
+	if (forceRetireAge >= g.get("draftAges")[1] && age >= forceRetireAge) {
 		return true;
 	}
 

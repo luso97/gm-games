@@ -4,7 +4,7 @@ import range from "lodash-es/range";
 import { random, helpers } from "../../util";
 import { bySport, isSport } from "../../../common";
 
-// Football gets 1-99
+// Football/hockey gets 1-99
 const VALID_JERSEY_NUMBERS = range(1, 100).map(i => String(i));
 
 // Basketball also gets 0 and 00
@@ -121,8 +121,12 @@ const weightFunction = bySport({
 
 		const frequency = frequencies[jerseyNumber];
 
-		// +1 is to make the 0s possible
-		return frequency ?? 0.25;
+		if (frequency === undefined || frequency === 0) {
+			// Never have 0 probability
+			return 0.25;
+		}
+
+		return frequency;
 	},
 	football: () => 1,
 	hockey: (jerseyNumber: string) => {
@@ -231,8 +235,12 @@ const weightFunction = bySport({
 
 		const frequency = frequencies[jerseyNumber];
 
-		// +1 is to make the 0s possible
-		return frequency ?? 0.25;
+		if (frequency === undefined || frequency === 0) {
+			// Never have 0 probability
+			return 0.25;
+		}
+
+		return frequency;
 	},
 });
 
@@ -246,14 +254,14 @@ const genFootballWeightFunction = (boost: number[]) => {
 const weightFunctionsByPosition = bySport({
 	football: {
 		QB: genFootballWeightFunction(range(1, 20)),
-		RB: genFootballWeightFunction(range(20, 50)),
-		WR: genFootballWeightFunction([...range(10, 20), ...range(80, 90)]),
-		TE: genFootballWeightFunction([...range(40, 50), ...range(80, 90)]),
+		RB: genFootballWeightFunction([...range(1, 50), ...range(80, 90)]),
+		WR: genFootballWeightFunction([...range(1, 50), ...range(80, 90)]),
+		TE: genFootballWeightFunction([...range(1, 50), ...range(80, 91)]),
 		OL: genFootballWeightFunction(range(50, 80)),
-		DL: genFootballWeightFunction([...range(40, 80), ...range(90, 100)]),
-		LB: genFootballWeightFunction([...range(40, 60), ...range(90, 100)]),
-		CB: genFootballWeightFunction(range(20, 50)),
-		S: genFootballWeightFunction(range(20, 50)),
+		DL: genFootballWeightFunction([...range(50, 80), ...range(90, 100)]),
+		LB: genFootballWeightFunction([...range(1, 60), ...range(90, 100)]),
+		CB: genFootballWeightFunction(range(1, 50)),
+		S: genFootballWeightFunction(range(1, 50)),
 		K: genFootballWeightFunction(range(1, 20)),
 		P: genFootballWeightFunction(range(1, 20)),
 	},
@@ -282,8 +290,7 @@ const genJerseyNumber = async (
 		).filter(p2 => p2.pid !== p.pid);
 		for (const teammate of teammates) {
 			if (teammate.stats.length > 0) {
-				const teamJerseyNumber =
-					teammate.stats[teammate.stats.length - 1].jerseyNumber;
+				const teamJerseyNumber = teammate.stats.at(-1).jerseyNumber;
 				if (teamJerseyNumber) {
 					teamJerseyNumbers.push(teamJerseyNumber);
 				}
@@ -308,18 +315,23 @@ const genJerseyNumber = async (
 			!teamJerseyNumbers.includes(jerseyNumber) &&
 			!retiredJerseyNumbers.includes(jerseyNumber),
 	);
+
+	if (
+		prevJerseyNumber &&
+		(candidates.includes(prevJerseyNumber) ||
+			!VALID_JERSEY_NUMBERS.includes(prevJerseyNumber))
+	) {
+		// Keep old jersey number, if it is available or if prevJerseyNumber is not a valid jersey number (must have been manually edited)
+		return prevJerseyNumber;
+	}
+
 	if (candidates.length === 0) {
 		// No valid jersey number left!
 		return;
 	}
 
-	if (prevJerseyNumber && candidates.includes(prevJerseyNumber)) {
-		// Keep old jersey number, if possible
-		return prevJerseyNumber;
-	}
-
 	if (weightFunctionsByPosition) {
-		const pos = p.ratings[p.ratings.length - 1].pos;
+		const pos = p.ratings.at(-1).pos;
 		if ((weightFunctionsByPosition as any)[pos]) {
 			return random.choice(candidates, (weightFunctionsByPosition as any)[pos]);
 		}

@@ -7,8 +7,8 @@ import type {
 
 // For strings of a format like 1:23 (times), which is greater? 1 for first, -1 for second, 0 for tie
 const cmpTime = (t1: string, t2: string) => {
-	const [min1, sec1] = t1.split(":").map(x => parseInt(x, 10));
-	const [min2, sec2] = t2.split(":").map(x => parseInt(x, 10));
+	const [min1, sec1] = t1.split(":").map(x => parseInt(x));
+	const [min2, sec2] = t2.split(":").map(x => parseInt(x));
 
 	if (min1 > min2) {
 		return 1;
@@ -139,6 +139,12 @@ const getText = (
 	if (event.type === "penaltyOver") {
 		text = `${event.names[0]} is released from the penalty box`;
 	}
+	if (event.type === "pullGoalie") {
+		text = `Pulled goalie! ${event.name} takes the ice`;
+	}
+	if (event.type === "noPullGoalie") {
+		text = `Goalie ${event.name} comes back into the game`;
+	}
 
 	if (text === undefined) {
 		throw new Error(`Invalid event type "${event.type}"`);
@@ -184,7 +190,7 @@ const processLiveGameEvents = ({
 		}
 
 		// Swap teams order, so home team is at bottom in box score
-		// @ts-ignore
+		// @ts-expect-error
 		const actualT = e.t === 0 ? 1 : 0;
 
 		if (e.type !== "init" && !quarters.includes(e.quarter)) {
@@ -212,6 +218,16 @@ const processLiveGameEvents = ({
 			}
 		}
 
+		const findPlayer = (pid: number) => {
+			const p = boxScore.teams[actualT].players.find(
+				(p2: any) => p2.pid === pid,
+			);
+			if (p === undefined) {
+				console.log("Can't find player", e);
+			}
+			return p;
+		};
+
 		if (e.type === "stat") {
 			// Quarter-by-quarter score
 			if (e.s === "pts") {
@@ -221,13 +237,8 @@ const processLiveGameEvents = ({
 			}
 
 			// Everything else
-			if (e.pid !== undefined) {
-				const p = boxScore.teams[actualT].players.find(
-					(p2: any) => p2.pid === e.pid,
-				);
-				if (p === undefined) {
-					console.log("Can't find player", e);
-				}
+			if (e.pid != undefined) {
+				const p = findPlayer(e.pid);
 				if (p && p[e.s] !== undefined) {
 					p[e.s] += e.amt;
 				}
@@ -241,31 +252,16 @@ const processLiveGameEvents = ({
 			}
 		} else if (e.type !== "init") {
 			if (e.type === "injury") {
-				const p = boxScore.teams[actualT].players.find(
-					(p2: any) => p2.pid === e.injuredPID,
-				);
-				if (p === undefined) {
-					console.log("Can't find player", e);
-				}
+				const p = findPlayer(e.injuredPID);
 				p.injury = {
 					type: "Injured",
 					gamesRemaining: -1,
 				};
 			} else if (e.type === "penalty") {
-				const p = boxScore.teams[actualT].players.find(
-					(p2: any) => p2.pid === e.penaltyPID,
-				);
-				if (p === undefined) {
-					console.log("Can't find player", e);
-				}
+				const p = findPlayer(e.penaltyPID);
 				p.inPenaltyBox = true;
 			} else if (e.type === "penaltyOver") {
-				const p = boxScore.teams[actualT].players.find(
-					(p2: any) => p2.pid === e.penaltyPID,
-				);
-				if (p === undefined) {
-					console.log("Can't find player", e);
-				}
+				const p = findPlayer(e.penaltyPID);
 				p.inPenaltyBox = false;
 			}
 
@@ -290,7 +286,7 @@ const processLiveGameEvents = ({
 			if (!quarters.includes(event.quarter)) {
 				// Future quarters
 				event.hide = true;
-			} else if (event.quarter !== quarters[quarters.length - 1]) {
+			} else if (event.quarter !== quarters.at(-1)) {
 				// Past quarters
 				event.hide = false;
 			} else {

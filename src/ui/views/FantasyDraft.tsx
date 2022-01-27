@@ -1,6 +1,5 @@
-import PropTypes from "prop-types";
 import { useCallback, useState } from "react";
-import arrayMove from "array-move";
+import { arrayMoveImmutable } from "array-move";
 import { PHASE } from "../../common";
 import { SortableTable } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
@@ -92,7 +91,11 @@ const FantasyDraft = ({ phase, teams, userTids }: View<"fantasyDraft">) => {
 				values={teamsSorted}
 				highlightHandle={({ value }) => userTids.includes(value.tid)}
 				onChange={({ oldIndex, newIndex }) => {
-					const newSortedTids = arrayMove(sortedTids, oldIndex, newIndex);
+					const newSortedTids = arrayMoveImmutable(
+						sortedTids,
+						oldIndex,
+						newIndex,
+					);
 					setSortedTids(newSortedTids);
 				}}
 				onSwap={async (index1, index2) => {
@@ -139,19 +142,6 @@ const FantasyDraft = ({ phase, teams, userTids }: View<"fantasyDraft">) => {
 			</span>
 		</>
 	);
-};
-
-FantasyDraft.propTypes = {
-	phase: PropTypes.number.isRequired,
-	userTids: PropTypes.arrayOf(PropTypes.number).isRequired,
-	teams: PropTypes.arrayOf(
-		PropTypes.shape({
-			abbrev: PropTypes.string.isRequired,
-			name: PropTypes.string.isRequired,
-			region: PropTypes.string.isRequired,
-			tid: PropTypes.number.isRequired,
-		}),
-	).isRequired,
 };
 
 export default FantasyDraft;

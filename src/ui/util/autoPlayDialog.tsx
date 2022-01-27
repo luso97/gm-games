@@ -58,7 +58,7 @@ const Confirm = confirmable(
 							ok();
 						}}
 					>
-						<div className="form-row">
+						<div className="row gx-2">
 							<div className="col">
 								<input
 									ref={inputRef}
@@ -73,7 +73,7 @@ const Confirm = confirmable(
 							</div>
 							<div className="col">
 								<select
-									className="form-control"
+									className="form-select"
 									onChange={event => {
 										setPhase(event.target.value);
 									}}
@@ -113,7 +113,7 @@ const autoPlayDialog = (
 	phase: string;
 	season: string;
 } | null => {
-	// @ts-ignore
+	// @ts-expect-error
 	return confirmFunction({
 		currentSeason,
 		repeatSeason,

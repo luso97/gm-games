@@ -1,5 +1,4 @@
 import range from "lodash-es/range";
-import PropTypes from "prop-types";
 import { DataTable, PlayerNameLabels } from "../../components";
 import { getCols, helpers } from "../../util";
 import type { View } from "../../../common/types";
@@ -115,9 +114,14 @@ const genPickRows = (
 	});
 };
 
-const pickCols = getCols("", "X", "Draft Picks");
-pickCols[0].sortSequence = [];
-pickCols[2].width = "100%";
+const pickCols = getCols(["", "X", "Draft Picks"], {
+	"": {
+		sortSequence: [],
+	},
+	"Draft Picks": {
+		width: "100%",
+	},
+});
 
 const AssetList = ({
 	challengeNoRatings,
@@ -139,19 +143,28 @@ const AssetList = ({
 	userOrOther: UserOrOther;
 }) => {
 	const playerCols = getCols(
-		"",
-		"X",
-		"Name",
-		"Pos",
-		"Age",
-		"Ovr",
-		"Pot",
-		"Contract",
-		"Exp",
-		...stats.map(stat => `stat:${stat}`),
+		[
+			"",
+			"X",
+			"Name",
+			"Pos",
+			"Age",
+			"Ovr",
+			"Pot",
+			"Contract",
+			"Exp",
+			...stats.map(stat => `stat:${stat}`),
+		],
+		{
+			"": {
+				sortSequence: [],
+				noSearch: true,
+			},
+			Name: {
+				width: "100%",
+			},
+		},
 	);
-	playerCols[0].sortSequence = [];
-	playerCols[2].width = "100%";
 
 	const playerRows = genPlayerRows(
 		roster,
@@ -248,14 +261,6 @@ const AssetList = ({
 			</div>
 		</div>
 	);
-};
-
-AssetList.propTypes = {
-	handleToggle: PropTypes.func.isRequired,
-	picks: PropTypes.array.isRequired,
-	roster: PropTypes.array.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userOrOther: PropTypes.oneOf(["other", "user"]).isRequired,
 };
 
 export default AssetList;

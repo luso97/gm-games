@@ -13,7 +13,6 @@ const leaguePartDescriptions: { [key: string]: string } = {
 	events: "News feed",
 	negotiations: "In-progress contract negotiations",
 	trade: "In-progress trade negotiations",
-	meta: "League metadata, like league name",
 	messages: "Messages from the owner",
 	playerFeats: "Statistical feats",
 	playoffSeries: "Upcoming and historical playoff series",
@@ -43,8 +42,8 @@ const LeaguePartPicker = ({
 	keysSorted.push(...allKeys.filter(key => !keysSorted.includes(key)));
 
 	return (
-		<div className="form-group">
-			<label>Use from selected league:</label>
+		<div className="mb-3">
+			<label className="form-label">Use from selected league:</label>
 
 			{keysSorted.map(key => (
 				<div key={key} className="form-check">

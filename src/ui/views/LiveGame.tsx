@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import {
 	Component,
 	ChangeEvent,
@@ -9,12 +8,17 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { BoxScoreRow, BoxScoreWrapper, Confetti } from "../components";
+import {
+	BoxScoreRow,
+	BoxScoreWrapper,
+	Confetti,
+	PlayPauseNext,
+} from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { helpers, processLiveGameEvents, toWorker } from "../util";
 import type { View } from "../../common/types";
-import { Dropdown } from "react-bootstrap";
 import { bySport, getPeriodName, isSport } from "../../common";
+import { useLocalStorageState } from "use-local-storage-state";
 
 type PlayerRowProps = {
 	forceUpdate?: boolean;
@@ -26,8 +30,8 @@ type PlayerRowProps = {
 class PlayerRow extends Component<PlayerRowProps> {
 	prevInGame: boolean | undefined;
 
-	// Can't just switch to useMemo because p is mutated. Might be better to fix that, then switch to useMemo!
-	shouldComponentUpdate(nextProps: PlayerRowProps) {
+	// Can't just switch to hooks and React.memo because p is mutated, so there is no way to access the previous value of inGame in the memo callback function
+	override shouldComponentUpdate(nextProps: PlayerRowProps) {
 		return bySport({
 			basketball: !!(
 				this.prevInGame ||
@@ -44,7 +48,7 @@ class PlayerRow extends Component<PlayerRowProps> {
 		});
 	}
 
-	render() {
+	override render() {
 		const { p, ...props } = this.props;
 
 		// Needed for shouldComponentUpdate because state is mutated so we need to explicitly store the last value
@@ -65,26 +69,21 @@ class PlayerRow extends Component<PlayerRowProps> {
 	}
 }
 
-// @ts-ignore
-PlayerRow.propTypes = {
-	p: PropTypes.object.isRequired,
-};
-
 const updatePhaseAndLeagueTopBar = () => {
 	// Send to worker, rather than doing `localActions.update({ liveGameInProgress: false });`, so it works in all tabs
 	toWorker("main", "uiUpdateLocal", { liveGameInProgress: false });
 };
 
 const getSeconds = (time: string) => {
-	const [min, sec] = time.split(":").map(x => parseInt(x, 10));
+	const [min, sec] = time.split(":").map(x => parseInt(x));
 	return min * 60 + sec;
 };
 
 const LiveGame = (props: View<"liveGame">) => {
 	const [paused, setPaused] = useState(false);
 	const pausedRef = useRef(paused);
-	const [speed, setSpeed] = useState(7);
-	const speedRef = useRef(speed);
+	const [speed, setSpeed] = useLocalStorageState("live-game-speed", "7");
+	const speedRef = useRef(parseInt(speed));
 	const [playIndex, setPlayIndex] = useState(-1);
 	const [started, setStarted] = useState(!!props.events);
 	const [confetti, setConfetti] = useState<{
@@ -101,6 +100,7 @@ const LiveGame = (props: View<"liveGame">) => {
 	const overtimes = useRef(0);
 	const playByPlayDiv = useRef<HTMLDivElement | null>(null);
 	const quarters = useRef(isSport("hockey") ? [1] : ["Q1"]);
+	const possessionChange = useRef<boolean | undefined>();
 	const componentIsMounted = useRef(false);
 	const events = useRef<any[] | undefined>();
 
@@ -126,23 +126,34 @@ const LiveGame = (props: View<"liveGame">) => {
 			const text = output.text;
 			overtimes.current = output.overtimes;
 			quarters.current = output.quarters;
+			possessionChange.current = output.possessionChange;
 
 			if (text !== undefined) {
 				const p = document.createElement("p");
-				const node = document.createTextNode(text);
-				if (
-					text === "End of game" ||
-					text.startsWith("Start of") ||
-					(isSport("basketball") &&
-						text.startsWith("Elam Ending activated! First team to")) ||
-					(isSport("hockey") &&
-						(text.includes("Goal!") || text.includes("penalty")))
-				) {
-					const b = document.createElement("b");
-					b.appendChild(node);
-					p.appendChild(b);
+				if (isSport("football") && text.startsWith("Penalty")) {
+					p.innerHTML = text
+						.replace("accepted", "<b>accepted</b>")
+						.replace("declined", "<b>declined</b>")
+						.replace("enforced", "<b>enforced</b>")
+						.replace("overruled", "<b>overruled</b>")
+						.replace("ABBREV0", boxScore.current.teams[1].abbrev)
+						.replace("ABBREV1", boxScore.current.teams[0].abbrev);
 				} else {
-					p.appendChild(node);
+					const node = document.createTextNode(text);
+					if (
+						text === "End of game" ||
+						text.startsWith("Start of") ||
+						(isSport("basketball") &&
+							text.startsWith("Elam Ending activated! First team to")) ||
+						(isSport("hockey") &&
+							(text.includes("Goal!") || text.includes("penalty")))
+					) {
+						const b = document.createElement("b");
+						b.appendChild(node);
+						p.appendChild(b);
+					} else {
+						p.appendChild(node);
+					}
 				}
 
 				if (playByPlayDiv.current) {
@@ -263,11 +274,9 @@ const LiveGame = (props: View<"liveGame">) => {
 	}, [props.events, props.initialBoxScore, started, startLiveGame]);
 
 	const handleSpeedChange = (event: ChangeEvent<HTMLInputElement>) => {
-		const speed = parseInt(event.target.value, 10);
-		if (!Number.isNaN(speed)) {
-			setSpeed(speed);
-			speedRef.current = speed;
-		}
+		const speed = event.target.value;
+		setSpeed(speed);
+		speedRef.current = parseInt(speed);
 	};
 
 	const handlePause = useCallback(() => {
@@ -348,10 +357,29 @@ const LiveGame = (props: View<"liveGame">) => {
 			setPlayIndex(prev => prev + numPlays);
 		};
 
-		const skipMinutes = [
+		const playUntilChangeOfPossession = () => {
+			let numPlays = 0;
+
+			// If currently on one, play through it
+			if (possessionChange.current) {
+				while (possessionChange.current && !boxScore.current.gameOver) {
+					processToNextPause(true);
+					numPlays += 1;
+				}
+			}
+
+			// Find next one
+			while (!possessionChange.current && !boxScore.current.gameOver) {
+				processToNextPause(true);
+				numPlays += 1;
+			}
+			setPlayIndex(prev => prev + numPlays);
+		};
+
+		let skipMinutes = [
 			{
 				minutes: 1,
-				key: "O",
+				key: "o",
 			},
 			{
 				minutes: helpers.bound(
@@ -359,7 +387,7 @@ const LiveGame = (props: View<"liveGame">) => {
 					1,
 					Infinity,
 				),
-				key: "T",
+				key: "t",
 			},
 			{
 				minutes: helpers.bound(
@@ -367,9 +395,20 @@ const LiveGame = (props: View<"liveGame">) => {
 					1,
 					Infinity,
 				),
-				key: "S",
+				key: "s",
 			},
 		];
+
+		// Dedupe
+		const skipMinutesValues = new Set();
+		skipMinutes = skipMinutes.filter(({ minutes }) => {
+			if (skipMinutesValues.has(minutes)) {
+				return false;
+			}
+
+			skipMinutesValues.add(minutes);
+			return true;
+		});
 
 		const menuItems = [
 			...skipMinutes.map(({ minutes, key }) => ({
@@ -387,7 +426,7 @@ const LiveGame = (props: View<"liveGame">) => {
 						? "period"
 						: getPeriodName(boxScore.current.numPeriods)
 				}`,
-				key: "Q",
+				key: "q",
 				onClick: () => {
 					playSeconds(Infinity);
 				},
@@ -397,9 +436,25 @@ const LiveGame = (props: View<"liveGame">) => {
 		if (!boxScore.current.elam) {
 			menuItems.push({
 				label: "Until last 2 minutes",
-				key: "U",
+				key: "u",
 				onClick: () => {
 					playUntilLastTwoMinutes();
+				},
+			});
+		}
+
+		if (
+			bySport({
+				basketball: false,
+				football: true,
+				hockey: false,
+			})
+		) {
+			menuItems.push({
+				label: "Until change of possession",
+				key: "c",
+				onClick: () => {
+					playUntilChangeOfPossession();
 				},
 			});
 		}
@@ -416,7 +471,7 @@ const LiveGame = (props: View<"liveGame">) => {
 					hockey: "goal",
 					default: "score",
 				})}`,
-				key: "G",
+				key: "g",
 				onClick: () => {
 					playUntilNextScore();
 				},
@@ -426,7 +481,7 @@ const LiveGame = (props: View<"liveGame">) => {
 		if (boxScore.current.elam && boxScore.current.elamTarget === undefined) {
 			menuItems.push({
 				label: "Until Elam Ending",
-				key: "U",
+				key: "u",
 				onClick: () => {
 					playUntilElamEnding();
 				},
@@ -441,43 +496,6 @@ const LiveGame = (props: View<"liveGame">) => {
 		boxScore.current.overtime,
 		processToNextPause,
 	]);
-
-	useEffect(() => {
-		const handleKeydown = (event: KeyboardEvent) => {
-			// alt + letter
-			if (
-				!boxScore.current.gameOver &&
-				event.altKey &&
-				!event.ctrlKey &&
-				!event.shiftKey &&
-				!event.isComposing &&
-				!event.metaKey
-			) {
-				if (pausedRef.current) {
-					const option = fastForwardMenuItems.find(
-						option2 => `Key${option2.key}` === event.code,
-					);
-
-					if (option) {
-						option.onClick();
-					} else if (event.code === "KeyB") {
-						handlePlay();
-					} else if (event.code === "KeyN") {
-						handleNextPlay();
-					}
-				} else {
-					if (event.code === "KeyB") {
-						handlePause();
-					}
-				}
-			}
-		};
-
-		document.addEventListener("keydown", handleKeydown);
-		return () => {
-			document.removeEventListener("keydown", handleKeydown);
-		};
-	}, [fastForwardMenuItems, handlePause, handleNextPlay, handlePlay]);
 
 	// Needs to return actual div, not fragment, for AutoAffix!!!
 	return (
@@ -495,7 +513,6 @@ const LiveGame = (props: View<"liveGame">) => {
 					{boxScore.current.gid >= 0 ? (
 						<BoxScoreWrapper
 							boxScore={boxScore.current}
-							injuredToBottom
 							Row={PlayerRow}
 							playIndex={playIndex}
 						/>
@@ -507,62 +524,23 @@ const LiveGame = (props: View<"liveGame">) => {
 					<div className="live-game-affix">
 						{boxScore.current.gid >= 0 ? (
 							<div className="d-flex align-items-center mb-3">
-								<div className="btn-group mr-2">
-									{paused ? (
-										<button
-											className="btn btn-light-bordered"
-											disabled={boxScore.current.gameOver}
-											onClick={handlePlay}
-											title="Resume Simulation (Alt+B)"
-										>
-											<span className="glyphicon glyphicon-play" />
-										</button>
-									) : (
-										<button
-											className="btn btn-light-bordered"
-											disabled={boxScore.current.gameOver}
-											onClick={handlePause}
-											title="Pause Simulation (Alt+B)"
-										>
-											<span className="glyphicon glyphicon-pause" />
-										</button>
-									)}
-									<button
-										className="btn btn-light-bordered"
-										disabled={!paused || boxScore.current.gameOver}
-										onClick={handleNextPlay}
-										title="Show Next Play (Alt+N)"
-									>
-										<span className="glyphicon glyphicon-step-forward" />
-									</button>
-									<Dropdown alignRight>
-										<Dropdown.Toggle
-											id="live-game-sim-more"
-											className="btn-light-bordered live-game-sim-more"
-											disabled={!paused || boxScore.current.gameOver}
-											variant={"no-class" as any}
-											title="Fast Forward"
-										>
-											<span className="glyphicon glyphicon-fast-forward" />
-										</Dropdown.Toggle>
-										<Dropdown.Menu>
-											{fastForwardMenuItems.map(item => (
-												<Dropdown.Item
-													key={item.key}
-													onClick={item.onClick}
-													className="kbd-parent"
-												>
-													{item.label}
-													<span className="text-muted kbd">Alt+{item.key}</span>
-												</Dropdown.Item>
-											))}
-										</Dropdown.Menu>
-									</Dropdown>
-								</div>
-								<div className="form-group flex-grow-1 mb-0">
+								<PlayPauseNext
+									className="me-2"
+									disabled={boxScore.current.gameOver}
+									fastForwardAlignRight
+									fastForwards={fastForwardMenuItems}
+									onPlay={handlePlay}
+									onPause={handlePause}
+									onNext={handleNextPlay}
+									paused={paused}
+									titlePlay="Resume Simulation"
+									titlePause="Pause Simulation"
+									titleNext="Show Next Play"
+								/>
+								<div className="mb-3 flex-grow-1 mb-0">
 									<input
 										type="range"
-										className="form-control-range"
+										className="form-range"
 										disabled={boxScore.current.gameOver}
 										min="1"
 										max="33"
@@ -588,23 +566,10 @@ const LiveGame = (props: View<"liveGame">) => {
 	);
 };
 
-// @ts-ignore
-LiveGame.propTypes = {
-	events: PropTypes.arrayOf(
-		PropTypes.shape({
-			type: PropTypes.string.isRequired,
-		}),
-	),
-	initialBoxScore: PropTypes.object,
-};
-
 const LiveGameWrapper = (props: View<"liveGame">) => {
 	useTitleBar({ title: "Live Game Simulation", hideNewWindow: true });
 
 	return <LiveGame {...props} />;
 };
-
-// @ts-ignore
-LiveGameWrapper.propTypes = LiveGame.propTypes;
 
 export default LiveGameWrapper;

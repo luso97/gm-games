@@ -1,6 +1,17 @@
-const downloadFile = (fileName: string, contents: string, mimeType: string) => {
-	// Magic number from http://stackoverflow.com/a/18925211/786644 to force UTF-8 encoding
-	const blob = new Blob(["\ufeff", contents], {
+const downloadFile = (
+	fileName: string,
+	contents: string | Uint8Array[],
+	mimeType: string,
+) => {
+	let contents2;
+	if (typeof contents === "string") {
+		// Magic number from http://stackoverflow.com/a/18925211/786644 to force UTF-8 encoding
+		contents2 = ["\ufeff", contents];
+	} else {
+		contents2 = contents;
+	}
+
+	const blob = new Blob(contents2, {
 		type: mimeType,
 	});
 	const a = document.createElement("a");
@@ -9,16 +20,8 @@ const downloadFile = (fileName: string, contents: string, mimeType: string) => {
 	a.dataset.downloadurl = [mimeType, a.download, a.href].join(":");
 	a.style.display = "none";
 
-	if (!document.body) {
-		throw new Error("Should never happen");
-	}
-
 	document.body.appendChild(a);
 	a.click();
-
-	if (!document.body) {
-		throw new Error("Should never happen");
-	}
 
 	document.body.removeChild(a);
 	setTimeout(() => {

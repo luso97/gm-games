@@ -10,7 +10,7 @@ const setUserTid = async (userTid: number) => {
 };
 
 const handleChange = async (event: ChangeEvent<HTMLSelectElement>) => {
-	const userTid = parseInt(event.target.value, 10);
+	const userTid = parseInt(event.target.value);
 	await setUserTid(userTid);
 };
 
@@ -74,7 +74,7 @@ const MultiTeamMenu = () => {
 			</button>
 			<div className="flex-fill px-1">
 				<select
-					className="form-control"
+					className="form-select"
 					onChange={handleChange}
 					value={state.userTid}
 				>

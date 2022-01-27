@@ -7,6 +7,7 @@ import { team } from "../core";
 const getTeamOvr = async (tid: number) => {
 	const playersAll = await idb.cache.players.indexGetAll("playersByTid", tid);
 	const players = await idb.getCopies.playersPlus(playersAll, {
+		attrs: ["value"],
 		ratings: ["ovr", "pot", "ovrs", "pos"],
 		season: g.get("season"),
 		tid,
@@ -18,22 +19,25 @@ const getTeamOvr = async (tid: number) => {
 };
 
 const updateTeamSelect = async () => {
-	const rawTeams = await idb.getCopies.teamsPlus({
-		attrs: ["tid", "region", "name", "pop", "imgURL", "cid", "abbrev"],
-		seasonAttrs: [
-			"winp",
-			"won",
-			"lost",
-			"tied",
-			"otl",
-			"season",
-			"playoffRoundsWon",
-			"revenue",
-		],
-		season: g.get("season"),
-		active: true,
-		addDummySeason: true,
-	});
+	const rawTeams = await idb.getCopies.teamsPlus(
+		{
+			attrs: ["tid", "region", "name", "pop", "imgURL", "cid", "abbrev"],
+			seasonAttrs: [
+				"winp",
+				"won",
+				"lost",
+				"tied",
+				"otl",
+				"season",
+				"playoffRoundsWon",
+				"revenue",
+			],
+			season: g.get("season"),
+			active: true,
+			addDummySeason: true,
+		},
+		"noCopyCache",
+	);
 
 	const teamsAll = helpers.addPopRank(rawTeams);
 
@@ -68,7 +72,7 @@ const updateTeamSelect = async () => {
 	}
 
 	let orderedTeams = orderBy(teams, ["region", "name", "tid"]);
-	if (expansion || otherTeamsWantToHire) {
+	if ((expansion && !g.get("gameOver")) || otherTeamsWantToHire) {
 		// User team first!
 		const userTeam = teamsAll.find(t => t.tid === g.get("userTid"));
 		if (userTeam) {

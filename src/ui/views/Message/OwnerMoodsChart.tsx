@@ -1,11 +1,68 @@
-import PropTypes from "prop-types";
-import { useCallback, useEffect, useState } from "react";
-import { axisBottom } from "d3-axis";
-import { scaleLinear, scalePoint } from "d3-scale";
-import { curveMonotoneX, line } from "d3-shape";
-import { select } from "d3-selection";
+import { AxisBottom } from "@visx/axis";
+import { curveMonotoneX } from "@visx/curve";
+import { Group } from "@visx/group";
+import { ParentSize } from "@visx/responsive";
+import { LinePath } from "@visx/shape";
+import { scaleLinear, scalePoint } from "@visx/scale";
+import { Text } from "@visx/text";
 import { HelpPopover } from "../../components";
 import type { OwnerMood } from "../../../common/types";
+import { Fragment } from "react";
+
+export const ReferenceLine = ({
+	x,
+	y,
+	color,
+	text,
+	textPosition,
+}: {
+	x: [number, number];
+	y: [number, number];
+	color: string;
+	text?: string;
+	textPosition?: "above" | "below" | "right";
+}) => {
+	let textX = x[1];
+	let textY = y[1];
+
+	if (textPosition === "below") {
+		textX -= 4;
+		textY += 17;
+	} else if (textPosition === "above") {
+		textX -= 4;
+		textY -= 7;
+	} else if (textPosition === "right") {
+		textX += 5;
+		textY += 14;
+	}
+
+	return (
+		<>
+			<LinePath
+				className="chart-line"
+				data={x}
+				x={d => d}
+				y={(d, i) => y[i]}
+				stroke={color}
+				strokeDasharray="5 5"
+			/>
+			{text ? (
+				<Text
+					x={textX}
+					y={textY}
+					fill={color}
+					textAnchor={
+						textPosition === "below" || textPosition === "above"
+							? "end"
+							: undefined
+					}
+				>
+					{text}
+				</Text>
+			) : null}
+		</>
+	);
+};
 
 const OwnerMoodsChart = ({
 	ownerMoods,
@@ -14,129 +71,63 @@ const OwnerMoodsChart = ({
 	ownerMoods: OwnerMood[];
 	year: number;
 }) => {
-	const [node, setNode] = useState<HTMLDivElement | null>(null);
-	const getNode = useCallback(node2 => {
-		if (node2 !== null) {
-			setNode(node2);
-		}
-	}, []);
-	useEffect(() => {
-		if (node) {
-			const data = ownerMoods.map((mood, i) => {
-				return {
-					...mood,
-					total: mood.money + mood.playoffs + mood.wins,
-					year: String(year - ownerMoods.length + 1 + i),
-				};
-			});
-			const allValues: number[] = [];
-			const years: string[] = [];
+	const MAX_WIDTH = 400;
+	const HEIGHT = 400;
 
-			for (const row of data) {
-				allValues.push(row.money, row.playoffs, row.total, row.wins);
-				years.push(row.year);
-			}
+	const data = ownerMoods.map((mood, i) => {
+		return {
+			...mood,
+			total: mood.money + mood.playoffs + mood.wins,
+			year: String(year - ownerMoods.length + 1 + i),
+		};
+	});
+	const allValues: number[] = [];
+	const years: string[] = [];
 
-			// totals span -1 to 3, others -3 to 1
-			const yDomain = [
-				Math.min(-1.3, ...allValues),
-				Math.max(3.3, ...allValues),
-			];
-			const margin = {
-				top: 0,
-				right: 15,
-				bottom: 30,
-				left: 15,
-			};
-			const width = node.clientWidth - margin.left - margin.right;
-			const height = 400;
-			const xScale = scalePoint().domain(years).range([0, width]);
-			const yScale = scaleLinear().domain(yDomain).range([height, 0]) as (
-				y: number,
-			) => number;
-			const svg = select(node)
-				.append("svg")
-				.attr("width", width + margin.left + margin.right)
-				.attr("height", height + margin.top + margin.bottom)
-				.append("g")
-				.attr("transform", `translate(${margin.left},${margin.top})`);
+	for (const row of data) {
+		allValues.push(row.money, row.playoffs, row.total, row.wins);
+		years.push(row.year);
+	}
 
-			const drawReferenceLine = (
-				y: number,
-				color: string,
-				text?: string,
-				position?: string,
-			) => {
-				const line2 = line<number>()
-					.x(d => d)
-					.y(() => yScale(y));
-				svg
-					.append("path")
-					.datum(xScale.range())
-					.attr("class", "chart-line")
-					.style("stroke", color)
-					.style("stroke-dasharray", "5 5")
-					.attr("d", line2);
+	// totals span -1 to 3, others -3 to 1
+	const yDomain = [Math.min(-1.3, ...allValues), Math.max(3.3, ...allValues)];
 
-				if (text) {
-					svg
-						.append("text")
-						.attr("y", yScale(y) + (position === "above" ? -7 : 17))
-						.attr("x", width - 4)
-						.attr("text-anchor", "end")
-						.style("fill", color)
-						.text(text);
-				}
-			};
+	const margin = {
+		top: 0,
+		right: 15,
+		bottom: 30,
+		left: 15,
+	};
 
-			drawReferenceLine(3, "var(--success)", "Perfect", "above");
-			drawReferenceLine(-1, "var(--danger)", "You're fired!", "below");
-			drawReferenceLine(3, "var(--success)", "Perfect", "above");
-			drawReferenceLine(0, "var(--secondary)");
+	const lineInfos: {
+		key: "wins" | "playoffs" | "money" | "total";
+		color: string;
+		width?: number;
+	}[] = [
+		{
+			key: "wins",
+			color: "var(--bs-danger)",
+		},
+		{
+			key: "playoffs",
+			color: "var(--bs-info)",
+		},
+		{
+			key: "money",
+			color: "var(--bs-success)",
+		},
+		{
+			key: "total",
+			color: "var(--bs-dark)",
+			width: 4,
+		},
+	];
 
-			type Data = typeof data[number];
-			const drawLine = (
-				attr: Exclude<keyof Data, "year">,
-				color: string,
-				strokeWidth = 1,
-			) => {
-				const line2 = line<Data>()
-					.x(d => xScale(d.year) as number)
-					.y(d => yScale(d[attr]))
-					.curve(curveMonotoneX);
+	const yScale = scaleLinear({
+		domain: yDomain,
+		range: [HEIGHT, 0],
+	});
 
-				svg
-					.append("path")
-					.datum(data)
-					.attr("class", "chart-line")
-					.style("stroke", color)
-					.style("stroke-width", strokeWidth)
-					.attr("d", line2);
-
-				svg
-					.selectAll()
-					.data(data)
-					.enter()
-					.append("circle")
-					.attr("class", "chart-point")
-					.attr("stroke", color)
-					.style("stroke-width", strokeWidth)
-					.attr("cx", d => xScale(d.year) as number)
-					.attr("cy", d => yScale(d[attr]))
-					.attr("r", 3 * Math.sqrt(strokeWidth));
-			};
-
-			drawLine("wins", "var(--danger)");
-			drawLine("playoffs", "var(--info)");
-			drawLine("money", "var(--success)");
-			drawLine("total", "var(--dark)", 4);
-			svg
-				.append("g")
-				.attr("class", "chart-axis")
-				.attr("transform", `translate(0,${height})`)
-				.call(axisBottom(xScale));
-		}
-	}, [node, ownerMoods, year]);
 	return (
 		<div className="position-relative mt-n1">
 			<HelpPopover
@@ -163,33 +154,90 @@ const OwnerMoodsChart = ({
 				</p>
 				<p>The owner only starts judging you two years after you're hired.</p>
 			</HelpPopover>
-			<div
-				ref={getNode}
-				style={{
-					maxWidth: 400,
+			<ParentSize
+				parentSizeStyles={{
+					maxWidth: MAX_WIDTH,
 				}}
-			/>
+			>
+				{parent => {
+					const width = parent.width - margin.left - margin.right;
+					const xScale = scalePoint({
+						domain: years,
+						range: [0, width],
+					});
+					return (
+						<svg
+							width={width + margin.left + margin.right}
+							height={HEIGHT + margin.top + margin.bottom}
+						>
+							<Group transform={`translate(${margin.left},${margin.top})`}>
+								<ReferenceLine
+									x={xScale.range()}
+									y={[yScale(3), yScale(3)]}
+									color="var(--bs-success)"
+									text="Perfect"
+									textPosition="above"
+								/>
+								<ReferenceLine
+									x={xScale.range()}
+									y={[yScale(-1), yScale(-1)]}
+									color="var(--bs-danger)"
+									text="You're fired!"
+									textPosition="below"
+								/>
+								<ReferenceLine
+									x={xScale.range()}
+									y={[yScale(0), yScale(0)]}
+									color="var(--bs-secondary)"
+								/>
+								{lineInfos.map(({ key, color, width = 1 }) => {
+									return (
+										<Fragment key={key}>
+											<LinePath
+												className="chart-line"
+												curve={curveMonotoneX}
+												data={data}
+												x={d => xScale(d.year) ?? 0}
+												y={d => yScale(d[key]) ?? 0}
+												stroke={color}
+												strokeWidth={width}
+											/>
+											{data.map((d, j) => (
+												<circle
+													key={j}
+													className="chart-point"
+													r={3 * Math.sqrt(width)}
+													cx={xScale(d.year)}
+													cy={yScale(d[key])}
+													stroke={color}
+													strokeWidth={width}
+												/>
+											))}
+										</Fragment>
+									);
+								})}
+								<AxisBottom
+									axisClassName="chart-axis"
+									scale={xScale}
+									tickLength={5}
+									top={HEIGHT}
+								/>
+							</Group>
+						</svg>
+					);
+				}}
+			</ParentSize>
+
 			<div className="chart-legend">
 				<ul className="list-unstyled mb-0">
 					<li className="text-danger">— Regular season success</li>
 					<li className="text-info">— Playoff success</li>
 					<li className="text-success">— Finances</li>
-					<li className="text-dark font-weight-bold">— Total</li>
+					<li className="text-dark fw-bold">— Total</li>
 				</ul>
 			</div>
 		</div>
 	);
-};
-
-OwnerMoodsChart.propTypes = {
-	ownerMoods: PropTypes.arrayOf(
-		PropTypes.shape({
-			money: PropTypes.number.isRequired,
-			playoffs: PropTypes.number.isRequired,
-			wins: PropTypes.number.isRequired,
-		}),
-	).isRequired,
-	year: PropTypes.number.isRequired,
 };
 
 export default OwnerMoodsChart;

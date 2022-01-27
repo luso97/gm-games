@@ -20,7 +20,7 @@ const makePlayoffsKey = (game: ScheduleGameWithoutKey) =>
  */
 const setSchedule = async (tids: [number, number][]) => {
 	const playoffs = g.get("phase") === PHASE.PLAYOFFS;
-	const oldForceWin: Record<string, number> = {};
+	const oldForceWin: Record<string, number | "tie"> = {};
 	if (playoffs) {
 		// If live simming an individual playoff game, setSchedule gets called afterwards with the remaining games that day. But that means it forgets forceWin! So we need to keep track of old forceWin values
 		const oldSchedule = await idb.cache.schedule.getAll();
@@ -40,6 +40,7 @@ const setSchedule = async (tids: [number, number][]) => {
 			homeTid,
 			awayTid,
 		})),
+		await idb.cache.games.getAll(),
 	);
 	for (const game of schedule) {
 		if (playoffs) {
@@ -58,7 +59,6 @@ const setSchedule = async (tids: [number, number][]) => {
 	const upcoming = await getUpcoming({ tid: userTid });
 	for (const game of upcoming) {
 		games.push({
-			forceWin: game.forceWin,
 			gid: game.gid,
 			teams: [
 				{

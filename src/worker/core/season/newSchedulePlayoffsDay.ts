@@ -2,6 +2,7 @@ import setSchedule from "./setSchedule";
 import { idb } from "../../db";
 import { g, helpers, local, lock, orderTeams } from "../../util";
 import type { PlayoffSeriesTeam } from "../../../common/types";
+import { season } from "..";
 
 // Play 2 home (true) then 2 away (false) and repeat, but ensure that the better team always gets the last game.
 const betterSeedHome = (numGamesPlayoffSeries: number, gameNum: number) => {
@@ -40,7 +41,64 @@ const newSchedulePlayoffsDay = async (): Promise<boolean> => {
 	if (!playoffSeries) {
 		throw new Error("No playoff series");
 	}
+
+	const playIns = playoffSeries.playIns;
+	if (playoffSeries.currentRound === -1 && playIns && playIns.length > 0) {
+		const tids: [number, number][] = [];
+
+		// Is play-in tournament still going on?
+		for (const playIn of playIns) {
+			// If length is 3, that means the final game in the play-in was already scheduled, so no need to do any more
+			const needsSecondRound =
+				playIn.length === 2 &&
+				playIn[0].home.won + playIn[0].away.won === 1 &&
+				playIn[1].home.won + playIn[1].away.won === 1;
+			if (needsSecondRound) {
+				const getTeam = (i: number, type: "won" | "lost") => {
+					const oldTeam =
+						(playIn[i].home.won > 0 && type === "won") ||
+						(playIn[i].away.won > 0 && type === "lost")
+							? playIn[i].home
+							: playIn[i].away;
+
+					return {
+						...helpers.deepCopy(oldTeam),
+						pts: undefined,
+						won: 0,
+					};
+				};
+				const matchup = {
+					home: getTeam(0, "lost"),
+					away: getTeam(1, "won"),
+				};
+				playIn.push(matchup);
+
+				tids.push([matchup.home.tid, matchup.away.tid]);
+			} else {
+				for (const matchup of playIn) {
+					if (matchup.home.won === 0 && matchup.away.won === 0) {
+						tids.push([matchup.home.tid, matchup.away.tid]);
+					}
+				}
+			}
+		}
+
+		if (tids.length > 0) {
+			await idb.cache.playoffSeries.put(playoffSeries);
+			await setSchedule(tids);
+			return false;
+		} else {
+			// playIn is over, so proceed to next round
+			playoffSeries.currentRound += 1;
+		}
+	}
+
 	const series = playoffSeries.series;
+
+	if (series.length === 0) {
+		return true;
+	}
+
 	const rnd = playoffSeries.currentRound;
 	const tids: [number, number][] = [];
 	const numGamesToWin = helpers.numGamesToWinSeries(
@@ -126,67 +184,91 @@ const newSchedulePlayoffsDay = async (): Promise<boolean> => {
 	}
 
 	// Set matchups for next round
-	const tidsWon: number[] = [];
 
-	for (let i = 0; i < series[rnd].length; i += 2) {
-		const { away: away1, home: home1 } = series[rnd][i];
-		const { away: away2, home: home2 } = series[rnd][i + 1]; // Find the two winning teams
-
-		let team1: PlayoffSeriesTeam;
-		let team2: PlayoffSeriesTeam;
-
-		if (home1.won >= numGamesToWin || !away1) {
-			team1 = helpers.deepCopy(home1);
-			tidsWon.push(home1.tid);
+	// Which teams won?
+	let teamsWon: PlayoffSeriesTeam[] = [];
+	for (const { home, away } of series[rnd]) {
+		if (home.won >= numGamesToWin || !away) {
+			teamsWon.push(helpers.deepCopy(home));
 		} else {
-			team1 = helpers.deepCopy(away1);
-			tidsWon.push(away1.tid);
+			teamsWon.push(helpers.deepCopy(away));
+		}
+	}
+
+	// Need to reorder for reseeding?
+	if (g.get("playoffsReseed")) {
+		// Can't just look in playoffSeries.byConf because of upgraded leagues and real players leagues started in the playoffs
+		const playoffsByConf = await season.getPlayoffsByConf(g.get("season"));
+
+		let groups: PlayoffSeriesTeam[][];
+		if (playoffsByConf) {
+			const half = Math.ceil(teamsWon.length / 2);
+			groups = [teamsWon.slice(0, half), teamsWon.slice(-half)];
+		} else {
+			groups = [[...teamsWon]];
 		}
 
-		if (home2.won >= numGamesToWin || !away2) {
-			team2 = helpers.deepCopy(home2);
-			tidsWon.push(home2.tid);
-		} else {
-			team2 = helpers.deepCopy(away2);
-			tidsWon.push(away2.tid);
+		// Sort the groups so that each 2 teams are a matchup (best team, worst team, 2nd best team, 2nd worst team, etc)
+		for (let i = 0; i < groups.length; i++) {
+			const group = groups[i];
+			group.sort((a, b) => a.seed - b.seed);
+
+			const interleaved: PlayoffSeriesTeam[] = [];
+			while (group.length > 0) {
+				if (interleaved.length % 2 === 0) {
+					interleaved.push(group.shift() as PlayoffSeriesTeam);
+				} else {
+					interleaved.push(group.pop() as PlayoffSeriesTeam);
+				}
+			}
+			groups[i] = interleaved;
 		}
 
-		// Set home/away in the next round
-		let firstTeamHome =
-			team1.seed < team2.seed ||
-			(team1.seed === team2.seed && team1.winp >= team2.winp);
+		teamsWon = groups.flat();
+	}
+
+	const playoffsByConf = await season.getPlayoffsByConf(g.get("season"));
+
+	for (let i = 0; i < teamsWon.length; i += 2) {
+		const team1 = teamsWon[i];
+		const team2 = teamsWon[i + 1];
+
+		// Set home/away in the next round - seed ties should be impossible except maybe in the finals, which is handled below
+		let firstTeamHome = team1.seed < team2.seed;
 
 		// Special case for the finals, do it by winp not seed
-		const playoffsByConference = g.get("confs", "current").length === 2;
-		if (playoffsByConference) {
+		if (playoffsByConf) {
 			const numPlayoffRounds = g.get("numGamesPlayoffSeries", "current").length;
 
 			// Plus 2 reason: 1 is for 0 indexing, 1 is because currentRound hasn't been incremented yet
 			if (numPlayoffRounds === playoffSeries.currentRound + 2) {
-				const allTeams = await idb.getCopies.teamsPlus({
-					attrs: ["tid"],
-					seasonAttrs: [
-						"winp",
-						"pts",
-						"won",
-						"lost",
-						"otl",
-						"tied",
-						"did",
-						"cid",
-						"wonDiv",
-						"lostDiv",
-						"otlDiv",
-						"tiedDiv",
-						"wonConf",
-						"lostConf",
-						"otlConf",
-						"tiedConf",
-					],
-					stats: ["pts", "oppPts", "gp"],
-					season: g.get("season"),
-					showNoStats: true,
-				});
+				const allTeams = await idb.getCopies.teamsPlus(
+					{
+						attrs: ["tid"],
+						seasonAttrs: [
+							"winp",
+							"pts",
+							"won",
+							"lost",
+							"otl",
+							"tied",
+							"did",
+							"cid",
+							"wonDiv",
+							"lostDiv",
+							"otlDiv",
+							"tiedDiv",
+							"wonConf",
+							"lostConf",
+							"otlConf",
+							"tiedConf",
+						],
+						stats: ["pts", "oppPts", "gp"],
+						season: g.get("season"),
+						showNoStats: true,
+					},
+					"noCopyCache",
+				);
 				const finalsTeams = allTeams.filter(
 					t => t.tid === team1.tid || t.tid === team2.tid,
 				);
@@ -220,7 +302,7 @@ const newSchedulePlayoffsDay = async (): Promise<boolean> => {
 
 	// Update hype for winning a series
 	await Promise.all(
-		tidsWon.map(async tid => {
+		teamsWon.map(async ({ tid }) => {
 			const teamSeason = await idb.cache.teamSeasons.indexGet(
 				"teamSeasonsBySeasonTid",
 				[g.get("season"), tid],

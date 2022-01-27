@@ -1,13 +1,10 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { useEffect, useState, ReactNode, FormEvent } from "react";
 import { ACCOUNT_API_URL, EMAIL_ADDRESS, fetchWrapper } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
 import { localActions, realtimeUpdate } from "../util";
 import type { View } from "../../common/types";
-
-const ajaxErrorMsg =
-	"Error connecting to server. Check your Internet connection or try again later.";
+import { ajaxErrorMsg } from "./LoginOrRegister";
 
 type State = {
 	globalMessage?: ReactNode;
@@ -143,7 +140,7 @@ const ResetPassword = ({ token }: View<"resetPassword">) => {
 					<input type="hidden" name="action" value="reset_password" />
 					<input type="hidden" name="token" value={token} />
 					<div
-						className={classNames("form-group", {
+						className={classNames("mb-3", {
 							"text-danger": state.errorMessagePassword !== undefined,
 						})}
 					>
@@ -162,12 +159,12 @@ const ResetPassword = ({ token }: View<"resetPassword">) => {
 						<span className="form-text">{state.errorMessagePassword}</span>
 					</div>
 					<div
-						className={classNames("form-group", {
+						className={classNames("mb-3", {
 							"text-danger": state.errorMessagePassword2 !== undefined,
 						})}
 					>
 						<label className="col-form-label" htmlFor="resetpw-password2">
-							Verify Password
+							Repeat Password
 						</label>
 						<input
 							type="password"
@@ -199,10 +196,6 @@ const ResetPassword = ({ token }: View<"resetPassword">) => {
 			</p>
 		</>
 	);
-};
-
-ResetPassword.propTypes = {
-	token: PropTypes.string.isRequired,
 };
 
 export default ResetPassword;

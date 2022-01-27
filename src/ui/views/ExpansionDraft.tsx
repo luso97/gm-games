@@ -4,12 +4,15 @@ import { helpers, toWorker, logEvent } from "../util";
 import type { View, ExpansionDraftSetupTeam } from "../../common/types";
 import { DEFAULT_JERSEY, PHASE } from "../../common";
 import TeamForm from "./ManageTeams/TeamForm";
+import { getGodModeWarnings } from "./NewLeague/UpsertTeamModal";
 
 const ExpansionDraft = ({
 	builtInTeams,
 	confs,
+	defaultNumProtectedPlayers,
 	divs,
 	godMode,
+	godModeLimits,
 	initialNumPerTeam,
 	initialNumProtectedPlayers,
 	initialTeams,
@@ -27,7 +30,7 @@ const ExpansionDraft = ({
 		jersey: DEFAULT_JERSEY,
 		pop: "1",
 		stadiumCapacity: "25000",
-		did: String(divs[divs.length - 1].did),
+		did: String(divs.at(-1).did),
 		takeControl: false,
 	};
 
@@ -59,11 +62,7 @@ const ExpansionDraft = ({
 
 	const setTeams = async (newTeams: ExpansionDraftSetupTeam[]) => {
 		const newNumProtectedPlayers = String(
-			helpers.bound(
-				parseInt(initialNumProtectedPlayers) - newTeams.length,
-				0,
-				Infinity,
-			),
+			helpers.bound(defaultNumProtectedPlayers - newTeams.length, 0, Infinity),
 		);
 		const newNumPerTeam = String(
 			helpers.getExpansionDraftMinimumPlayersPerActiveTeam(
@@ -97,29 +96,31 @@ const ExpansionDraft = ({
 		);
 	}
 
-	const handleInputChange = (i: number) => async (
-		field: string,
-		event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-	) => {
-		const value = event.target.value;
+	const handleInputChange =
+		(i: number) =>
+		async (
+			field: string,
+			event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+		) => {
+			const value = event.target.value;
 
-		const t: any = {
-			...teams[i],
-		};
+			const t: any = {
+				...teams[i],
+			};
 
-		if (field.startsWith("colors")) {
-			const ind = parseInt(field.replace("colors", ""));
-			if (ind >= 0 && ind <= 2) {
-				t.colors[ind] = value;
+			if (field.startsWith("colors")) {
+				const ind = parseInt(field.replace("colors", ""));
+				if (ind >= 0 && ind <= 2) {
+					t.colors[ind] = value;
+				}
+			} else {
+				t[field] = value;
 			}
-		} else {
-			t[field] = value;
-		}
 
-		const newTeams = [...teams];
-		newTeams[i] = t;
-		await setTeams(newTeams);
-	};
+			const newTeams = [...teams];
+			newTeams[i] = t;
+			await setTeams(newTeams);
+		};
 
 	const deleteTeam = (i: number) => async (event: MouseEvent) => {
 		event.preventDefault();
@@ -146,7 +147,11 @@ const ExpansionDraft = ({
 
 		setSaving(true);
 
-		const errors = await toWorker("main", "advanceToPlayerProtection");
+		const errors = await toWorker(
+			"main",
+			"advanceToPlayerProtection",
+			undefined,
+		);
 
 		if (errors) {
 			logEvent({
@@ -158,47 +163,50 @@ const ExpansionDraft = ({
 		}
 	};
 
-	const handleTakeControl = (i: number) => async (
-		event: ChangeEvent<HTMLInputElement>,
-	) => {
-		const newTeams = [...teams];
-		if (!event.target.checked) {
-			newTeams[i] = {
-				...newTeams[i],
-				takeControl: false,
-			};
-		} else {
-			if (multiTeamMode) {
+	const handleTakeControl =
+		(i: number) => async (event: ChangeEvent<HTMLInputElement>) => {
+			const newTeams = [...teams];
+			if (!event.target.checked) {
 				newTeams[i] = {
 					...newTeams[i],
-					takeControl: true,
+					takeControl: false,
 				};
 			} else {
-				for (let j = 0; j < newTeams.length; j++) {
-					// Only allow one to be checked
-					newTeams[j] = {
-						...newTeams[j],
-						takeControl: i === j,
+				if (multiTeamMode) {
+					newTeams[i] = {
+						...newTeams[i],
+						takeControl: true,
 					};
+				} else {
+					for (let j = 0; j < newTeams.length; j++) {
+						// Only allow one to be checked
+						newTeams[j] = {
+							...newTeams[j],
+							takeControl: i === j,
+						};
+					}
 				}
 			}
-		}
 
-		await setTeams(newTeams);
-	};
+			await setTeams(newTeams);
+		};
 
 	const currentAbbrevs = teams.map(t => t.abbrev);
 
 	// If user is taking control of team, don't let them pick the number of protected players - too easy!
 	const disableNumProtectedPlayersChange =
 		teams.some(t => t.takeControl) && !godMode;
-	const defaultNumProtectedPlayers = String(minRosterSize - teams.length);
+	const defaultNumProtectedPlayersValue = String(
+		defaultNumProtectedPlayers - teams.length,
+	);
 	if (
 		disableNumProtectedPlayersChange &&
-		numProtectedPlayers !== defaultNumProtectedPlayers
+		numProtectedPlayers !== defaultNumProtectedPlayersValue
 	) {
-		setNumProtectedPlayers(defaultNumProtectedPlayers);
+		setNumProtectedPlayers(defaultNumProtectedPlayersValue);
 	}
+
+	let godModeWarning = false;
 
 	return (
 		<>
@@ -213,57 +221,76 @@ const ExpansionDraft = ({
 				<h2>Expansion Teams</h2>
 				<div className="row">
 					{teams.map((t, i) => {
+						const godModeWarnings = godMode
+							? []
+							: getGodModeWarnings({ t, godModeLimits });
+						if (godModeWarnings.length > 0) {
+							godModeWarning = true;
+						}
+
 						return (
 							<div key={i} className="col-xl-4 col-lg-6 mb-3">
 								<div className="card">
-									<div className="card-body row">
-										<TeamForm
-											classNamesCol={[
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-												"col-6",
-											]}
-											confs={confs}
-											disableStadiumCapacity={!godMode}
-											divs={divs}
-											handleInputChange={handleInputChange(i)}
-											hideStatus
-											t={t}
-										/>
-										<div className="col-6">
-											<div className="form-check mt-2">
-												<input
-													className="form-check-input"
-													type="checkbox"
-													id={`expansion-control-team-${i}`}
-													checked={t.takeControl}
-													onChange={handleTakeControl(i)}
-												/>
-												<label
-													className="form-check-label"
-													htmlFor={`expansion-control-team-${i}`}
+									<div className="card-body">
+										<div className="row">
+											<TeamForm
+												classNamesCol={[
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+													"col-6",
+												]}
+												confs={confs}
+												disableStadiumCapacity={!godMode}
+												divs={divs}
+												handleInputChange={handleInputChange(i)}
+												hideStatus
+												t={t}
+											/>
+										</div>
+										<div className="row">
+											<div className="col-6">
+												<div className="form-check mt-2">
+													<input
+														className="form-check-input"
+														type="checkbox"
+														id={`expansion-control-team-${i}`}
+														checked={t.takeControl}
+														onChange={handleTakeControl(i)}
+													/>
+													<label
+														className="form-check-label"
+														htmlFor={`expansion-control-team-${i}`}
+													>
+														{multiTeamMode
+															? "Add team to multi team mode"
+															: "Switch to controlling this team"}
+													</label>
+												</div>
+											</div>
+											<div className="col-6 text-end">
+												<button
+													type="button"
+													className="btn btn-danger"
+													onClick={deleteTeam(i)}
 												>
-													{multiTeamMode
-														? "Add team to multi team mode"
-														: "Switch to controlling this team"}
-												</label>
+													Remove Team
+												</button>
 											</div>
 										</div>
-										<div className="col-6 text-right">
-											<button
-												type="button"
-												className="btn btn-danger"
-												onClick={deleteTeam(i)}
-											>
-												Remove Team
-											</button>
-										</div>
+										{godModeWarnings.length > 0 ? (
+											<div className="alert alert-danger mb-0 mt-3">
+												You cannot set {godModeWarnings.join(" or ")} unless you
+												enable{" "}
+												<a href={helpers.leagueUrl(["godMode"])}>God Mode</a>.
+											</div>
+										) : null}
 									</div>
 								</div>
 							</div>
@@ -273,7 +300,7 @@ const ExpansionDraft = ({
 						<div className="card">
 							<div className="card-body">
 								<select
-									className="form-control mr-2"
+									className="form-select me-2"
 									style={{ maxWidth: 300 }}
 									value={addTeamAbbrev}
 									onChange={event => {
@@ -304,8 +331,8 @@ const ExpansionDraft = ({
 
 				<h2>Settings</h2>
 				<div className="d-sm-flex">
-					<div className="form-group mb-0 mr-sm-3">
-						<label htmlFor="expansion-num-protected">
+					<div className="me-sm-3">
+						<label className="form-label" htmlFor="expansion-num-protected">
 							Number of players each existing team can protect
 						</label>
 						<input
@@ -320,8 +347,8 @@ const ExpansionDraft = ({
 							style={{ maxWidth: 100 }}
 						/>
 					</div>
-					<div className="form-groupmb-0 ">
-						<label htmlFor="expansion-num-per-team">
+					<div>
+						<label className="form-label" htmlFor="expansion-num-per-team">
 							Max number of players that can be drafted from each existing team
 						</label>
 						<input
@@ -348,7 +375,7 @@ const ExpansionDraft = ({
 				<button
 					type="submit"
 					className="btn btn-primary mt-3"
-					disabled={saving || teams.length === 0}
+					disabled={saving || teams.length === 0 || godModeWarning}
 				>
 					Advance To Player Protection
 				</button>

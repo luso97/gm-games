@@ -1,11 +1,16 @@
-import PropTypes from "prop-types";
 import { useCallback, useState } from "react";
 import { Dropdown } from "react-bootstrap";
 import { PLAYER } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers, toWorker } from "../util";
-import { DataTable, PlayerNameLabels, WatchBlock } from "../components";
+import {
+	ActionButton,
+	DataTable,
+	PlayerNameLabels,
+	WatchBlock,
+} from "../components";
 import type { View } from "../../common/types";
+import { wrappedAgeAtDeath } from "../components/AgeAtDeath";
 
 const WatchList = ({
 	challengeNoRatings,
@@ -19,7 +24,7 @@ const WatchList = ({
 
 	const clearWatchList = useCallback(async () => {
 		setClearing(true);
-		await toWorker("main", "clearWatchList");
+		await toWorker("main", "clearWatchList", undefined);
 		setClearing(false);
 	}, []);
 
@@ -30,19 +35,25 @@ const WatchList = ({
 	});
 
 	const cols = getCols(
-		"",
-		"Name",
-		"Pos",
-		"Age",
-		"Team",
-		"Ovr",
-		"Pot",
-		"Contract",
-		"Exp",
-		...stats.map(stat => `stat:${stat}`),
-		"Note",
+		[
+			"",
+			"Name",
+			"Pos",
+			"Age",
+			"Team",
+			"Ovr",
+			"Pot",
+			"Contract",
+			"Exp",
+			...stats.map(stat => `stat:${stat}`),
+			"Note",
+		],
+		{
+			Note: {
+				width: "100%",
+			},
+		},
 	);
-	cols[cols.length - 1].width = "100%";
 
 	const rows = players.map(p => {
 		let contract;
@@ -72,7 +83,7 @@ const WatchList = ({
 					{p.name}
 				</PlayerNameLabels>,
 				p.ratings.pos,
-				p.age,
+				wrappedAgeAtDeath(p.age, p.ageAtDeath),
 				<a href={helpers.leagueUrl(["roster", `${p.abbrev}_${p.tid}`])}>
 					{p.abbrev}
 				</a>,
@@ -104,7 +115,7 @@ const WatchList = ({
 
 	return (
 		<>
-			<Dropdown className="float-right my-1">
+			<Dropdown className="float-end my-1">
 				<Dropdown.Toggle
 					id="watch-list-other-reports"
 					className="btn-light-bordered"
@@ -131,13 +142,14 @@ const WatchList = ({
 			</p>
 			<p>You can edit a player's note near the top of his profile page.</p>
 
-			<button
-				className="btn btn-danger mb-3"
-				disabled={clearing}
+			<ActionButton
+				className="mb-3"
 				onClick={clearWatchList}
+				processing={clearing}
+				variant="danger"
 			>
 				Clear Watch List
-			</button>
+			</ActionButton>
 
 			<DataTable
 				cols={cols}
@@ -148,13 +160,6 @@ const WatchList = ({
 			/>
 		</>
 	);
-};
-
-WatchList.propTypes = {
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	playoffs: PropTypes.oneOf(["playoffs", "regularSeason"]).isRequired,
-	statType: PropTypes.oneOf(["per36", "perGame", "totals"]).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
 
 export default WatchList;

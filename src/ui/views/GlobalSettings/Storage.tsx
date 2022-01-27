@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import { useCallback, useEffect, useState } from "react";
-import { GAME_NAME } from "../../../common";
+import { GAME_NAME, WEBSITE_ROOT } from "../../../common";
 
 const Storage = () => {
 	const [status, setStatus] = useState<
@@ -12,9 +12,16 @@ const Storage = () => {
 	>("loading...");
 
 	useEffect(() => {
+		let mounted = true;
+
 		const check = async () => {
 			if (navigator.storage && navigator.storage.persisted) {
 				const persisted = await navigator.storage.persisted();
+
+				if (!mounted) {
+					return;
+				}
+
 				if (persisted) {
 					setStatus("enabled");
 				} else {
@@ -26,6 +33,10 @@ const Storage = () => {
 		};
 
 		check();
+
+		return () => {
+			mounted = false;
+		};
 	}, []);
 
 	const onClick = useCallback(async event => {
@@ -50,7 +61,11 @@ const Storage = () => {
 		<>
 			<p>
 				Since {GAME_NAME} stores game data in your browser profile,{" "}
-				<a href="https://basketball-gm.com/manual/faq/#missing-leagues">
+				<a
+					href={`https://${WEBSITE_ROOT}/manual/faq/#missing-leagues`}
+					rel="noopener noreferrer"
+					target="_blank"
+				>
 					sometimes it can be inadvertently deleted
 				</a>
 				. Enabling persistent storage helps protect against this.

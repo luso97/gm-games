@@ -6,11 +6,15 @@ import isSport from "./isSport";
 
 const getPopRanks = (
 	teamSeasons: {
+		// If these are teamSeason objects, disabled teams won't even have one. If these are some other kind of team object, disabled teams might be there.
+		disabled?: boolean;
 		pop?: number;
 		tid: number;
 	}[],
 ): number[] => {
-	const teamsSorted = orderBy(teamSeasons, "pop", "desc");
+	const teamsFiltered = teamSeasons.filter(t => !t.disabled);
+
+	const teamsSorted = orderBy(teamsFiltered, "pop", "desc");
 
 	return teamSeasons.map(t => {
 		// Find the starting and ending ranks of all teams tied with the current team (if no tie, then startRank and endRank will be the same)
@@ -27,16 +31,17 @@ const getPopRanks = (
 		}
 
 		if (startRank === undefined || endRank === undefined) {
-			throw new Error("No rank found");
+			// For disabled teams
+			return teamsFiltered.length + 1;
 		}
 
 		return (startRank + endRank) / 2;
 	});
 };
 
-function addPopRank<T extends { pop?: number; tid: number }>(
-	teams: T[],
-): (T & { popRank: number })[] {
+function addPopRank<
+	T extends { disabled?: boolean; pop?: number; tid: number },
+>(teams: T[]): (T & { popRank: number })[] {
 	const popRanks = getPopRanks(teams);
 
 	return teams.map((t, i) => ({
@@ -62,7 +67,7 @@ const gameScore = (arg: { [key: string]: number }): number => {
 };
 
 function getTeamsDefault(): TeamBasic[] {
-	let teams: Omit<TeamBasic, "popRank">[];
+	let teams: TeamBasic[];
 	if (isSport("basketball")) {
 		teams = getTeamInfos([
 			{
@@ -281,44 +286,44 @@ function getTeamsDefault(): TeamBasic[] {
 			{
 				tid: 0,
 				cid: 0,
-				did: 1,
-				abbrev: "BAL",
-			},
-			{
-				tid: 1,
-				cid: 0,
 				did: 0,
 				abbrev: "BOS",
 			},
 			{
-				tid: 2,
+				tid: 1,
 				cid: 0,
 				did: 1,
 				abbrev: "BKN",
 			},
 			{
+				tid: 2,
+				cid: 0,
+				did: 0,
+				abbrev: "BUF",
+			},
+			{
 				tid: 3,
+				cid: 1,
+				did: 3,
+				abbrev: "CGY",
+			},
+			{
+				tid: 4,
 				cid: 0,
 				did: 1,
 				abbrev: "CHA",
 			},
 			{
-				tid: 4,
+				tid: 5,
 				cid: 1,
 				did: 2,
 				abbrev: "CHI",
 			},
 			{
-				tid: 5,
+				tid: 6,
 				cid: 0,
 				did: 1,
 				abbrev: "CIN",
-			},
-			{
-				tid: 6,
-				cid: 0,
-				did: 0,
-				abbrev: "CLE",
 			},
 			{
 				tid: 7,
@@ -340,57 +345,57 @@ function getTeamsDefault(): TeamBasic[] {
 			},
 			{
 				tid: 10,
-				cid: 0,
-				did: 0,
-				abbrev: "IND",
-			},
-			{
-				tid: 11,
 				cid: 1,
 				did: 3,
 				abbrev: "LA",
 			},
 			{
-				tid: 12,
+				tid: 11,
 				cid: 1,
 				did: 3,
 				abbrev: "LV",
 			},
 			{
-				tid: 13,
+				tid: 12,
 				cid: 1,
 				did: 2,
 				abbrev: "MEM",
 			},
 			{
-				tid: 14,
+				tid: 13,
 				cid: 0,
 				did: 0,
 				abbrev: "MIA",
 			},
 			{
-				tid: 15,
+				tid: 14,
 				cid: 1,
 				did: 2,
 				abbrev: "MIL",
 			},
 			{
-				tid: 16,
+				tid: 15,
 				cid: 1,
 				did: 2,
 				abbrev: "MIN",
 			},
 			{
-				tid: 17,
+				tid: 16,
 				cid: 0,
 				did: 0,
 				abbrev: "MON",
 			},
 			{
-				tid: 18,
+				tid: 17,
 				cid: 0,
 				did: 1,
 				abbrev: "NYC",
+			},
+			{
+				tid: 18,
+				cid: 0,
+				did: 0,
+				abbrev: "OTT",
 			},
 			{
 				tid: 19,
@@ -420,13 +425,13 @@ function getTeamsDefault(): TeamBasic[] {
 				tid: 23,
 				cid: 1,
 				did: 3,
-				abbrev: "SAC",
+				abbrev: "SD",
 			},
 			{
 				tid: 24,
 				cid: 1,
 				did: 3,
-				abbrev: "SD",
+				abbrev: "SJ",
 			},
 			{
 				tid: 25,
@@ -437,14 +442,14 @@ function getTeamsDefault(): TeamBasic[] {
 			{
 				tid: 26,
 				cid: 1,
-				did: 3,
-				abbrev: "SF",
+				did: 2,
+				abbrev: "STL",
 			},
 			{
 				tid: 27,
-				cid: 1,
-				did: 2,
-				abbrev: "STL",
+				cid: 0,
+				did: 0,
+				abbrev: "TPA",
 			},
 			{
 				tid: 28,
@@ -454,15 +459,15 @@ function getTeamsDefault(): TeamBasic[] {
 			},
 			{
 				tid: 29,
-				cid: 0,
-				did: 0,
-				abbrev: "TPA",
-			},
-			{
-				tid: 30,
 				cid: 1,
 				did: 3,
 				abbrev: "VAN",
+			},
+			{
+				tid: 30,
+				cid: 0,
+				did: 1,
+				abbrev: "VB",
 			},
 			{
 				tid: 31,
@@ -475,227 +480,202 @@ function getTeamsDefault(): TeamBasic[] {
 		teams = getTeamInfos([
 			{
 				tid: 0,
-				cid: 1,
-				did: 6,
-
-				abbrev: "ATL",
+				cid: 0,
+				did: 0,
+				abbrev: "BOS",
 			},
 			{
 				tid: 1,
 				cid: 0,
 				did: 0,
-
-				abbrev: "BAL",
+				abbrev: "BKN",
 			},
 			{
 				tid: 2,
 				cid: 0,
 				did: 0,
-
-				abbrev: "BOS",
+				abbrev: "BUF",
 			},
 			{
 				tid: 3,
-				cid: 1,
-				did: 5,
-
-				abbrev: "CHI",
+				cid: 0,
+				did: 0,
+				abbrev: "MIA",
 			},
+
 			{
 				tid: 4,
 				cid: 0,
 				did: 1,
-
-				abbrev: "CIN",
+				abbrev: "BAL",
 			},
 			{
 				tid: 5,
 				cid: 0,
 				did: 1,
-
-				abbrev: "CLE",
+				abbrev: "CIN",
 			},
 			{
 				tid: 6,
-				cid: 1,
-				did: 4,
-
-				abbrev: "DAL",
+				cid: 0,
+				did: 1,
+				abbrev: "CLE",
 			},
 			{
 				tid: 7,
 				cid: 0,
-				did: 3,
-
-				abbrev: "DEN",
+				did: 1,
+				abbrev: "PIT",
 			},
+
 			{
 				tid: 8,
-				cid: 1,
-				did: 5,
-
-				abbrev: "DET",
+				cid: 0,
+				did: 2,
+				abbrev: "HOU",
 			},
 			{
 				tid: 9,
 				cid: 0,
 				did: 2,
-
-				abbrev: "HOU",
+				abbrev: "IND",
 			},
 			{
 				tid: 10,
 				cid: 0,
 				did: 2,
-
-				abbrev: "KC",
+				abbrev: "JAX",
 			},
 			{
 				tid: 11,
 				cid: 0,
 				did: 2,
-
-				abbrev: "LV",
+				abbrev: "MEM",
 			},
+
 			{
 				tid: 12,
-				cid: 1,
-				did: 7,
-
-				abbrev: "LA",
+				cid: 0,
+				did: 3,
+				abbrev: "DEN",
 			},
 			{
 				tid: 13,
-				cid: 1,
-				did: 6,
-
-				abbrev: "MXC",
+				cid: 0,
+				did: 3,
+				abbrev: "KC",
 			},
 			{
 				tid: 14,
 				cid: 0,
-				did: 0,
-
-				abbrev: "MIA",
+				did: 3,
+				abbrev: "LAE",
 			},
 			{
 				tid: 15,
-				cid: 1,
-				did: 5,
-
-				abbrev: "MIN",
+				cid: 0,
+				did: 3,
+				abbrev: "LV",
 			},
+
 			{
 				tid: 16,
-				cid: 0,
-				did: 1,
-
-				abbrev: "MON",
+				cid: 1,
+				did: 4,
+				abbrev: "DAL",
 			},
 			{
 				tid: 17,
 				cid: 1,
 				did: 4,
-
 				abbrev: "NYC",
 			},
 			{
 				tid: 18,
 				cid: 1,
 				did: 4,
-
 				abbrev: "PHI",
 			},
 			{
 				tid: 19,
-				cid: 0,
-				did: 2,
-
-				abbrev: "PHO",
+				cid: 1,
+				did: 4,
+				abbrev: "WAS",
 			},
+
 			{
 				tid: 20,
-				cid: 0,
-				did: 0,
-
-				abbrev: "PIT",
+				cid: 1,
+				did: 5,
+				abbrev: "CHI",
 			},
 			{
 				tid: 21,
-				cid: 0,
-				did: 3,
-
-				abbrev: "POR",
+				cid: 1,
+				did: 5,
+				abbrev: "DET",
 			},
 			{
 				tid: 22,
 				cid: 1,
-				did: 7,
-
-				abbrev: "SAC",
+				did: 5,
+				abbrev: "MIL",
 			},
 			{
 				tid: 23,
 				cid: 1,
-				did: 6,
-
-				abbrev: "SA",
+				did: 5,
+				abbrev: "MIN",
 			},
+
 			{
 				tid: 24,
-				cid: 0,
-				did: 3,
-
-				abbrev: "SD",
+				cid: 1,
+				did: 6,
+				abbrev: "ATL",
 			},
 			{
 				tid: 25,
 				cid: 1,
-				did: 7,
-
-				abbrev: "SF",
+				did: 6,
+				abbrev: "CHA",
 			},
 			{
 				tid: 26,
 				cid: 1,
-				did: 7,
-
-				abbrev: "SEA",
+				did: 6,
+				abbrev: "NOL",
 			},
 			{
 				tid: 27,
 				cid: 1,
-				did: 5,
-
-				abbrev: "STL",
+				did: 6,
+				abbrev: "TPA",
 			},
+
 			{
 				tid: 28,
 				cid: 1,
-				did: 6,
-
-				abbrev: "TPA",
+				did: 7,
+				abbrev: "LA",
 			},
 			{
 				tid: 29,
-				cid: 0,
-				did: 1,
-
-				abbrev: "TOR",
+				cid: 1,
+				did: 7,
+				abbrev: "PHO",
 			},
 			{
 				tid: 30,
-				cid: 0,
-				did: 3,
-
-				abbrev: "VAN",
+				cid: 1,
+				did: 7,
+				abbrev: "SEA",
 			},
 			{
 				tid: 31,
 				cid: 1,
-				did: 4,
-
-				abbrev: "WAS",
+				did: 7,
+				abbrev: "SF",
 			},
 		]);
 	}
@@ -713,16 +693,16 @@ function deepCopy<T>(obj: T): T {
 		return obj;
 	}
 
-	// @ts-ignore
+	// @ts-expect-error
 	if (obj.constructor === RegExp) {
 		return obj;
 	}
 
-	// @ts-ignore
+	// @ts-expect-error
 	const retVal = new obj.constructor();
 
 	for (const key of Object.keys(obj)) {
-		// @ts-ignore
+		// @ts-expect-error
 		retVal[key] = deepCopy(obj[key]);
 	}
 
@@ -737,7 +717,7 @@ function deepCopy<T>(obj: T): T {
  */
 function leagueUrlFactory(
 	lid: number,
-	components: (number | string)[],
+	components: (number | string | undefined)[],
 ): string {
 	let url = `/l/${lid}`;
 
@@ -771,6 +751,7 @@ function formatCurrency(
 		return "$0";
 	}
 
+	// Keep in sync with getSortVal
 	if (append === "M" && abs > 1000) {
 		abs /= 1000;
 		append = "B";
@@ -795,13 +776,15 @@ function formatCurrency(
 	let numberString = abs.toFixed(precision);
 
 	// Remove last digits if 0
-	for (let i = 0; i < precision; i++) {
-		if (numberString[numberString.length - 1] === "0") {
+	if (append !== "") {
+		for (let i = 0; i < precision; i++) {
+			if (numberString.at(-1) === "0") {
+				numberString = numberString.slice(0, -1);
+			}
+		}
+		if (numberString.at(-1) === ".") {
 			numberString = numberString.slice(0, -1);
 		}
-	}
-	if (numberString[numberString.length - 1] === ".") {
-		numberString = numberString.slice(0, -1);
 	}
 
 	return `${sign}$${numberString}${append}`;
@@ -871,54 +854,14 @@ function roundWinp(winp: number): string {
 	return output;
 }
 
-const upperCaseFirstLetter = (string: string): string => {
-	return `${string.charAt(0).toUpperCase()}${string.slice(1)}`;
+const upperCaseFirstLetter = <T extends string>(string: T) => {
+	return `${string.charAt(0).toUpperCase()}${string.slice(1)}` as Capitalize<T>;
 };
 
 // https://medium.com/@_achou/dont-give-up-and-use-suppressimplicitanyindexerrors-ca6b208b9365
 // eslint-disable-next-line @typescript-eslint/ban-types
 const keys = <O extends object>(obj: O): Array<keyof O> => {
 	return Object.keys(obj) as Array<keyof O>;
-};
-
-const validateRoundsByes = (
-	numRounds: number,
-	numPlayoffByes: number,
-	numActiveTeams: number,
-) => {
-	if (numRounds < 1) {
-		throw new Error("Must have at least one round of playoffs");
-	}
-
-	if (numPlayoffByes < 0) {
-		throw new Error("Cannot have a negative number of byes");
-	}
-
-	if (numRounds === 1 && numPlayoffByes > 0) {
-		throw new Error("You cannoy have any byes in a one round playoff.");
-	}
-
-	const numPlayoffTeams = 2 ** numRounds - numPlayoffByes;
-
-	if (numPlayoffTeams > numActiveTeams) {
-		throw new Error(
-			`${numRounds} playoff rounds with ${numPlayoffByes} first round byes means ${numPlayoffTeams} teams make the playoffs, but there are only ${numActiveTeams} teams in the league`,
-		);
-	}
-
-	let numTeamsSecondRound;
-	if (numRounds === 1) {
-		// Becuase there is no second round!
-		numTeamsSecondRound = 0;
-	} else {
-		numTeamsSecondRound = 2 ** (numRounds - 1);
-	}
-
-	if (numTeamsSecondRound < numPlayoffByes) {
-		throw new Error(
-			`With ${numRounds} playoff rounds, you need ${numTeamsSecondRound} teams in the second round, so it's not possible to have ${numPlayoffByes} first round byes`,
-		);
-	}
 };
 
 const states = [
@@ -1032,7 +975,11 @@ const isAmerican = (loc: string) => {
 	}
 
 	const parts = loc.split(", ");
-	const state = parts[parts.length - 1];
+	const state = parts.at(-1);
+
+	if (state === "Georgia") {
+		return false;
+	}
 
 	return states.includes(state);
 };
@@ -1043,9 +990,12 @@ const getCountry = (bornLoc?: string) => {
 	if (isAmerican(name)) {
 		name = "USA";
 	} else {
-		const parts = name.split(", ");
-		if (parts.length > 1) {
-			name = parts[parts.length - 1];
+		// Find part after last comma/colon
+		for (const delimiter of [", ", ": "]) {
+			const parts = name.split(delimiter);
+			if (parts.length > 1) {
+				name = parts.at(-1);
+			}
 		}
 	}
 
@@ -1058,10 +1008,10 @@ const getJerseyNumber = (
 ): string | undefined => {
 	if (type === "current") {
 		if (p.stats.length > 0) {
-			return p.stats[p.stats.length - 1].jerseyNumber;
+			return p.stats.at(-1).jerseyNumber;
 		}
 
-		// For uploaded league files
+		// For uploaded league files, or real players leagues with no old stats (with new old stats, relies on augmentPartialPlayer to set jerseyNumber from root in latest stats row)
 		return p.jerseyNumber;
 	}
 
@@ -1097,14 +1047,14 @@ const roundsWonText = (
 	numPlayoffRounds: number,
 	numConfs: number,
 ): string => {
-	const playoffsByConference = numConfs === 2;
+	const playoffsByConf = numConfs === 2;
 
 	if (playoffRoundsWon === numPlayoffRounds) {
 		return "League champs";
 	}
 
 	if (playoffRoundsWon === numPlayoffRounds - 1) {
-		return playoffsByConference ? "Conference champs" : "Made finals";
+		return playoffsByConf ? "Conference champs" : "Made finals";
 	}
 
 	if (playoffRoundsWon === 0) {
@@ -1112,13 +1062,11 @@ const roundsWonText = (
 	}
 
 	if (playoffRoundsWon === numPlayoffRounds - 2) {
-		return playoffsByConference ? "Made conference finals" : "Made semifinals";
+		return playoffsByConf ? "Made conference finals" : "Made semifinals";
 	}
 
 	if (playoffRoundsWon === numPlayoffRounds - 3) {
-		return playoffsByConference
-			? "Made conference semifinals"
-			: "Made quarterfinals";
+		return playoffsByConf ? "Made conference semifinals" : "Made quarterfinals";
 	}
 
 	if (playoffRoundsWon >= 1) {
@@ -1151,6 +1099,29 @@ const percentage = (numerator: number, denominator: number) => {
 	return 100 * ratio(numerator, denominator);
 };
 
+// There are a bunch of places where formatRecord is not used and it's done manually :(
+const formatRecord = ({
+	won,
+	lost,
+	tied,
+	otl,
+}: {
+	won: number;
+	lost: number;
+	tied?: number;
+	otl?: number;
+}) => {
+	let record = `${won}-${lost}`;
+	if (typeof otl === "number" && !Number.isNaN(otl) && otl > 0) {
+		record += `-${otl}`;
+	}
+	if (typeof tied === "number" && !Number.isNaN(tied) && tied > 0) {
+		record += `-${tied}`;
+	}
+
+	return record;
+};
+
 export default {
 	addPopRank,
 	getPopRanks,
@@ -1169,8 +1140,8 @@ export default {
 	roundWinp,
 	upperCaseFirstLetter,
 	keys,
-	validateRoundsByes,
 	roundsWonText,
 	ratio,
 	percentage,
+	formatRecord,
 };

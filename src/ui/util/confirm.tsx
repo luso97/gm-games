@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmable, createConfirmation } from "react-confirm";
 import { Modal } from "react-bootstrap";
@@ -31,7 +30,12 @@ const Confirm = confirmable(
 		}, []);
 
 		return (
-			<Modal show={show} onHide={cancel}>
+			<Modal
+				show={show}
+				onHide={cancel}
+				className="highest-modal"
+				backdropClassName="highest-modal-backdrop"
+			>
 				<Modal.Body>
 					{confirmation}
 					{defaultValue !== undefined ? (
@@ -67,10 +71,6 @@ const Confirm = confirmable(
 		);
 	},
 );
-Confirm.propTypes = {
-	confirmation: PropTypes.string.isRequired,
-	defaultValue: PropTypes.string,
-};
 
 const confirmFunction = createConfirmation(Confirm);
 

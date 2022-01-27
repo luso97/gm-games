@@ -42,9 +42,12 @@ const getPlayers = async (season: number): Promise<PlayerFiltered[]> => {
 			Infinity,
 		]);
 	} else {
-		playersAll = await idb.getCopies.players({
-			activeSeason: season,
-		});
+		playersAll = await idb.getCopies.players(
+			{
+				activeSeason: season,
+			},
+			"noCopyCache",
+		);
 	}
 	let players = await idb.getCopies.playersPlus(playersAll, {
 		attrs: [
@@ -73,6 +76,7 @@ const getPlayers = async (season: number): Promise<PlayerFiltered[]> => {
 				"ewa",
 				"ws",
 				"dws",
+				"vorp",
 				"ws48",
 				"season",
 				"abbrev",
@@ -96,6 +100,13 @@ const getPlayers = async (season: number): Promise<PlayerFiltered[]> => {
 				"abbrev",
 				"tid",
 				"jerseyNumber",
+				"defIntTD",
+				"defFmbTD",
+				"defSft",
+				"defSk",
+				"defTck",
+				"defInt",
+				"defPssDef",
 			],
 			hockey: [
 				"keyStats",
@@ -126,26 +137,35 @@ const getPlayers = async (season: number): Promise<PlayerFiltered[]> => {
 	);
 
 	// Add winp, for later
-	const teamSeasons = await idb.getCopies.teamSeasons({
-		season,
-	});
+	const teamSeasons = await idb.getCopies.teamSeasons(
+		{
+			season,
+		},
+		"noCopyCache",
+	);
 	const teamInfos: Record<
 		number,
 		{
+			gp: number;
 			winp: number;
 		}
 	> = {};
 	for (const teamSeason of teamSeasons) {
 		teamInfos[teamSeason.tid] = {
+			gp:
+				teamSeason.won +
+				teamSeason.lost +
+				(teamSeason.tied ?? 0) +
+				(teamSeason.otl ?? 0),
 			winp: helpers.calcWinp(teamSeason),
 		};
 	}
 
 	// For convenience later
 	for (const p of players) {
-		p.pos = p.ratings[p.ratings.length - 1].pos;
+		p.pos = p.ratings.at(-1).pos;
 
-		p.currentStats = p.stats[p.stats.length - 1];
+		p.currentStats = p.stats.at(-1);
 		for (let i = p.stats.length - 1; i >= 0; i--) {
 			if (p.stats[i].season === season) {
 				p.currentStats = p.stats[i];
@@ -156,7 +176,32 @@ const getPlayers = async (season: number): Promise<PlayerFiltered[]> => {
 		// Otherwise it's always the current season
 		p.age = season - p.born.year;
 
-		p.teamInfo = teamInfos[p.currentStats.tid];
+		// Player somehow on an inactive team needs this fallback, should only happen in a weird custom roster
+		p.teamInfo = teamInfos[p.currentStats.tid] ?? {
+			gp: 0,
+			winp: 0,
+		};
+	}
+
+	// Add fracWS for basketball current season
+	if (isSport("basketball")) {
+		const totalWS: Record<number, number> = {};
+		for (const p of players) {
+			if (totalWS[p.currentStats.tid] === undefined) {
+				totalWS[p.currentStats.tid] = 0;
+			}
+			totalWS[p.currentStats.tid] += p.currentStats.ws;
+		}
+
+		for (const p of players) {
+			p.currentStats.fracWS = Math.min(
+				// Inner max is to handle negative totalWS
+				p.currentStats.ws / Math.max(totalWS[p.currentStats.tid], 1),
+
+				// In the rare case that a team has very low or even negative WS, don't let anybody have a crazy high fracWS
+				0.8,
+			);
+		}
 	}
 
 	return players;
@@ -335,7 +380,12 @@ const saveAwardsByPlayer = async (
 	conditions: Conditions,
 	season: number = g.get("season"),
 	logEvents: boolean = true,
+	allStarGID?: number,
 ) => {
+	if (awardsByPlayer.length === 0) {
+		return;
+	}
+
 	// None of this stuff needs to block, it's just notifications
 	for (const p of awardsByPlayer) {
 		let text = `<a href="${helpers.leagueUrl(["player", p.pid])}">${
@@ -357,7 +407,21 @@ const saveAwardsByPlayer = async (
 				.toLowerCase()}.`;
 			score = 10;
 		} else if (p.type === "All-Star") {
-			text += `made the All-Star team.`;
+			text += "made the All-Star team.";
+			score = 10;
+		} else if (p.type === "All-Star MVP") {
+			text += `won the <a href="${helpers.leagueUrl([
+				"game_log",
+				"special",
+				season,
+				allStarGID,
+			])}">All-Star MVP</a> award.`;
+			score = 10;
+		} else if (p.type === "Slam Dunk Contest Winner") {
+			text += "won the slam dunk contest.";
+			score = 10;
+		} else if (p.type === "Three-Point Contest Winner") {
+			text += "won the three-point contest.";
 			score = 10;
 		} else {
 			text += `won the ${p.type} award.`;
@@ -384,9 +448,12 @@ const saveAwardsByPlayer = async (
 	for (const pid of pids) {
 		let p = await idb.cache.players.get(pid);
 		if (!p) {
-			p = (await idb.getCopy.players({
-				pid: pid,
-			})) as any;
+			p = (await idb.getCopy.players(
+				{
+					pid: pid,
+				},
+				"noCopyCache",
+			)) as any;
 		}
 
 		if (p && pid != undefined) {
@@ -404,13 +471,23 @@ const saveAwardsByPlayer = async (
 };
 
 const deleteAwardsByPlayer = async (
-	awardsByPlayer: AwardsByPlayer,
+	awardsByPlayer: {
+		pid: number;
+		type: string;
+	}[],
 	season: number,
 ) => {
+	if (awardsByPlayer.length === 0) {
+		return;
+	}
+
 	const pids = Array.from(new Set(awardsByPlayer.map(award => award.pid)));
-	const players = await idb.getCopies.players({
-		pids,
-	});
+	const players = await idb.getCopies.players(
+		{
+			pids,
+		},
+		"noCopyCache",
+	);
 	for (const p of players) {
 		const typesToDelete = awardsByPlayer
 			.filter(award => award.pid === p.pid)

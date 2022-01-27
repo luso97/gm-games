@@ -2,6 +2,7 @@ import { toUI } from "../../util";
 import type {
 	GameAttributesLeagueWithHistory,
 	GameAttributesLeague,
+	LocalStateUI,
 } from "../../../common/types";
 import { unwrapGameAttribute } from "../../../common";
 
@@ -11,12 +12,16 @@ const gameAttributesToUI = async (
 	// Keep in sync with ui/util/local.ts
 	const keys = [
 		"challengeNoRatings",
+		"fantasyPoints",
 		"godMode",
+		"hideDisabledTeams",
 		"homeCourtAdvantage",
 		"lid",
-		"spectator",
+		"numPeriods",
 		"phase",
+		"quarterLength",
 		"season",
+		"spectator",
 		"startingSeason",
 		"teamInfoCache",
 		"userTid",
@@ -32,8 +37,21 @@ const gameAttributesToUI = async (
 		}
 	}
 
+	let flagOverrides: LocalStateUI["flagOverrides"] | undefined;
+	if (gameAttributes.playerBioInfo) {
+		flagOverrides = {};
+		const countries = gameAttributes.playerBioInfo.countries;
+		if (countries) {
+			for (const [country, { flag }] of Object.entries(countries)) {
+				if (flag !== undefined) {
+					flagOverrides[country] = flag;
+				}
+			}
+		}
+	}
+
 	if (updated) {
-		await toUI("setGameAttributes", [update]);
+		await toUI("setGameAttributes", [update, flagOverrides]);
 	}
 };
 

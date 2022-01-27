@@ -1,9 +1,7 @@
 import { useState, FormEvent } from "react";
 import { ACCOUNT_API_URL, fetchWrapper } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
-
-const ajaxErrorMsg =
-	"Error connecting to server. Check your Internet connection or try again later.";
+import { ajaxErrorMsg } from "./LoginOrRegister";
 
 type State = {
 	errorMessage?: string;
@@ -74,7 +72,7 @@ const LostPassword = () => {
 					</p>
 					<form onSubmit={handleSubmit} id="lostpw">
 						<input type="hidden" name="sport" value={process.env.SPORT} />
-						<div className="form-group">
+						<div className="mb-3">
 							<label className="col-form-label" htmlFor="lostpw-entry">
 								Username or Email Address
 							</label>

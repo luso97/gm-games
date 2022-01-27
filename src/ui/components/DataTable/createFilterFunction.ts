@@ -18,6 +18,17 @@ const createFilterFunction = (
 			let direction;
 			let number;
 
+			const not = text[0] === "!";
+			if (not) {
+				text = text.slice(1);
+			}
+
+			let exact = false;
+			if (text.length > 2 && text[0] === '"' && text.at(-1) === '"') {
+				exact = true;
+				text = text.slice(1, -1);
+			}
+
 			if (
 				searchType === "number" ||
 				searchType === "currency" ||
@@ -43,6 +54,8 @@ const createFilterFunction = (
 
 			return {
 				direction,
+				exact,
+				not,
 				number,
 				text,
 			};
@@ -61,31 +74,95 @@ const createFilterFunction = (
 			return true;
 		}
 
-		for (const { direction, number, text } of filters) {
-			if (typeof number === "number") {
-				const numericVal = parseFloat(getSortVal(value, sortType));
+		for (const { direction, exact, not, number, text } of filters) {
+			if (not) {
+				const checkTextSearch = () => {
+					const searchVal = getSearchVal(value);
 
-				if (Number.isNaN(numericVal)) {
-					continue;
-				}
+					if (!exact && !searchVal.includes(text)) {
+						return true;
+					}
 
-				if (direction === ">" && numericVal >= number) {
-					return true;
-				}
+					if (exact && searchVal !== text) {
+						return true;
+					}
 
-				if (direction === "<" && numericVal <= number) {
-					return true;
-				}
+					return false;
+				};
 
-				if (direction === "=" && numericVal === number) {
-					return true;
-				}
+				if (typeof number === "number") {
+					const numericVal = parseFloat(getSortVal(value, sortType));
 
-				if (direction === undefined && getSearchVal(value).includes(text)) {
-					return true;
+					if (Number.isNaN(numericVal)) {
+						continue;
+					}
+
+					if (direction === ">" && numericVal <= number) {
+						return true;
+					}
+
+					if (direction === "<" && numericVal >= number) {
+						return true;
+					}
+
+					if (direction === "=" && numericVal !== number) {
+						return true;
+					}
+
+					if (direction === undefined) {
+						if (checkTextSearch()) {
+							return true;
+						}
+					}
+				} else {
+					if (checkTextSearch()) {
+						return true;
+					}
 				}
-			} else if (getSearchVal(value).includes(text)) {
-				return true;
+			} else {
+				const checkTextSearch = () => {
+					const searchVal = getSearchVal(value);
+
+					if (!exact && searchVal.includes(text)) {
+						return true;
+					}
+
+					if (exact && searchVal === text) {
+						return true;
+					}
+
+					return false;
+				};
+
+				if (typeof number === "number") {
+					const numericVal = parseFloat(getSortVal(value, sortType));
+
+					if (Number.isNaN(numericVal)) {
+						continue;
+					}
+
+					if (direction === ">" && numericVal >= number) {
+						return true;
+					}
+
+					if (direction === "<" && numericVal <= number) {
+						return true;
+					}
+
+					if (direction === "=" && numericVal === number) {
+						return true;
+					}
+
+					if (direction === undefined) {
+						if (checkTextSearch()) {
+							return true;
+						}
+					}
+				} else {
+					if (checkTextSearch()) {
+						return true;
+					}
+				}
 			}
 		}
 

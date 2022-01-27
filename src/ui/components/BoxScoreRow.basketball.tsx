@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import type { MouseEvent } from "react";
 import PlayerNameLabels from "./PlayerNameLabels";
 import { helpers } from "../util";
@@ -18,11 +17,16 @@ const BoxScoreRow = ({
 	p: any;
 }) => {
 	const showDNP =
-		p.min === 0 && (!liveGameInProgress || p.injury.gamesRemaining > 0);
+		p.min === 0 &&
+		(!liveGameInProgress ||
+			(p.injury.gamesRemaining > 0 && !p.injury.playingThrough));
 
 	const statCols = showDNP ? (
 		<td colSpan={15} className="text-center">
-			DNP - {p.injury.gamesRemaining === 0 ? "Coach's decision" : p.injury.type}
+			DNP -{" "}
+			{p.injury.gamesRemaining === 0 || p.injury.playingThrough
+				? "Coach's decision"
+				: p.injury.type}
 		</td>
 	) : (
 		<>
@@ -63,8 +67,6 @@ const BoxScoreRow = ({
 					jerseyNumber={p.jerseyNumber}
 					pid={p.pid}
 					skills={p.skills}
-					watch={p.watch}
-					disableWatchToggle
 				>
 					{p.name}
 				</PlayerNameLabels>
@@ -80,12 +82,6 @@ const BoxScoreRow = ({
 			{statCols}
 		</tr>
 	);
-};
-
-BoxScoreRow.propTypes = {
-	className: PropTypes.string,
-	onClick: PropTypes.func,
-	p: PropTypes.object.isRequired,
 };
 
 export default BoxScoreRow;

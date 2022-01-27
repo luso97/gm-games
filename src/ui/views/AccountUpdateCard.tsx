@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import {
 	ACCOUNT_API_URL,
@@ -8,9 +7,7 @@ import {
 import useTitleBar from "../hooks/useTitleBar";
 import { getScript, realtimeUpdate } from "../util";
 import type { View } from "../../common/types";
-
-const ajaxErrorMsg =
-	"Error connecting to server. Check your Internet connection or try again later.";
+import { ajaxErrorMsg } from "./LoginOrRegister";
 
 const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 	const [state, setState] = useState({
@@ -38,15 +35,14 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 		})();
 	}, []);
 
-	const handleChange = (name: string) => (
-		event: ChangeEvent<HTMLInputElement>,
-	) => {
-		const value = event.target.value;
-		setState(prevState => ({
-			...prevState,
-			[name]: value,
-		}));
-	};
+	const handleChange =
+		(name: string) => (event: ChangeEvent<HTMLInputElement>) => {
+			const value = event.target.value;
+			setState(prevState => ({
+				...prevState,
+				[name]: value,
+			}));
+		};
 
 	const handleSubmit = (event: FormEvent) => {
 		event.preventDefault();
@@ -60,9 +56,9 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 			{
 				number: state.number,
 				cvc: state.cvc,
-				// @ts-ignore
+				// @ts-expect-error
 				exp_month: state.exp_month,
-				// @ts-ignore
+				// @ts-expect-error
 				exp_year: state.exp_year,
 			},
 			async (status: number, response: stripe.StripeCardTokenResponse) => {
@@ -111,7 +107,7 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 	}
 	if (goldCancelled) {
 		errorMessage =
-			"Cannot update card because your GM Gold account is cancelled.";
+			"Cannot update card because your ZenGM Gold account is cancelled.";
 	}
 	if (errorMessage) {
 		return (
@@ -141,8 +137,10 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 				) : null}
 
 				<div style={{ maxWidth: "300px" }}>
-					<div className="form-group">
-						<label htmlFor="card-number">Card Number</label>
+					<div className="mb-3">
+						<label className="form-label" htmlFor="card-number">
+							Card Number
+						</label>
 						<input
 							type="text"
 							onChange={handleChange("number")}
@@ -152,8 +150,10 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 						/>
 					</div>
 
-					<div className="form-group" style={{ maxWidth: "100px" }}>
-						<label htmlFor="cvc">CVC</label>
+					<div className="mb-3" style={{ maxWidth: "100px" }}>
+						<label className="form-label" htmlFor="cvc">
+							CVC
+						</label>
 						<input
 							type="text"
 							onChange={handleChange("cvc")}
@@ -163,8 +163,10 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 						/>
 					</div>
 
-					<div className="form-group">
-						<label htmlFor="exp-month">Expiration (MM/YYYY)</label>
+					<div className="mb-3">
+						<label className="form-label" htmlFor="exp-month">
+							Expiration (MM/YYYY)
+						</label>
 						<div className="row">
 							<div className="col-5">
 								<input
@@ -199,14 +201,6 @@ const AccountUpdateCard = (props: View<"accountUpdateCard">) => {
 			</form>
 		</>
 	);
-};
-
-AccountUpdateCard.propTypes = {
-	goldCancelled: PropTypes.bool.isRequired,
-	expMonth: PropTypes.number.isRequired,
-	expYear: PropTypes.number.isRequired,
-	last4: PropTypes.string.isRequired,
-	username: PropTypes.string,
 };
 
 export default AccountUpdateCard;

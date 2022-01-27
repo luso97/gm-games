@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import HelpPopover from "./HelpPopover";
 import { bySport, isSport, POSITION_COUNTS } from "../../common";
 
@@ -30,16 +29,12 @@ const PositionFraction = ({
 		</span>
 	);
 };
-PositionFraction.propTypes = {
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	pos: PropTypes.string.isRequired,
-};
 
 const RosterComposition = ({
 	className = "",
 	players,
 }: {
-	className: string;
+	className?: string;
 	players: Players;
 }) => {
 	if (isSport("basketball")) {
@@ -89,7 +84,7 @@ const RosterComposition = ({
 			{bySport({
 				basketball: null,
 				football: (
-					<div className="row">
+					<div className="mt-2 row">
 						<div className="col-4">
 							<PositionFraction players={players} pos="QB" />
 							<br />
@@ -119,7 +114,7 @@ const RosterComposition = ({
 					</div>
 				),
 				hockey: (
-					<div className="row">
+					<div className="mt-2 row">
 						<div className="col-6">
 							<PositionFraction players={players} pos="C" />
 							<br />
@@ -135,10 +130,6 @@ const RosterComposition = ({
 			})}
 		</div>
 	);
-};
-RosterComposition.propTypes = {
-	className: PropTypes.string,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
 export default RosterComposition;

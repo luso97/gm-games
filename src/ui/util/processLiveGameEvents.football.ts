@@ -1,26 +1,6 @@
 import { getPeriodName } from "../../common";
 import { helpers } from "../../ui/util";
 
-// For strings of a format like 1:23 (times), which is greater? 1 for first, -1 for second, 0 for tie
-const cmpTime = (t1: string, t2: string) => {
-	const [min1, sec1] = t1.split(":").map(x => parseInt(x, 10));
-	const [min2, sec2] = t2.split(":").map(x => parseInt(x, 10));
-
-	if (min1 > min2) {
-		return 1;
-	}
-	if (min1 < min2) {
-		return -1;
-	}
-	if (sec1 > sec2) {
-		return 1;
-	}
-	if (sec1 < sec2) {
-		return -1;
-	}
-	return 0;
-};
-
 // Mutates boxScore!!!
 const processLiveGameEvents = ({
 	events,
@@ -36,6 +16,18 @@ const processLiveGameEvents = ({
 	let stop = false;
 	let text;
 	let e: any;
+	let possessionChange: boolean = false;
+
+	// Would be better to use event type, if it was available here like in hockey
+	const possessionChangeTexts = [
+		" kicked off ",
+		" punted ",
+		" recovered the fumble for the defense",
+		" recovered the fumble in the endzone, resulting in a safety!",
+		" intercepted the pass ",
+		" gets ready to attempt an onside kick",
+		"Turnover on downs",
+	];
 
 	while (!stop && events.length > 0) {
 		e = events.shift();
@@ -80,7 +72,12 @@ const processLiveGameEvents = ({
 				};
 			}
 
-			text = e.text;
+			possessionChange = possessionChangeTexts.some(text =>
+				e.text.includes(text),
+			);
+
+			// Must include parens so it does not collide with ABBREV0 and ABBREV1 for penalties lol
+			text = e.text.replace("(ABBREV)", `(${boxScore.teams[actualT].abbrev})`);
 			boxScore.time = e.time;
 			stop = true;
 		} else if (e.type === "clock") {
@@ -122,9 +119,7 @@ const processLiveGameEvents = ({
 					}
 					if (p) {
 						if (e.s.endsWith("Lng")) {
-							if (e.amt > p[e.s]) {
-								p[e.s] = e.amt;
-							}
+							p[e.s] = e.amt;
 						} else {
 							p[e.s] += e.amt;
 						}
@@ -132,41 +127,21 @@ const processLiveGameEvents = ({
 				}
 				boxScore.teams[actualT][e.s] += e.amt;
 			}
+		} else if (e.type === "removeLastScore") {
+			boxScore.scoringSummary.pop();
 		}
-	}
 
-	//  Handle filtering of scoringSummary
-	if (boxScore.scoringSummary && boxScore.time !== undefined) {
-		for (const event of boxScore.scoringSummary) {
-			if (event.time === undefined) {
-				continue;
-			}
-
-			if (event.hide === false) {
-				// Already past, no need to check again
-				continue;
-			}
-
-			if (!quarters.includes(event.quarter)) {
-				// Future quarters
-				event.hide = true;
-			} else if (event.quarter !== quarters[quarters.length - 1]) {
-				// Past quarters
-				event.hide = false;
-			} else {
-				// Current quarter - this is the normal way all events will be shown. Used to just check time, but then scoring summary would update at the beginning of a play, since the scoring event has the same timestamp. So now also check for the internal properties of the event object, since it should always come through as "e" from above. Don't check event.t because that gets flipped in box score display
-				const show =
-					cmpTime(event.time, boxScore.time) !== -1 &&
-					e.text === event.text &&
-					e.time === event.time &&
-					e.quarter === event.quarter;
-				event.hide = !show;
-			}
+		if (e.scoringSummary) {
+			boxScore.scoringSummary.push({
+				...e,
+				t: actualT,
+			});
 		}
 	}
 
 	return {
 		overtimes,
+		possessionChange,
 		quarters,
 		text,
 	};

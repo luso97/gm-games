@@ -6,6 +6,7 @@ import type {
 	RealPlayerPhotos,
 	RealTeamInfo,
 } from "../../common/types";
+import type { Settings } from "../views/settings";
 import connectIndexedDB from "./connectIndexedDB";
 
 export interface MetaDB extends DBSchema {
@@ -13,17 +14,25 @@ export interface MetaDB extends DBSchema {
 		key: number;
 		value: {
 			slug: string;
+			difficulty?: "normal" | "hard" | "insane";
 		};
 	};
 	attributes: {
-		value: number | Options | RealPlayerPhotos | RealTeamInfo;
+		value:
+			| number
+			| string
+			| Options
+			| RealPlayerPhotos
+			| RealTeamInfo
+			| Partial<Settings>;
 		key:
-			| "changesRead"
+			| "lastChangesVersion"
 			| "nagged"
 			| "naggedMailingList"
 			| "options"
 			| "realPlayerPhotos"
-			| "realTeamInfo";
+			| "realTeamInfo"
+			| "defaultSettingsOverrides";
 	};
 	leagues: {
 		value: League;
@@ -42,11 +51,11 @@ const create = (db: IDBPDatabase<MetaDB>) => {
 		keyPath: "lid",
 		autoIncrement: true,
 	});
-	attributeStore.put(-1, "changesRead");
 	attributeStore.put(0, "nagged");
+	attributeStore.put("REV_GOES_HERE", "lastChangesVersion");
 };
 
-const migrate = ({
+const migrate = async ({
 	db,
 	oldVersion,
 }: {
@@ -67,7 +76,6 @@ const migrate = ({
 
 		if (oldVersion <= 7) {
 			const attributeStore = db.createObjectStore("attributes");
-			attributeStore.put(-1, "changesRead");
 			attributeStore.put(0, "nagged");
 		}
 	}

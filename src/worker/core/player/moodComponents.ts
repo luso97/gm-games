@@ -156,7 +156,7 @@ const moodComponents = async (
 						won: previousSeason ? previousSeason.won : 0,
 						lost: previousSeason ? previousSeason.lost : 0,
 						tied: previousSeason ? previousSeason.tied ?? 0 : 1,
-						otl: previousSeason ? previousSeason.otl ?? 0 : 1,
+						otl: previousSeason ? previousSeason.otl ?? 0 : 0,
 					};
 
 					const fractionComplete =
@@ -286,22 +286,12 @@ const moodComponents = async (
 
 	{
 		// ROOKIE CONTRACT
-		if (!g.get("hardCap")) {
-			const rookieContractLength = g.get("rookieContractLengths")[
-				p.draft.round - 1
-			];
-			const onRookieContract =
-				rookieContractLength !== undefined &&
-				(p.tid === tid ||
-					(p.tid === PLAYER.FREE_AGENT && phase === PHASE.RESIGN_PLAYERS)) &&
-				p.draft.round > 0 &&
-				((p.draft.year + rookieContractLength > season && p.tid >= 0) ||
-					(p.draft.year + rookieContractLength === season &&
-						phase <= PHASE.RESIGN_PLAYERS));
-
-			if (onRookieContract || p.tid === PLAYER.UNDRAFTED) {
-				components.rookieContract = 8;
-			}
+		if (
+			p.contract.rookieResign ||
+			p.contract.rookie ||
+			p.tid === PLAYER.UNDRAFTED
+		) {
+			components.rookieContract = 8;
 		}
 	}
 

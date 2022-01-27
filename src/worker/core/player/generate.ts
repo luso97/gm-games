@@ -1,9 +1,9 @@
 import genRatings from "./genRatings";
-import name from "./name";
 import { face, g } from "../../util";
 import type {
 	MinimalPlayerRatings,
 	PlayerWithoutKey,
+	Race,
 } from "../../../common/types";
 import genWeight from "./genWeight";
 import genMoodTraits from "./genMoodTraits";
@@ -14,12 +14,30 @@ const generate = (
 	draftYear: number,
 	newLeague: boolean,
 	scoutingRank: number,
+	{
+		college,
+		country,
+		firstName,
+		lastName,
+		race,
+	}: {
+		college: string;
+		country: string;
+		firstName: string;
+		lastName: string;
+		race: Race;
+	} = {
+		college: "College",
+		country: "Country",
+		firstName: "FirstName",
+		lastName: "LastName",
+		race: "asian",
+	},
 ): PlayerWithoutKey<MinimalPlayerRatings> => {
 	const { heightInInches, ratings } = genRatings(
 		newLeague ? g.get("startingSeason") : draftYear,
 		scoutingRank,
 	);
-	const { college, country, firstName, lastName, race } = name();
 
 	const weight = genWeight(ratings.hgt, ratings.stre);
 
@@ -48,7 +66,6 @@ const generate = (
 		firstName,
 		gamesUntilTradable: 0,
 		hgt: heightInInches,
-		hof: false,
 		imgURL: "",
 		// Custom rosters can define player image URLs to be used rather than vector faces
 		injury: {
@@ -70,7 +87,6 @@ const generate = (
 		statsTids: [],
 		tid,
 		transactions: [],
-		watch: false,
 		weight,
 		yearsFreeAgent: 0,
 		// These should be set by updateValues after player is completely done (automatic in develop)

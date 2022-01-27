@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import type { SyntheticEvent } from "react";
 
 const PerPage = ({
@@ -10,9 +9,9 @@ const PerPage = ({
 }) => {
 	return (
 		<div className="datatable-perpage">
-			<label>
+			<label className="form-label">
 				<select
-					className="form-control form-control-sm"
+					className="form-select form-select-sm"
 					onChange={onChange}
 					value={value}
 				>
@@ -25,11 +24,6 @@ const PerPage = ({
 			</label>
 		</div>
 	);
-};
-
-PerPage.propTypes = {
-	onChange: PropTypes.func.isRequired,
-	value: PropTypes.number.isRequired,
 };
 
 export default PerPage;

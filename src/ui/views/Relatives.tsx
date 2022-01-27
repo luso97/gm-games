@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import { DataTable, PlayerNameLabels } from "../components";
@@ -38,7 +37,7 @@ const Relatives = ({
 		},
 	];
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Drafted",
@@ -55,7 +54,7 @@ const Relatives = ({
 		"Team",
 		...stats.map(stat => `stat:${stat}`),
 		...stats.map(stat => `stat:${stat}`),
-	);
+	]);
 
 	const rows = players.map(p => {
 		const relationArray: string[] = [];
@@ -82,7 +81,7 @@ const Relatives = ({
 				<PlayerNameLabels pid={p.pid} jerseyNumber={p.jerseyNumber}>
 					{p.name}
 				</PlayerNameLabels>,
-				p.ratings[p.ratings.length - 1].pos,
+				p.ratings.at(-1).pos,
 				p.draft.year,
 				p.retiredYear === Infinity ? null : p.retiredYear,
 				<a
@@ -160,13 +159,6 @@ const Relatives = ({
 			/>
 		</>
 	);
-};
-
-Relatives.propTypes = {
-	pid: PropTypes.number,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default Relatives;

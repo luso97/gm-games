@@ -1,7 +1,8 @@
 import { bySport, PLAYER } from "../../common";
-import { player, team } from "../core";
+import { team } from "../core";
 import { idb } from "../db";
 import { g } from "../util";
+import { addMood } from "./freeAgents";
 
 const updateNegotiationList = async () => {
 	const stats = bySport({
@@ -22,13 +23,11 @@ const updateNegotiationList = async () => {
 		"playersByTid",
 		userTid,
 	);
-	const playersAll = (
-		await idb.cache.players.indexGetAll("playersByTid", PLAYER.FREE_AGENT)
-	).filter(p => negotiationPids.includes(p.pid));
-
-	for (const p of playersAll) {
-		(p as any).mood = await player.moodInfos(p);
-	}
+	const playersAll = await addMood(
+		(
+			await idb.cache.players.indexGetAll("playersByTid", PLAYER.FREE_AGENT)
+		).filter(p => negotiationPids.includes(p.pid)),
+	);
 
 	const players = await idb.getCopies.playersPlus(playersAll, {
 		attrs: [
@@ -59,8 +58,7 @@ const updateNegotiationList = async () => {
 	sumContracts /= 1000;
 
 	const payroll = await team.getPayroll(userTid);
-	const capSpace =
-		g.get("salaryCap") > payroll ? (g.get("salaryCap") - payroll) / 1000 : 0;
+	const capSpace = (g.get("salaryCap") - payroll) / 1000;
 
 	const userPlayers = await idb.getCopies.playersPlus(userPlayersAll, {
 		attrs: [],
@@ -74,7 +72,8 @@ const updateNegotiationList = async () => {
 	return {
 		capSpace,
 		challengeNoRatings: g.get("challengeNoRatings"),
-		hardCap: g.get("hardCap"),
+		draftPickAutoContract: g.get("draftPickAutoContract"),
+		salaryCapType: g.get("salaryCapType"),
 		maxContract: g.get("maxContract"),
 		minContract: g.get("minContract"),
 		numRosterSpots: g.get("maxRosterSize") - userPlayersAll.length,

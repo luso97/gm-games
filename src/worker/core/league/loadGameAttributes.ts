@@ -8,6 +8,19 @@ import {
 } from "../../../common";
 import gameAttributesToUI from "./gameAttributesToUI";
 
+export const ALWAYS_WRAP = [
+	"confs",
+	"divs",
+	"numGamesPlayoffSeries",
+	"numPlayoffByes",
+	"otl",
+	"playoffsNumTeamsDiv",
+	"pointsFormula",
+	"tiebreakers",
+	"ties",
+	"userTid",
+];
+
 /**
  * Load game attributes from the database and update the global variable g.
  *
@@ -16,24 +29,11 @@ import gameAttributesToUI from "./gameAttributesToUI";
 const loadGameAttributes = async () => {
 	const gameAttributes = await idb.cache.gameAttributes.getAll();
 
-	const alwaysWrap = [
-		"confs",
-		"divs",
-		"numGamesPlayoffSeries",
-		"numPlayoffByes",
-		"otl",
-		"pointsFormula",
-		"tiebreakers",
-		"ties",
-		"userTid",
-	];
-
 	for (const { key, value } of gameAttributes) {
-		if (alwaysWrap.includes(key) && !gameAttributeHasHistory(value)) {
+		if (ALWAYS_WRAP.includes(key) && !gameAttributeHasHistory(value)) {
 			// Wrap on load to avoid IndexedDB upgrade
 			g.setWithoutSavingToDB(key, [
 				{
-					// @ts-ignore
 					start: -Infinity,
 					value,
 				},
@@ -50,7 +50,7 @@ const loadGameAttributes = async () => {
 
 	// Set defaults to avoid IndexedDB upgrade
 	for (const key of helpers.keys(defaultGameAttributes)) {
-		// @ts-ignore
+		// @ts-expect-error
 		if (g[key] === undefined) {
 			if (key === "teamInfoCache") {
 				g.setWithoutSavingToDB(
@@ -59,6 +59,7 @@ const loadGameAttributes = async () => {
 						abbrev: t.abbrev,
 						disabled: t.disabled,
 						imgURL: t.imgURL,
+						imgURLSmall: t.imgURLSmall,
 						name: t.name,
 						region: t.region,
 					})),

@@ -1,5 +1,6 @@
 import {
 	COURT,
+	DEFAULT_CONFS,
 	DIFFICULTY,
 	GAME_NAME,
 	isSport,
@@ -9,8 +10,8 @@ import {
 } from "../../../common";
 import { toWorker, helpers } from "../../util";
 import type { ReactNode } from "react";
-import type { View } from "../../../common/types";
 import type { Category, Decoration, FieldType, Key, Values } from "./types";
+import type { Settings } from "../../../worker/views/settings";
 
 export const descriptions = {
 	difficulty:
@@ -28,11 +29,15 @@ export const settings: {
 	validator?: (
 		value: any,
 		output: any,
-		props: View<"settings">,
+		initialSettings: Settings,
 	) => void | Promise<void>;
+
+	// For form fields that render one box for two keys, put any of the associated hidden keys here.
+	partners?: Key[];
 
 	// showOnlyIf is for hiding form elements that only make sense in some situations (like when creating a new league). hidden is for a setting where we're merging it with some other setting in the UI (probably with customForm) but still want to track it here so it gets updated properly.
 	showOnlyIf?: (params: {
+		defaultNewLeagueSettings?: boolean;
 		hasPlayers?: boolean;
 		newLeague?: boolean;
 		realPlayers?: boolean;
@@ -47,6 +52,25 @@ export const settings: {
 	// Longer than one line, hidden by default
 	descriptionLong?: ReactNode;
 }[] = [
+	{
+		category: "New League",
+		key: "realStats",
+		name: "Historical Stats",
+		godModeRequired: "existingLeagueOnly",
+		showOnlyIf: ({ newLeague, hasPlayers, realPlayers }) =>
+			newLeague && hasPlayers && realPlayers,
+		type: "string",
+		values: [
+			{ key: "none", value: "None" },
+			{ key: "lastSeason", value: "Last season, active players only" },
+			{ key: "allActive", value: "All seasons, active players only" },
+			{
+				key: "allActiveHOF",
+				value: "All seasons, active and Hall of Fame players only",
+			},
+			{ key: "all", value: "All seasons, teams, and players" },
+		],
+	},
 	{
 		category: "New League",
 		key: "randomization",
@@ -78,14 +102,28 @@ export const settings: {
 				</p>
 			</>
 		),
+		validator: (value, output) => {
+			if (
+				(value === "debuts" || value === "debutsForever") &&
+				output.realStats !== "none"
+			) {
+				throw new Error(
+					'Random debuts mode currently only works with "Historical Stats" set to "None"',
+				);
+			}
+		},
 	},
 	{
 		category: "New League",
 		key: "randomization",
 		name: "Randomization",
 		godModeRequired: "existingLeagueOnly",
-		showOnlyIf: ({ newLeague, hasPlayers, realPlayers }) =>
-			newLeague && hasPlayers && !realPlayers,
+		showOnlyIf: ({
+			defaultNewLeagueSettings,
+			newLeague,
+			hasPlayers,
+			realPlayers,
+		}) => newLeague && hasPlayers && !realPlayers && !defaultNewLeagueSettings,
 		type: "string",
 		values: [
 			{ key: "none", value: "None" },
@@ -145,15 +183,53 @@ export const settings: {
 		type: "bool",
 	},
 	{
-		category: "Season",
+		category: "Schedule",
 		key: "numGames",
 		name: "# Games Per Season",
 		godModeRequired: "always",
 		type: "int",
-		description: "This will only apply to seasons that have not started yet.",
+		validator: (value, output) => {
+			if (value < 0) {
+				throw new Error("Must not be negative");
+			}
+
+			const numGamesDiv = output.numGamesDiv ?? 0;
+			const numGamesConf = output.numGamesConf ?? 0;
+			if (value < numGamesDiv + numGamesConf) {
+				throw new Error(
+					"Can't have more division and conference games than total games",
+				);
+			}
+		},
 	},
 	{
-		category: "Team",
+		category: "Schedule",
+		key: "numGamesDiv",
+		name: "# Division Games",
+		type: "intOrNull",
+		description:
+			"Number of games versus other teams in the same division. Leave blank to treat division games like conference games.",
+		validator: value => {
+			if (typeof value === "number" && value < 0) {
+				throw new Error("Cannot be negative");
+			}
+		},
+	},
+	{
+		category: "Schedule",
+		key: "numGamesConf",
+		name: "# Conference Games",
+		type: "intOrNull",
+		description:
+			"Number of games versus other teams in the same conference but different division. Leave blank to give no special scheduling treatment to conference games.",
+		validator: value => {
+			if (typeof value === "number" && value < 0) {
+				throw new Error("Cannot be negative");
+			}
+		},
+	},
+	{
+		category: "Teams",
 		key: "minRosterSize",
 		name: "Min Roster Size",
 		godModeRequired: "always",
@@ -165,27 +241,33 @@ export const settings: {
 		},
 	},
 	{
-		category: "Team",
+		category: "Teams",
 		key: "maxRosterSize",
 		name: "Max Roster Size",
 		godModeRequired: "always",
 		type: "int",
 	},
 	{
-		category: "Season",
+		category: "Playoffs",
 		key: "numGamesPlayoffSeries",
 		name: "# Playoff Games",
 		godModeRequired: "existingLeagueOnly",
 		descriptionLong: (
 			<>
-				Specify the number of games in each round. You must enter a valid JSON
-				array of integers. For example, enter <code>[5,7,1]</code> for a 5 game
-				first round series, a 7 game second round series, and a single
-				winner-takes-all final game.
+				<p>
+					Specify the number of games in each round. You must enter a valid JSON
+					array of integers. For example, enter <code>[5,7,1]</code> for a 5
+					game first round series, a 7 game second round series, and a single
+					winner-takes-all final game.
+				</p>
+				<p>
+					To disable the playoffs and have the top team in the regular season
+					crowned champion, set this to <code>[]</code>
+				</p>
 			</>
 		),
 		type: "jsonString",
-		validator: (value, output, props) => {
+		validator: async (value, output, initialSettings) => {
 			if (!Array.isArray(value)) {
 				throw new Error("Must be an array");
 			}
@@ -196,11 +278,16 @@ export const settings: {
 			}
 
 			const numRounds = value.length;
-			helpers.validateRoundsByes(
+			await toWorker("main", "validatePlayoffSettings", {
 				numRounds,
-				output.numPlayoffByes,
-				props.numActiveTeams,
-			);
+				numPlayoffByes: output.numPlayoffByes,
+				numActiveTeams: initialSettings.numActiveTeams,
+				playIn: output.playIn,
+				playoffsByConf: output.playoffsByConf,
+
+				// Fallback is for when creating a new league and editing settings, confs are not available here
+				confs: initialSettings.confs ?? DEFAULT_CONFS,
+			});
 		},
 	},
 	{
@@ -265,7 +352,7 @@ export const settings: {
 		type: "string",
 	},
 	{
-		category: "Season",
+		category: "Playoffs",
 		key: "numPlayoffByes",
 		name: "# First Round Byes",
 		godModeRequired: "existingLeagueOnly",
@@ -277,6 +364,15 @@ export const settings: {
 				throw new Error("Value cannot be less than 0");
 			}
 		},
+	},
+	{
+		category: "Playoffs",
+		key: "playIn",
+		name: "Play-In Tournament",
+		godModeRequired: "existingLeagueOnly",
+		type: "bool",
+		description:
+			"NBA-like tournament to determine the lowest seeded playoff teams.",
 	},
 	{
 		category: "Draft",
@@ -443,6 +539,48 @@ export const settings: {
 			"Take the difference between a team's payroll and the luxury tax threshold. Multiply that by this number. The result is the penalty they have to pay.",
 	},
 	{
+		category: "Inflation",
+		key: "inflationMin",
+		name: "Minimum",
+		godModeRequired: "always",
+		type: "float",
+		decoration: "percent",
+		validator: (value, output) => {
+			if (value > output.inflationMax) {
+				throw new Error("Value must be less than the maximum value.");
+			}
+		},
+	},
+	{
+		category: "Inflation",
+		key: "inflationMax",
+		name: "Maximum",
+		godModeRequired: "always",
+		type: "float",
+		decoration: "percent",
+		validator: (value, output) => {
+			if (value < output.inflationMin) {
+				throw new Error("Value must be greater than the minimum value.");
+			}
+		},
+	},
+	{
+		category: "Inflation",
+		key: "inflationAvg",
+		name: "Average",
+		godModeRequired: "always",
+		type: "float",
+		decoration: "percent",
+	},
+	{
+		category: "Inflation",
+		key: "inflationStd",
+		name: "Standard Deviation",
+		godModeRequired: "always",
+		type: "float",
+		decoration: "percent",
+	},
+	{
 		category: "Contracts",
 		key: "minContract",
 		name: "Min Contract",
@@ -504,15 +642,26 @@ export const settings: {
 	},
 	{
 		category: "Finances",
-		key: "hardCap",
-		name: "Hard Cap",
+		key: "salaryCapType",
+		name: "Salary Cap Type",
 		godModeRequired: "always",
-		type: "bool",
+		type: "string",
+		values: [
+			{ key: "hard", value: "Hard cap" },
+			{ key: "soft", value: "Soft cap" },
+			{ key: "none", value: "None" },
+		],
 		descriptionLong: (
 			<>
 				<p>
-					If this is enabled, then you can not exceed the salary cap to sign
-					draft picks or re-sign players (like the{" "}
+					<b>Hard cap:</b> Team payroll cannot exceed the salary cap, except to
+					sign free agents to minimum contracts which is to guarantee that you
+					never get stuck without enough players. This also disables this luxury
+					tax.
+				</p>
+				<p>
+					<b>Soft cap:</b> Same as hard cap, eccept you can exceed the salary
+					cap to sign draft picks or re-sign players (like the{" "}
 					<a
 						href="https://en.wikipedia.org/wiki/NBA_salary_cap#Larry_Bird_exception"
 						target="_blank"
@@ -520,15 +669,15 @@ export const settings: {
 					>
 						Larry Bird exception
 					</a>
-					) and you can not make trades that result in either team being over
-					the salary cap.
+					) and you can make trades that increase your payroll beyond the salary
+					cap as long as incoming salary is at most 125% of outgoing salary.
 				</p>
 				<p>
-					It is not really a strict hard cap, though. You can still go over the
-					cap to sign free agents to minimum contracts, which is to guarantee
-					that you never get stuck without enough players.
+					<b>None:</b> There is no limit to your payroll. The "Salary Cap"
+					setting is still used internally in many places to determine the
+					overall financial state of the league, but it does not limit your
+					signings or trades.
 				</p>
-				<p>This also disables the luxury tax.</p>
 			</>
 		),
 	},
@@ -583,7 +732,7 @@ export const settings: {
 			"Normally, teams controlled by the AI (including your team, if you're using Auto Play or Spectator Mode) will retire jersey numbers of their former players as they deem appropriate. You can disable that behavior here, and then the AI will not retire or unretire any jersey numbers.",
 	},
 	{
-		category: "Events",
+		category: "Injuries",
 		key: "injuryRate",
 		name: "Injury Rate",
 		godModeRequired: "always",
@@ -647,6 +796,13 @@ export const settings: {
 	},
 	{
 		category: "Events",
+		key: "tragicDeaths",
+		name: "Tragic Death Types",
+		type: "custom",
+		customForm: true,
+	},
+	{
+		category: "Events",
 		key: "brotherRate",
 		name: "Brother Rate",
 		type: "float",
@@ -671,24 +827,61 @@ export const settings: {
 			"Players at or above this age will retire at the end of the season. A number lower than the maximum draft age will disable this setting.",
 	},
 	{
-		category: "Contracts",
+		category: "Events",
+		key: "hofFactor",
+		name: "Hall of Fame Threshold Factor",
+		type: "float",
+		descriptionLong: (
+			<>
+				<p>
+					Hall of Fame eligibility is determined by a score based on player
+					stats. If it exceeds a threshold, the player is inducted into the Hall
+					of Fame.
+				</p>
+				<p>
+					The threshold is multiplied by the Hall of Fame Threshold Factor
+					before comparing. So if you increase this number, the Hall of Fame
+					becomes harder to get into. Decrease it and it is easier to get in.
+				</p>
+			</>
+		),
+	},
+	{
+		category: "Rookie Contracts",
+		key: "draftPickAutoContract",
+		name: "Rookie Salary Scale",
+		godModeRequired: "existingLeagueOnly",
+		type: "bool",
+	},
+	{
+		category: "Rookie Contracts",
+		key: "draftPickAutoContractPercent",
+		name: "#1 Pick Salary, % of Max Contract",
+		godModeRequired: "existingLeagueOnly",
+		type: "float",
+		decoration: "percent",
+	},
+	{
+		category: "Rookie Contracts",
+		key: "draftPickAutoContractRounds",
+		name: "Rounds With >Min Contracts",
+		godModeRequired: "existingLeagueOnly",
+		type: "int",
+	},
+	{
+		category: "Rookie Contracts",
 		key: "rookieContractLengths",
 		name: "Rookie Contract Lengths",
 		godModeRequired: "always",
 		descriptionLong: (
 			<>
-				<p>
-					Specify the length of rookie contracts. Different rounds can have
-					different lengths. The default is for first round picks to have 3 year
-					contracts and second round picks to have 2 year contracts, which looks
-					like: <code>[3,2]</code>. If you want every rookie contract to have
-					the same length regardless of round, just set one number like{" "}
-					<code>[2]</code> - this works because it uses the last value specified
-					here for any rounds where you don't define contract length.
-				</p>
-				<p>
-					This only applies if the <b>hard cap option is disabled</b>.
-				</p>
+				Specify the length of rookie contracts. Different rounds can have
+				different lengths. The default is for first round picks to have 3 year
+				contracts and second round picks to have 2 year contracts, which looks
+				like: <code>[3,2]</code>. If you want every rookie contract to have the
+				same length regardless of round, just set one number like{" "}
+				<code>[2]</code> - this works because it uses the last value specified
+				here for any rounds where you don't define contract length.
 			</>
 		),
 		type: "jsonString",
@@ -705,30 +898,25 @@ export const settings: {
 	},
 	{
 		category: "Contracts",
-		key: "rookiesCanRefuse",
-		name: "Rookies Can Refuse To Negotiate",
-		godModeRequired: "existingLeagueOnly",
-		descriptionLong: (
-			<>
-				<p>
-					{GAME_NAME} has no concept of "restricted free agency" like the NBA
-					does, so draft picks can refuse to negotiate with you after their
-					rookie contracts expire. This option can force every player to be
-					willing to negotiate when his rookie contract expires, which can
-					somewhat make up for restricted free agency not existing.
-				</p>
-				<p>
-					This only applies if the <b>hard cap option is disabled</b>.
-				</p>
-			</>
-		),
+		key: "playersRefuseToNegotiate",
+		name: "Players Can Refuse To Negotiate",
+		godModeRequired: "always",
 		type: "bool",
 	},
 	{
 		category: "Contracts",
-		key: "playersRefuseToNegotiate",
-		name: "Players Can Refuse To Negotiate",
-		godModeRequired: "always",
+		key: "rookiesCanRefuse",
+		name: "Can Refuse After Rookie Contract",
+		godModeRequired: "existingLeagueOnly",
+		descriptionLong: (
+			<>
+				{GAME_NAME} has no concept of "restricted free agency" like the NBA
+				does, so draft picks can refuse to negotiate with you after their rookie
+				contracts expire. This option can force every player to be willing to
+				negotiate when his rookie contract expires, which can somewhat make up
+				for restricted free agency not existing.
+			</>
+		),
 		type: "bool",
 	},
 	{
@@ -822,7 +1010,7 @@ export const settings: {
 			"In spectator mode, the AI controls all teams and you get to watch the league evolve. This is similar to Tools > Auto Play, but it lets you play through the season at your own pace.",
 	},
 	{
-		category: "Season",
+		category: "Schedule",
 		key: "tradeDeadline",
 		name: "Trade Deadline",
 		godModeRequired: "existingLeagueOnly",
@@ -853,12 +1041,48 @@ export const settings: {
 			}
 		},
 	},
+	{
+		category: "Playoffs",
+		key: "playoffsByConf",
+		name: "Split By Conference",
+		godModeRequired: "existingLeagueOnly",
+		descriptionLong:
+			"If your league has two conferences and there are enough teams in each conference to fill up half of the playoff bracket, then enabling this setting will put the top N teams of each conference into separate sides of the bracket.",
+		type: "bool",
+	},
+	{
+		category: "Playoffs",
+		key: "playoffsNumTeamsDiv",
+		name: "# Guaranteed Per Division",
+		godModeRequired: "existingLeagueOnly",
+		description:
+			"The number of teams per division that automatically make the playoffs as the top seeds.",
+		type: "int",
+	},
+	{
+		category: "Playoffs",
+		key: "playoffsReseed",
+		name: "Reseed Rounds",
+		godModeRequired: "existingLeagueOnly",
+		description:
+			"When enabled, the matchups in each round of the playoffs will be reset so the best team always plays the worst team.",
+		type: "bool",
+	},
+	{
+		category: "Players",
+		key: "playerBioInfo",
+		name: "Biographical Info",
+		godModeRequired: "always",
+		type: "custom",
+		description: "Customize the home countries and names of generated players.",
+		customForm: true,
+	},
 ];
 
 if (isSport("basketball")) {
 	settings.push(
 		{
-			category: "Season",
+			category: "Schedule",
 			key: "allStarGame",
 			name: "All-Star Game",
 			type: "floatOrNull",
@@ -1023,7 +1247,7 @@ if (isSport("basketball")) {
 				"The baseline rates for shooting and non-shooting fouls are multiplied by this number.",
 		},
 		{
-			category: "Player Development",
+			category: "Players",
 			key: "realPlayerDeterminism",
 			name: "Real Player Determinism",
 			godModeRequired: "existingLeagueOnly",
@@ -1092,6 +1316,32 @@ if (isSport("basketball")) {
 			},
 		},
 	);
+} else if (isSport("football")) {
+	settings.push({
+		category: "Game Simulation",
+		key: "foulRateFactor",
+		name: "Penalty Rate Factor",
+		godModeRequired: "always",
+		type: "float",
+		description:
+			"The baseline rate for penalties is multiplied by this number. Max is 10 because beyond that there is basically a penalty every play.",
+		validator: value => {
+			if (value > 10) {
+				throw new Error("Value cannot exceed 10");
+			}
+		},
+	});
+	settings.push({
+		category: "UI",
+		key: "fantasyPoints",
+		name: "Fantasy Points",
+		type: "string",
+		values: [
+			{ key: "standard", value: "Standard" },
+			{ key: "ppr", value: "PPR" },
+			{ key: "halfPpr", value: "Half PPR" },
+		],
+	});
 }
 
 settings.push(
@@ -1157,8 +1407,8 @@ settings.push(
 				<p>{descriptions.difficulty}</p>
 				<p>
 					If you set the difficulty to Easy, you will not get credit for any{" "}
-					<a href="/account">Achievements</a>. This persists even if you later
-					switch to a harder difficulty.
+					<a href="/achievements">Achievements</a>. This persists even if you
+					later switch to a harder difficulty.
 				</p>
 			</>
 		),
@@ -1170,12 +1420,20 @@ settings.push(
 		],
 	},
 	{
-		category: "General",
+		category: "Injuries",
 		key: "stopOnInjuryGames",
 		name: "Stop On Injury",
 		type: "int",
 		description:
 			"This will stop game simulation if one of your players is injured for more than N games. In auto play mode (Tools > Auto Play Seasons), this has no effect.",
+		customForm: true,
+		partners: ["stopOnInjury"],
+	},
+	{
+		category: "Injuries",
+		key: "injuries",
+		name: "Injury Types",
+		type: "custom",
 		customForm: true,
 	},
 	{
@@ -1193,6 +1451,22 @@ settings.push(
 		description:
 			"This will automatically delete box scores older than the past three seasons because box scores use a lot of disk space. See Tools > Delete Old Data for more.",
 	},
+	{
+		category: "UI",
+		key: "hideDisabledTeams",
+		name: "Hide Inactive Teams",
+		type: "bool",
+		descriptionLong:
+			"This will hide inactive teams from dropdown menus at the top of many pages, such as the roster page.",
+	},
+	{
+		category: "Players",
+		key: "goatFormula",
+		name: "GOAT Formula",
+		type: "string",
+		description: "See Tools > Frivolities > GOAT Lab for details.",
+		maxWidth: true,
+	},
 );
 
 if (isSport("basketball")) {
@@ -1209,6 +1483,28 @@ if (isSport("basketball")) {
 			}
 			if (value <= 0) {
 				throw new Error("Value must be greater than 0");
+			}
+		},
+	});
+	settings.push({
+		category: "All-Star Contests",
+		key: "numPlayersDunk",
+		name: "# Players In Dunk Contest",
+		type: "int",
+		validator: value => {
+			if (value <= 1) {
+				throw new Error("Value must be greater than 2");
+			}
+		},
+	});
+	settings.push({
+		category: "All-Star Contests",
+		key: "numPlayersThree",
+		name: "# Players In 3pt Contest",
+		type: "int",
+		validator: value => {
+			if (value <= 1) {
+				throw new Error("Value must be greater than 2");
 			}
 		},
 	});

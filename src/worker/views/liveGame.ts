@@ -10,7 +10,7 @@ const updatePlayByPlay = async (
 	updateEvents: UpdateEvents,
 ) => {
 	const redirectToMenu = {
-		redirectUrl: helpers.leagueUrl(["live"]),
+		redirectUrl: helpers.leagueUrl(["daily_schedule"]),
 	};
 
 	if (updateEvents.includes("firstRun") && !inputs.fromAction) {
@@ -18,12 +18,12 @@ const updatePlayByPlay = async (
 	}
 
 	if (
-		inputs.gidPlayByPlay !== undefined &&
+		inputs.gid !== undefined &&
 		inputs.playByPlay !== undefined &&
 		inputs.playByPlay.length > 0
 	) {
 		const boxScore: any = helpers.deepCopy(
-			await idb.cache.games.get(inputs.gidPlayByPlay),
+			await idb.cache.games.get(inputs.gid),
 		);
 
 		const otl = g.get("otl", "current");
@@ -90,13 +90,19 @@ const updatePlayByPlay = async (
 			}
 
 			for (let j = 0; j < t.players.length; j++) {
-				const p = t.players[j]; // Fix for players who were hurt this game - don't show right away!
+				const p = t.players[j];
 
-				if (p.injury.type !== "Healthy" && p.min > 0) {
-					p.injury = {
-						type: "Healthy",
-						gamesRemaining: 0,
-					};
+				// Fix for players who were hurt this game - don't show right away! And handle players playing through an injury who were injured again.
+				if (p.injury.newThisGame) {
+					p.injury = p.injuryAtStart
+						? {
+								...p.injuryAtStart,
+								playingThrough: true,
+						  }
+						: {
+								type: "Healthy",
+								gamesRemaining: 0,
+						  };
 				}
 
 				for (const stat of resetStatsPlayer) {
@@ -120,13 +126,17 @@ const updatePlayByPlay = async (
 			}
 		}
 
+		// For FBGM, build up scoringSummary from events, to handle deleting a score due to penalty
+		if (isSport("football")) {
+			boxScore.scoringSummary = [];
+		}
+
 		// For confetti
 		let finals = false;
 		if (boxScore.playoffs && g.get("phase") >= PHASE.PLAYOFFS) {
 			const playoffSeries = await idb.cache.playoffSeries.get(g.get("season"));
 			if (playoffSeries) {
-				const finalRound =
-					playoffSeries.series[playoffSeries.series.length - 1];
+				const finalRound = playoffSeries.series.at(-1);
 				if (finalRound.length === 1) {
 					const finalMatchup = finalRound[0];
 					if (

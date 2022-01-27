@@ -1,5 +1,4 @@
-import groupBy from "lodash-es/groupBy";
-import PropTypes from "prop-types";
+import { groupBy } from "../../common/groupBy";
 import { DataTable, MoreLinks } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
@@ -26,9 +25,6 @@ const CheckmarkOrCross = ({ success }: { success: boolean }) => {
 
 	return <span className="glyphicon glyphicon-remove text-danger" />;
 };
-CheckmarkOrCross.propTypes = {
-	success: PropTypes.bool.isRequired,
-};
 
 const AwardsRecords = ({
 	awardType,
@@ -43,7 +39,7 @@ const AwardsRecords = ({
 			awardType,
 		},
 	});
-	const cols = getCols("Name", "Count", "Year", "Last", "Retired", "HOF");
+	const cols = getCols(["Name", "Count", "Year", "Last", "Retired", "HOF"]);
 
 	const rows = awardsRecords.map(a => {
 		return {
@@ -88,13 +84,6 @@ const AwardsRecords = ({
 			/>
 		</>
 	);
-};
-
-AwardsRecords.propTypes = {
-	awardType: PropTypes.string.isRequired,
-	awardTypeVal: PropTypes.string.isRequired,
-	awardsRecords: PropTypes.arrayOf(PropTypes.object).isRequired,
-	playerCount: PropTypes.number.isRequired,
 };
 
 export default AwardsRecords;

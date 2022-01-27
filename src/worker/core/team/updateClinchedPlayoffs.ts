@@ -3,6 +3,7 @@ import type { TeamSeason, Conditions, TeamStats } from "../../../common/types";
 import { g, helpers, logEvent } from "../../util";
 import { genPlayoffSeriesFromTeams } from "../season/genPlayoffSeries";
 import evaluatePointsFormula from "./evaluatePointsFormula";
+import { season } from "..";
 
 type ClinchedPlayoffs = TeamSeason["clinchedPlayoffs"];
 
@@ -11,6 +12,10 @@ const getClinchedPlayoffs = async (
 	teamStats: Map<number, TeamStats>,
 	finalStandings: boolean,
 ) => {
+	if (g.get("numGamesPlayoffSeries").length === 0) {
+		return teamSeasons.map(() => undefined);
+	}
+
 	const usePts = g.get("pointsFormula", "current") !== "";
 
 	// We can skip tiebreakers because we add an extra 0.1 to the best/worst case win totals. Without skipping tiebreakers, it's way too slow.
@@ -81,6 +86,7 @@ const getClinchedPlayoffs = async (
 			return worstCase;
 		});
 
+		// w - clinched play-in tournament
 		// x - clinched playoffs
 		// y - if byes exist - clinched bye
 		// z - clinched home court advantage
@@ -90,18 +96,24 @@ const getClinchedPlayoffs = async (
 		const result = await genPlayoffSeriesFromTeams(worstCases, {
 			skipTiebreakers,
 		});
-		const matchups = result.series[0];
-		for (const matchup of matchups) {
-			if (matchup.home.tid === t.tid && matchup.home.seed === 1) {
-				clinchedPlayoffs = "z";
-			} else if (!matchup.away && matchup.home.tid === t.tid) {
-				clinchedPlayoffs = "y";
-			}
-		}
 
-		if (!clinchedPlayoffs) {
-			if (result.tidPlayoffs.includes(t.tid)) {
-				clinchedPlayoffs = "x";
+		if (result.tidPlayIn.includes(t.tid)) {
+			// Play-in dominates any other classification
+			clinchedPlayoffs = "w";
+		} else {
+			const matchups = result.series[0];
+			for (const matchup of matchups) {
+				if (matchup.home.tid === t.tid && matchup.home.seed === 1) {
+					clinchedPlayoffs = "z";
+				} else if (!matchup.away && matchup.home.tid === t.tid) {
+					clinchedPlayoffs = "y";
+				}
+			}
+
+			if (!clinchedPlayoffs) {
+				if (result.tidPlayoffs.includes(t.tid)) {
+					clinchedPlayoffs = "x";
+				}
 			}
 		}
 
@@ -171,7 +183,10 @@ const getClinchedPlayoffs = async (
 			const result = await genPlayoffSeriesFromTeams(bestCases, {
 				skipTiebreakers,
 			});
-			if (!result.tidPlayoffs.includes(t.tid)) {
+			if (
+				!result.tidPlayoffs.includes(t.tid) &&
+				!result.tidPlayIn.includes(t.tid)
+			) {
 				clinchedPlayoffs = "o";
 			}
 		}
@@ -205,19 +220,24 @@ const updateClinchedPlayoffs = async (
 		finalStandings,
 	);
 
+	let playoffsByConf: boolean | undefined;
 	for (let i = 0; i < teamSeasons.length; i++) {
 		const ts = teamSeasons[i];
 		if (clinchedPlayoffs[i] !== ts.clinchedPlayoffs) {
 			ts.clinchedPlayoffs = clinchedPlayoffs[i];
 
 			let action = "";
-			if (clinchedPlayoffs[i] === "x") {
+			if (clinchedPlayoffs[i] === "w") {
+				action = "clinched a play-in tournament spot";
+			} else if (clinchedPlayoffs[i] === "x") {
 				action = "clinched a playoffs spot";
 			} else if (clinchedPlayoffs[i] === "y") {
 				action = "clinched a first round bye";
 			} else if (clinchedPlayoffs[i] === "z") {
-				const playoffsByConference = g.get("confs", "current").length === 2;
-				action = `clinched ${playoffsByConference ? "a" : "the"} #1 seed`;
+				if (playoffsByConf === undefined) {
+					playoffsByConf = await season.getPlayoffsByConf(g.get("season"));
+				}
+				action = `clinched ${playoffsByConf ? "a" : "the"} #1 seed`;
 			} else if (clinchedPlayoffs[i] === "o") {
 				action = "have been eliminated from playoff contention";
 			}

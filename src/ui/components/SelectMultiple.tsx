@@ -1,45 +1,31 @@
-import { useState } from "react";
 import Select from "react-select";
 
-const SelectReact = ({
-	defaultValue,
+const SelectMultiple = <T extends Record<string, unknown>>({
+	value,
 	options,
-	changing,
-	teamNumber,
-	playerNumber,
+	onChange,
+	isClearable = true,
 	getOptionLabel,
+	getOptionValue,
 }: {
-	defaultValue: any;
-	options: any[];
-	changing: (arg: any) => boolean;
-	teamNumber?: number;
-	playerNumber?: number;
-	getOptionLabel: any;
+	value: T | null | undefined;
+	options: T[];
+	onChange: (value: T | null) => void;
+	isClearable?: boolean;
+	getOptionLabel: (value: T) => string;
+	getOptionValue: (value: T) => string;
 }) => {
-	const [value, setValue] = useState(defaultValue);
-
-	const handleChange = (p: any) => {
-		const error = changing({
-			p,
-			teamNumber,
-			playerNumber,
-		});
-		if (!error) {
-			setValue(p);
-		}
-	};
-
 	return (
-		<Select
+		<Select<T>
 			classNamePrefix="dark-select"
 			value={value}
-			isClearable
-			onChange={handleChange}
+			isClearable={isClearable}
+			onChange={onChange}
 			options={options}
-			getOptionValue={p => p.pid}
+			getOptionValue={getOptionValue}
 			getOptionLabel={getOptionLabel}
 		/>
 	);
 };
 
-export default SelectReact;
+export default SelectMultiple;

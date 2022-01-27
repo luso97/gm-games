@@ -3,6 +3,7 @@ import { team } from "../core";
 import { idb } from "../db";
 import { g, helpers } from "../util";
 import type { UpdateEvents, ViewInput } from "../../common/types";
+import { getAutoTicketPriceByTid } from "../core/game/attendance";
 
 const updateTeamFinances = async (
 	inputs: ViewInput<"teamFinances">,
@@ -23,7 +24,7 @@ const updateTeamFinances = async (
 		if (inputs.show === "all") {
 			showInt = g.get("season") - g.get("startingSeason") + 1;
 		} else {
-			showInt = parseInt(inputs.show, 10);
+			showInt = parseInt(inputs.show);
 		}
 
 		let season = g.get("season");
@@ -100,7 +101,7 @@ const updateTeamFinances = async (
 			"expenses",
 		] as const;
 
-		// @ts-ignore
+		// @ts-expect-error
 		const barData: Record<"won" | "hype" | "pop" | "att" | "cash", number[]> &
 			Record<"revenues" | "expenses", any> = {};
 
@@ -108,7 +109,7 @@ const updateTeamFinances = async (
 			if (teamSeasons.length > 0) {
 				if (typeof teamSeasons[0][key] === "number") {
 					barData[key] = helpers.zeroPad(
-						// @ts-ignore
+						// @ts-expect-error
 						teamSeasons.map(ts => ts[key]),
 						showInt,
 					);
@@ -119,7 +120,7 @@ const updateTeamFinances = async (
 
 					for (const key2 of Object.keys(tempData[0])) {
 						barData[key][key2] = helpers.zeroPad(
-							// @ts-ignore
+							// @ts-expect-error
 							tempData.map(x => x[key2]).map(x => x.amount),
 							showInt,
 						);
@@ -164,13 +165,24 @@ const updateTeamFinances = async (
 		}
 
 		// Get stuff for the finances form
-		const t = await idb.getCopy.teamsPlus({
-			attrs: ["budget", "adjustForInflation"],
-			seasonAttrs: ["expenses"],
-			season: g.get("season"),
-			tid: inputs.tid,
-			addDummySeason: true,
-		});
+		const t = await idb.getCopy.teamsPlus(
+			{
+				attrs: ["budget", "adjustForInflation", "autoTicketPrice"],
+				seasonAttrs: ["expenses"],
+				season: g.get("season"),
+				tid: inputs.tid,
+				addDummySeason: true,
+			},
+			"noCopyCache",
+		);
+
+		if (!t) {
+			throw new Error("Team not found");
+		}
+
+		// undefined is true (for upgrades), and AI teams are always true
+		t.autoTicketPrice =
+			t.autoTicketPrice !== false || !g.get("userTids").includes(inputs.tid);
 
 		const maxStadiumCapacity = teamSeasons.reduce((max, teamSeason) => {
 			if (teamSeason.stadiumCapacity > max) {
@@ -180,10 +192,13 @@ const updateTeamFinances = async (
 			return max;
 		}, 0);
 
+		const autoTicketPrice = await getAutoTicketPriceByTid(inputs.tid);
+
 		return {
 			abbrev: inputs.abbrev,
+			autoTicketPrice,
 			challengeNoRatings: g.get("challengeNoRatings"),
-			hardCap: g.get("hardCap"),
+			salaryCapType: g.get("salaryCapType"),
 			numGames: g.get("numGames"),
 			tid: inputs.tid,
 			show: inputs.show,

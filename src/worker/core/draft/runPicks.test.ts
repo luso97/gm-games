@@ -7,7 +7,7 @@ import { g } from "../../util";
 import { getDraftTids, loadTeamSeasons } from "./testHelpers";
 
 const testRunPicks = async (numNow: number, numTotal: number) => {
-	const pids = await draft.runPicks("untilYourNextPick");
+	const pids = await draft.runPicks({ type: "untilYourNextPick" });
 	assert.strictEqual(pids.length, numNow);
 	const players = (
 		await idb.cache.players.indexGetAll("playersByDraftYearRetiredYear", [
@@ -58,7 +58,7 @@ describe("worker/core/draft/runPicks", () => {
 		userPick2 = draftTids.lastIndexOf(g.get("userTid")) + 1;
 	});
 	afterAll(() => {
-		// @ts-ignore
+		// @ts-expect-error
 		idb.league = undefined;
 	});
 

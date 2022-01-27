@@ -1,39 +1,44 @@
 import { unwrap } from "idb";
 import orderBy from "lodash-es/orderBy";
 import {
+	DEFAULT_PLAY_THROUGH_INJURIES,
+	DIFFICULTY,
+	gameAttributesArrayToObject,
 	isSport,
 	MAX_SUPPORTED_LEAGUE_VERSION,
 	PHASE,
 	PLAYER,
+	unwrapGameAttribute,
 } from "../../common";
 import { player, season } from "../core";
 import { idb } from ".";
 import iterate from "./iterate";
 import { defaultGameAttributes, helpers, logEvent } from "../util";
 import connectIndexedDB from "./connectIndexedDB";
-import type { DBSchema, IDBPDatabase, IDBPTransaction } from "idb";
+import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 import type {
 	DraftLotteryResult,
-	DraftPickWithoutKey,
-	ReleasedPlayerWithoutKey,
+	ReleasedPlayer,
 	AllStars,
-	EventBBGMWithoutKey,
+	EventBBGM,
 	GameAttribute,
 	Game,
-	MessageWithoutKey,
+	Message,
 	Negotiation,
-	PlayerFeatWithoutKey,
-	PlayerWithoutKey,
+	PlayerFeat,
+	Player,
 	MinimalPlayerRatings,
 	PlayoffSeries,
-	ScheduleGameWithoutKey,
-	TeamSeasonWithoutKey,
-	TeamStatsWithoutKey,
+	ScheduleGame,
+	TeamSeason,
+	TeamStats,
 	Team,
 	Trade,
-	ScheduledEventWithoutKey,
+	ScheduledEvent,
 	HeadToHead,
+	DraftPick,
 } from "../../common/types";
+import getInitialNumGamesConfDivSettings from "../core/season/getInitialNumGamesConfDivSettings";
 
 export interface LeagueDB extends DBSchema {
 	allStars: {
@@ -50,12 +55,12 @@ export interface LeagueDB extends DBSchema {
 	};
 	draftPicks: {
 		key: number;
-		value: DraftPickWithoutKey;
+		value: DraftPick;
 		autoIncrementKeyPath: "dpid";
 	};
 	events: {
 		key: number;
-		value: EventBBGMWithoutKey;
+		value: EventBBGM;
 		autoIncrementKeyPath: "eid";
 		indexes: {
 			dpids: number;
@@ -65,7 +70,7 @@ export interface LeagueDB extends DBSchema {
 	};
 	gameAttributes: {
 		key: string;
-		value: GameAttribute;
+		value: GameAttribute<any>;
 	};
 	games: {
 		key: number;
@@ -80,7 +85,7 @@ export interface LeagueDB extends DBSchema {
 	};
 	messages: {
 		key: number;
-		value: MessageWithoutKey;
+		value: Message;
 		autoIncrementKeyPath: "mid";
 	};
 	negotiations: {
@@ -89,17 +94,20 @@ export interface LeagueDB extends DBSchema {
 	};
 	playerFeats: {
 		key: number;
-		value: PlayerFeatWithoutKey;
+		value: PlayerFeat;
 		autoIncrementKeyPath: "fid";
 	};
 	players: {
 		key: number;
-		value: PlayerWithoutKey<MinimalPlayerRatings>;
+		value: Player<MinimalPlayerRatings>;
 		autoIncrementKeyPath: "pid";
 		indexes: {
 			"draft.year, retiredYear": [number, number];
+			hof: 1;
+			noteBool: 1;
 			statsTids: number;
 			tid: number;
+			watch: 1;
 		};
 	};
 	playoffSeries: {
@@ -108,17 +116,17 @@ export interface LeagueDB extends DBSchema {
 	};
 	releasedPlayers: {
 		key: number;
-		value: ReleasedPlayerWithoutKey;
+		value: ReleasedPlayer;
 		autoIncrementKeyPath: "rid";
 	};
 	schedule: {
 		key: number;
-		value: ScheduleGameWithoutKey;
+		value: ScheduleGame;
 		autoIncrementKeyPath: "gid";
 	};
 	scheduledEvents: {
 		key: number;
-		value: ScheduledEventWithoutKey;
+		value: ScheduledEvent;
 		autoIncrementKeyPath: "id";
 		indexes: {
 			season: number;
@@ -126,7 +134,7 @@ export interface LeagueDB extends DBSchema {
 	};
 	teamSeasons: {
 		key: number;
-		value: TeamSeasonWithoutKey;
+		value: TeamSeason;
 		autoIncrementKeyPath: "rid";
 		indexes: {
 			"season, tid": [number, number];
@@ -135,7 +143,7 @@ export interface LeagueDB extends DBSchema {
 	};
 	teamStats: {
 		key: number;
-		value: TeamStatsWithoutKey;
+		value: TeamStats;
 		autoIncrementKeyPath: "rid";
 		indexes: {
 			"season, tid": [number, number];
@@ -151,6 +159,12 @@ export interface LeagueDB extends DBSchema {
 		value: Trade;
 	};
 }
+
+type VersionChangeTransaction = IDBPTransaction<
+	LeagueDB,
+	StoreNames<LeagueDB>[],
+	"versionchange"
+>;
 
 // I did it this way (with the raw IDB API) because I was afraid it would read all players into memory before getting
 // the stats and writing them back to the database. Promises/async/await would help, but Firefox before 60 does not like
@@ -263,7 +277,7 @@ const upgrade31 = (tx: IDBTransaction) => {
 	};
 };
 
-const upgrade33 = (transaction: IDBPTransaction<LeagueDB>) => {
+const upgrade33 = (transaction: VersionChangeTransaction) => {
 	const tx = unwrap(transaction);
 	tx.objectStore("gameAttributes").get("season").onsuccess = (event: any) => {
 		if (event.target.result === undefined) {
@@ -313,7 +327,7 @@ const upgrade33 = (transaction: IDBPTransaction<LeagueDB>) => {
 	};
 };
 
-const upgrade38 = (transaction: IDBPTransaction<LeagueDB>) => {
+const upgrade38 = (transaction: VersionChangeTransaction) => {
 	const tx = unwrap(transaction);
 	const scheduleStore = tx.objectStore("schedule");
 	scheduleStore.getAll().onsuccess = (event: any) => {
@@ -325,6 +339,48 @@ const upgrade38 = (transaction: IDBPTransaction<LeagueDB>) => {
 			for (const game of updated) {
 				scheduleStore.put(game);
 			}
+		};
+	};
+};
+
+const upgrade45 = (transaction: VersionChangeTransaction) => {
+	const tx = unwrap(transaction);
+
+	const gameAttributesStore = tx.objectStore("gameAttributes");
+
+	gameAttributesStore.getAll().onsuccess = (event: any) => {
+		const gameAttributes = gameAttributesArrayToObject(event.target.result);
+
+		const settings = {
+			divs: unwrapGameAttribute(gameAttributes, "divs"),
+			numGames: gameAttributes.numGames,
+			numGamesConf: defaultGameAttributes.numGamesConf,
+			numGamesDiv: defaultGameAttributes.numGamesDiv,
+		};
+
+		tx.objectStore("teams").getAll().onsuccess = (event2: any) => {
+			const teams = event2.target.result;
+
+			let numGamesDiv = null;
+			let numGamesConf = null;
+
+			try {
+				const response = getInitialNumGamesConfDivSettings(teams, settings);
+				numGamesDiv = response.numGamesDiv;
+				numGamesConf = response.numGamesConf;
+			} catch (error) {
+				console.error(error);
+			}
+
+			gameAttributesStore.put({
+				key: "numGamesDiv",
+				value: numGamesDiv,
+			});
+
+			gameAttributesStore.put({
+				key: "numGamesConf",
+				value: numGamesConf,
+			});
 		};
 	};
 };
@@ -431,6 +487,15 @@ const create = (db: IDBPDatabase<LeagueDB>) => {
 	playerStore.createIndex("tid", "tid", {
 		unique: false,
 	});
+	playerStore.createIndex("hof", "hof", {
+		unique: false,
+	});
+	playerStore.createIndex("noteBool", "noteBool", {
+		unique: false,
+	});
+	playerStore.createIndex("watch", "watch", {
+		unique: false,
+	});
 	teamSeasonsStore.createIndex("season, tid", ["season", "tid"], {
 		unique: true,
 	});
@@ -440,8 +505,6 @@ const create = (db: IDBPDatabase<LeagueDB>) => {
 	teamStatsStore.createIndex("season, tid", ["season", "tid"], {
 		unique: false,
 	});
-
-	// Not unique because of playoffs
 	teamStatsStore.createIndex("tid", "tid", {
 		unique: false,
 	});
@@ -455,7 +518,7 @@ const create = (db: IDBPDatabase<LeagueDB>) => {
 	});
 };
 
-const migrate = ({
+const migrate = async ({
 	db,
 	lid,
 	oldVersion,
@@ -464,7 +527,7 @@ const migrate = ({
 	db: IDBPDatabase<LeagueDB>;
 	lid: number;
 	oldVersion: number;
-	transaction: IDBPTransaction<LeagueDB>;
+	transaction: VersionChangeTransaction;
 }) => {
 	console.log(db, lid, oldVersion, transaction);
 	let upgradeMsg = `Upgrading league${lid} database from version ${oldVersion} to version ${db.version}.`;
@@ -1007,7 +1070,134 @@ const migrate = ({
 		}
 	}
 
-	// New ones here!
+	if (oldVersion <= 43) {
+		iterate(transaction.objectStore("teams"), undefined, undefined, t => {
+			if (!t.playThroughInjuries) {
+				t.playThroughInjuries = DEFAULT_PLAY_THROUGH_INJURIES;
+				return t;
+			}
+		});
+	}
+
+	if (oldVersion <= 44) {
+		upgrade45(transaction);
+	}
+
+	if (oldVersion <= 45) {
+		transaction.objectStore("gameAttributes").put({
+			key: "playIn",
+			value: false,
+		});
+	}
+
+	if (oldVersion <= 46) {
+		slowUpgrade();
+
+		iterate(transaction.objectStore("players"), undefined, undefined, p => {
+			if ((p as any).mood) {
+				// Delete mood property that was accidentally saved previously
+				delete (p as any).mood;
+				return p;
+			}
+		});
+	}
+
+	if (oldVersion <= 47) {
+		// Gets need to use raw IDB API because Firefox < 60
+		const tx = unwrap(transaction);
+
+		tx.objectStore("gameAttributes").get("difficulty").onsuccess = (
+			event: any,
+		) => {
+			let difficulty =
+				event.target.result !== undefined
+					? event.target.result.value
+					: undefined;
+
+			tx.objectStore("gameAttributes").get("easyDifficultyInPast").onsuccess = (
+				event: any,
+			) => {
+				let easyDifficultyInPast =
+					event.target.result !== undefined
+						? event.target.result.value
+						: undefined;
+
+				if (typeof difficulty !== "number") {
+					difficulty = 0;
+				}
+				if (typeof easyDifficultyInPast !== "boolean") {
+					easyDifficultyInPast = false;
+				}
+
+				let lowestDifficulty = difficulty;
+				if (easyDifficultyInPast && lowestDifficulty > DIFFICULTY.Easy) {
+					lowestDifficulty = DIFFICULTY.Easy;
+				}
+
+				console.log(difficulty, easyDifficultyInPast, lowestDifficulty);
+
+				tx.objectStore("gameAttributes").put({
+					key: "lowestDifficulty",
+					value: lowestDifficulty,
+				});
+			};
+		};
+	}
+
+	if (oldVersion <= 49) {
+		slowUpgrade();
+
+		const playerStore = transaction.objectStore("players");
+		await iterate(
+			transaction.objectStore("players"),
+			undefined,
+			undefined,
+			p => {
+				for (const key of ["hof", "watch"] as const) {
+					if (p[key]) {
+						p[key] = 1;
+					} else {
+						delete p[key];
+					}
+				}
+
+				if (p.note) {
+					p.noteBool = 1;
+				} else {
+					delete p.note;
+				}
+
+				return p;
+			},
+		);
+
+		// Had hof index in version 49, others in 50. Merged together here so the upgrade could happen together for people who have not yet upgraded to 49
+		if (oldVersion <= 48) {
+			playerStore.createIndex("hof", "hof", {
+				unique: false,
+			});
+		}
+		playerStore.createIndex("noteBool", "noteBool", {
+			unique: false,
+		});
+		playerStore.createIndex("watch", "watch", {
+			unique: false,
+		});
+	}
+
+	if (oldVersion <= 50) {
+		const store = transaction.objectStore("gameAttributes");
+		const hardCap = await store.get("hardCap");
+
+		if (hardCap) {
+			const newValue = hardCap.value ? "hard" : "soft";
+			await store.put({
+				key: "salaryCapType",
+				value: newValue,
+			});
+			await store.delete("hardCap");
+		}
+	}
 };
 
 const connectLeague = (lid: number) =>

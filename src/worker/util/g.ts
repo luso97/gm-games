@@ -20,7 +20,7 @@ const g: GameAttributes & {
 
 	get: (key, season = Infinity) => {
 		if (g.hasOwnProperty(key)) {
-			// @ts-ignore
+			// @ts-expect-error
 			const gameAttribute = g[key];
 
 			if (gameAttributeHasHistory(gameAttribute)) {
@@ -45,7 +45,6 @@ const g: GameAttributes & {
 				return null;
 			}
 
-			// @ts-ignore
 			return gameAttribute;
 		}
 
@@ -54,7 +53,7 @@ const g: GameAttributes & {
 
 	setWithoutSavingToDB: (key, value) => {
 		// Should this error when setting a key that doesn't exist, like setting a value form GameAttributesLeague when not in a league? Maybe, but need a way to initialize it first.
-		// @ts-ignore
+		// @ts-expect-error
 		g[key] = value;
 	},
 };
@@ -63,8 +62,11 @@ export const wrap = <T extends keyof GameAttributesLeague>(
 	gameAttributes: any,
 	key: T,
 	value: GameAttributesLeague[T],
+	override?: {
+		season: number;
+		phase: number;
+	},
 ) => {
-	// @ts-ignore
 	const gameAttribute = gameAttributes[key];
 
 	if (!gameAttributeHasHistory(gameAttribute)) {
@@ -73,18 +75,26 @@ export const wrap = <T extends keyof GameAttributesLeague>(
 
 	const cloned = helpers.deepCopy(gameAttribute);
 
-	const latestRow = cloned[cloned.length - 1];
+	const latestRow = cloned.at(-1);
 
-	let currentSeason =
-		gameAttributes.season !== undefined
-			? gameAttributes.season
-			: g.get("season");
+	let currentSeason;
+	let actualPhase;
 
-	let actualPhase = gameAttributes.phase ?? g.get("phase");
-	if (actualPhase < 0) {
-		const nextPhase = g.get("nextPhase");
-		if (nextPhase !== undefined) {
-			actualPhase = nextPhase;
+	if (override) {
+		currentSeason = override.season;
+		actualPhase = override.phase;
+	} else {
+		currentSeason =
+			gameAttributes.season !== undefined
+				? gameAttributes.season
+				: g.get("season");
+
+		actualPhase = gameAttributes.phase ?? g.get("phase");
+		if (actualPhase < 0) {
+			const nextPhase = g.get("nextPhase");
+			if (nextPhase !== undefined) {
+				actualPhase = nextPhase;
+			}
 		}
 	}
 

@@ -7,24 +7,28 @@ import {
 	SafeHtml,
 } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
-import { getCols, helpers } from "../util";
+import { getCols, helpers, logEvent, toWorker } from "../util";
 import type { View } from "../../common/types";
 import { dataTableWrappedMood } from "../components/Mood";
 
 const NegotiationList = ({
 	capSpace,
 	challengeNoRatings,
-	hardCap,
+	draftPickAutoContract,
 	maxContract,
 	minContract,
 	numRosterSpots,
 	spectator,
 	players,
+	salaryCapType,
 	stats,
 	sumContracts,
 	userPlayers,
 }: View<"negotiationList">) => {
-	const title = hardCap ? "Rookies and Expiring Contracts" : "Re-sign Players";
+	const title =
+		salaryCapType === "hard" || !draftPickAutoContract
+			? "Rookies and Expiring Contracts"
+			: "Re-sign Players";
 
 	useTitleBar({ title });
 
@@ -32,7 +36,7 @@ const NegotiationList = ({
 		return <p>The AI will handle re-signing players in spectator mode.</p>;
 	}
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"Age",
@@ -44,7 +48,7 @@ const NegotiationList = ({
 		"Asking For",
 		"Exp",
 		"Negotiate",
-	);
+	]);
 
 	const rows = players.map(p => {
 		return {
@@ -79,9 +83,11 @@ const NegotiationList = ({
 				{
 					value: (
 						// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-						// @ts-ignore
+						// @ts-expect-error
 						<NegotiateButtons
-							canGoOverCap
+							canGoOverCap={
+								salaryCapType === "none" || salaryCapType === "soft"
+							}
 							capSpace={capSpace}
 							minContract={minContract}
 							spectator={spectator}
@@ -92,12 +98,17 @@ const NegotiationList = ({
 					searchValue: p.mood.user.willing ? "Negotiate Sign" : "Refuses!",
 				},
 			],
+			classNames: {
+				"table-info": p.contract.rookie,
+			},
 		};
 	});
 
+	const hasRookies = players.some(p => p.contract.rookie);
+
 	return (
 		<>
-			<RosterComposition className="float-right mb-3" players={userPlayers} />
+			<RosterComposition className="float-end mb-3" players={userPlayers} />
 
 			<p>
 				More:{" "}
@@ -106,7 +117,7 @@ const NegotiationList = ({
 				</a>
 			</p>
 
-			{!hardCap ? (
+			{salaryCapType === "soft" ? (
 				<p>
 					You are allowed to go over the salary cap to re-sign your players
 					before they become free agents. If you do not re-sign them before free
@@ -117,17 +128,42 @@ const NegotiationList = ({
 
 			<RosterSalarySummary
 				capSpace={capSpace}
-				hardCap={hardCap}
+				salaryCapType={salaryCapType}
 				maxContract={maxContract}
 				minContract={minContract}
 				numRosterSpots={numRosterSpots}
 			/>
 
-			{hardCap ? (
-				<p>
-					Your unsigned players are asking for a total of{" "}
-					<b>{helpers.formatCurrency(sumContracts, "M")}</b>.
-				</p>
+			<p>
+				Your unsigned players are asking for a total of{" "}
+				<b>{helpers.formatCurrency(sumContracts, "M")}</b>.
+				{hasRookies ? (
+					<>
+						{" "}
+						Rookies you just drafted are{" "}
+						<span className="text-info">highlighted in blue</span>.
+					</>
+				) : null}
+			</p>
+
+			{(salaryCapType !== "hard" || sumContracts < capSpace) &&
+			players.length > 0 ? (
+				<button
+					className="btn btn-secondary mb-3"
+					onClick={async () => {
+						const errorMsg = await toWorker("main", "reSignAll", players);
+
+						if (errorMsg) {
+							logEvent({
+								type: "error",
+								text: errorMsg,
+								saveToDb: false,
+							});
+						}
+					}}
+				>
+					Re-sign all
+				</button>
 			) : null}
 
 			<DataTable

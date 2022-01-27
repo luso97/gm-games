@@ -39,22 +39,26 @@ const Players = ({
 				  ]
 				: season;
 
-		await toWorker("main", "retiredJerseyNumberUpsert", tid, undefined, {
-			number,
-			seasonRetired: season,
-			seasonTeamInfo,
-			pid: p.pid,
-			text: "",
+		await toWorker("main", "retiredJerseyNumberUpsert", {
+			tid,
+			info: {
+				number,
+				// Season can only can be undefined if gmHistory is true, but then there are no jersey retirements
+				seasonRetired: season!,
+				seasonTeamInfo,
+				pid: p.pid,
+				text: "",
+			},
 		});
 	};
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		...stats.map(stat => `stat:${stat}`),
 		"Last Season",
 		"Actions",
-	);
+	]);
 	if (!includeRetireJerseyButton) {
 		cols.pop();
 	}

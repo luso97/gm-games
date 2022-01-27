@@ -84,7 +84,7 @@ const value = (
 
 	// No stats at all? Just look at ratings more, then.
 	if (isSport("basketball") && ps.length > 0) {
-		const ps1 = ps[ps.length - 1]; // Most recent stats
+		const ps1 = ps.at(-1); // Most recent stats
 
 		if (ps.length === 1 || ps[0].min >= 2000) {
 			// Only one year of stats
@@ -119,11 +119,11 @@ const value = (
 
 	if (isSport("football")) {
 		if (pr.pos === "QB") {
-			current *= 1.25;
-			potential *= 1.25;
+			current *= 1.1;
+			potential *= 1.1;
 		} else if (pr.pos === "K" || pr.pos === "P") {
-			current *= 0.25;
-			potential *= 0.25;
+			current *= 0.65;
+			potential *= 0.65;
 		}
 	}
 
@@ -147,7 +147,9 @@ const value = (
 	}
 
 	// Otherwise, combine based on age
-	return valueCombineOvrPot(current, potential, age);
+	const combined = valueCombineOvrPot(current, potential, age);
+
+	return combined < 0 ? Number.MIN_VALUE : combined;
 };
 
 export default value;

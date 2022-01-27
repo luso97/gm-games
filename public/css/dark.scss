@@ -17,7 +17,7 @@ $blue: lighten(#007bff, 25);
 $indigo: lighten(#6610f2, 20);
 $purple: lighten(#6f42c1, 20);
 $pink: lighten(#e83e8c, 20);
-$red: lighten(#dc3545, 0);
+$red: #dc3545;
 $orange: lighten(#fd7e14, 10);
 $yellow: lighten(#ffc107, 20);
 $green: lighten(#28a745, 10);
@@ -27,6 +27,17 @@ $cyan: lighten(#17a2b8, 20);
 $primary: $orange;
 $secondary: $gray-400;
 $text-muted: $gray-400;
+
+$table-bg-scale: 70%;
+$table-hover-bg-factor: 0.1;
+
+$alert-bg-scale: 70%;
+$alert-border-scale: 60%;
+
+$list-group-item-bg-scale: 70%;
+
+// Otherwise, it complains about contrast for buttons
+$min-contrast-ratio: 3;
 
 @import "light";
 
@@ -63,6 +74,13 @@ $text-muted: $gray-400;
 	}
 }
 
+// btn-danger dropdown text color while cliking an item
+.btn-danger:not(:disabled):not(.disabled):active,
+.btn-danger:not(:disabled):not(.disabled).active,
+.show > .btn-danger.dropdown-toggle {
+	color: $black !important;
+}
+
 .btn-primary {
 	border-color: darken($orange, 25);
 	background-color: darken($orange, 25);
@@ -73,28 +91,6 @@ $text-muted: $gray-400;
 	&:not(:disabled):hover {
 		border-color: darken($orange, 30) !important;
 		background-color: darken($orange, 30) !important;
-	}
-}
-
-.btn-success {
-	border-color: darken($green, 20);
-	background-color: darken($green, 20);
-
-	&:active,
-	&:focus,
-	&:hover {
-		border-color: darken($green, 25) !important;
-		background-color: darken($green, 25) !important;
-		color: $black !important;
-	}
-}
-.bg-success {
-	background-color: darken($green, 20) !important;
-
-	&:hover,
-	&:active,
-	&:focus {
-		background-color: darken($green, 25) !important;
 	}
 }
 
@@ -112,18 +108,36 @@ $text-muted: $gray-400;
 	}
 }
 
-.active.btn-light-bordered,
-.btn-light-bordered:hover {
-	background-color: $gray-100 !important;
-}
+.btn-light-bordered,
+.btn-light-bordered-2 {
+	&:active,
+	&:focus,
+	&:not(:disabled):hover {
+		background-color: $gray-200 !important;
+		color: $black !important;
+	}
 
-.badge-danger {
-	background-color: darken($red, 20);
-	color: $black;
-}
-
-a.play-button {
+	// Both these are needed for disabled buttons, for some reason
 	color: $black !important;
+	&:disabled {
+		color: $black !important;
+	}
+}
+
+.bg-danger {
+	background-color: darken($red, 20) !important;
+}
+
+.bg-danger,
+.bg-darkblue,
+.bg-primary,
+.bg-success {
+	color: $black !important;
+}
+.bg-warning,
+.bg-orange,
+.bg-info {
+	color: $white !important;
 }
 
 .notification,
@@ -132,7 +146,8 @@ a.play-button {
 }
 
 .god-mode,
-.sidebar a.god-mode {
+.sidebar a.god-mode,
+select.god-mode:focus {
 	background-color: darken($purple, 20);
 	color: $black;
 }
@@ -153,9 +168,48 @@ a.god-mode.active {
 	color: $primary;
 }
 
+.play-button-success {
+	background-color: darken($green, 20);
+
+	&:hover,
+	&:active,
+	&:focus {
+		background-color: shade-color(
+			darken($green, 20),
+			$btn-hover-bg-shade-amount
+		);
+	}
+}
+
+.btn-success {
+	border-color: darken($green, 20);
+	background-color: darken($green, 20);
+
+	&:active,
+	&:focus,
+	&:not(:disabled):hover {
+		border-color: darken($green, 25) !important;
+		background-color: darken($green, 25) !important;
+		color: $black !important;
+	}
+}
+.bg-success {
+	background-color: darken($green, 20) !important;
+}
+
 .btn-god-mode {
+	@include button-variant(
+		darken($purple, 20),
+		darken($purple, 20),
+		$black,
+		darken($purple, 27),
+		darken($purple, 27)
+	);
+}
+
+.btn-outline-god-mode {
 	@include button-variant(darken($purple, 20), $gray-400);
-	&,
+
 	&:active,
 	&:focus,
 	&:not(:disabled):hover {
@@ -221,7 +275,6 @@ table.table thead .sorting::after {
 	color: $black !important;
 }
 .dark-select__input {
-	background-color: $white !important;
 	color: $black !important;
 }
 
@@ -259,28 +312,18 @@ table.table thead .sorting::after {
 	background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22200%22%20height%3D%22100%22%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M%200%2C0%20L%20100%2C100%20L%20200%2C0%20z%22%2F%3E%3C%2Fsvg%3E");
 }
 
-// For Firefox: https://mail.google.com/mail/u/0/#sent/FMfcgxwGDDlBLslqTJrgVGGsTVMGLjNx?compose=lqrsljbfHSlTfwlWfkfgJZGFBMJhCZGwxnNHFrchrZwsNsKzFxrVPNQnHBRBvMchPkvLxQTLsjknLTNJK
-input[type="checkbox"][disabled]:not(.custom-control-input) {
-	cursor: not-allowed;
-	opacity: 0.65;
-}
-
-.badge-primary,
-.badge-secondary,
-.badge-success,
-.badge-info,
-.badge-warning,
-.badge-dark,
-.badge-yellow {
-	color: $white;
-}
-
-.badge-danger,
-.badge-light {
-	color: $black;
-}
-
 :root {
 	--gradient-base-danger: #{derive-rgb-values-from-hex(darken($danger, 25%))};
 	--gradient-base-success: #{derive-rgb-values-from-hex(darken($success, 25%))};
+}
+
+.chart-axis {
+	line,
+	path {
+		stroke: lighten($secondary, 10%);
+	}
+
+	text {
+		fill: lighten($secondary, 10%);
+	}
 }

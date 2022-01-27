@@ -1,5 +1,7 @@
 export type Key =
 	| "numGames"
+	| "numGamesDiv"
+	| "numGamesConf"
 	| "numPeriods"
 	| "quarterLength"
 	| "minRosterSize"
@@ -17,7 +19,7 @@ export type Key =
 	| "maxContract"
 	| "minContractLength"
 	| "maxContractLength"
-	| "hardCap"
+	| "salaryCapType"
 	| "budget"
 	| "aiTradesFactor"
 	| "playersRefuseToNegotiate"
@@ -73,23 +75,50 @@ export type Key =
 	| "equalizeRegions"
 	| "noStartingInjuries"
 	| "realDraftRatings"
-	| "randomization";
+	| "randomization"
+	| "realStats"
+	| "hideDisabledTeams"
+	| "hofFactor"
+	| "injuries"
+	| "inflationAvg"
+	| "inflationMax"
+	| "inflationMin"
+	| "inflationStd"
+	| "playoffsByConf"
+	| "playoffsNumTeamsDiv"
+	| "playoffsReseed"
+	| "playerBioInfo"
+	| "playIn"
+	| "numPlayersDunk"
+	| "numPlayersThree"
+	| "fantasyPoints"
+	| "tragicDeaths"
+	| "goatFormula"
+	| "draftPickAutoContract"
+	| "draftPickAutoContractPercent"
+	| "draftPickAutoContractRounds";
 
 export type Category =
 	| "New League"
 	| "General"
-	| "Season"
+	| "Schedule"
 	| "Standings"
-	| "Team"
+	| "Playoffs"
+	| "Teams"
 	| "Draft"
 	| "Finances"
+	| "Inflation"
 	| "Contracts"
+	| "Rookie Contracts"
 	| "Events"
+	| "Injuries"
 	| "Game Simulation"
 	| "Elam Ending"
 	| "Challenge Modes"
 	| "Game Modes"
-	| "Player Development";
+	| "Players"
+	| "UI"
+	| "All-Star Contests";
 
 export type FieldType =
 	| "bool"
@@ -97,10 +126,12 @@ export type FieldType =
 	| "float1000"
 	| "floatOrNull"
 	| "int"
+	| "intOrNull"
 	| "jsonString"
 	| "string"
 	| "rangePercent"
-	| "floatValuesOrCustom";
+	| "floatValuesOrCustom"
+	| "custom";
 
 export type Decoration = "currency" | "percent";
 

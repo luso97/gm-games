@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { WEBSITE_PLAY } from "../../../common";
 import { HelpPopover, RatingsStatsPopover } from "../../components";
 
@@ -37,7 +36,6 @@ const RelativesForm = ({
 				type: "brother",
 			});
 		} else {
-			// @ts-ignore
 			relatives[index][field] = event.target.value;
 		}
 		handleChange("root", "relatives", {
@@ -50,12 +48,14 @@ const RelativesForm = ({
 	return (
 		<>
 			{relatives.map(({ pid, type }, i) => {
+				const pidInt = parseInt(pid as any);
+
 				return (
 					<div className="d-flex align-items-end mb-3" key={i}>
-						<div className="mr-3">
-							{i === 0 ? <label>Type</label> : null}
+						<div className="me-3">
+							{i === 0 ? <label className="form-label">Type</label> : null}
 							<select
-								className="form-control"
+								className="form-select"
 								onChange={event => {
 									handleRelativesChange(i, "type", event);
 								}}
@@ -67,9 +67,9 @@ const RelativesForm = ({
 								<option value="son">Son</option>
 							</select>
 						</div>
-						<div className="mr-2">
+						<div className="me-2">
 							{i === 0 ? (
-								<label>
+								<label className="form-label">
 									Player ID number{" "}
 									<HelpPopover title="Player ID number">
 										<p>Enter the player ID number of the relative here.</p>
@@ -98,9 +98,9 @@ const RelativesForm = ({
 							/>
 						</div>
 						<div className="flex-shrink-0" style={{ fontSize: 20 }}>
-							<RatingsStatsPopover pid={parseInt(pid as any, 10)} />
+							<RatingsStatsPopover pid={pidInt} />
 							<button
-								className="ml-3 text-danger btn btn-link p-0 border-0"
+								className="ms-3 text-danger btn btn-link p-0 border-0"
 								onClick={() => {
 									handleRelativesChange(i, "delete");
 								}}
@@ -127,16 +127,6 @@ const RelativesForm = ({
 			</button>
 		</>
 	);
-};
-
-RelativesForm.propTypes = {
-	handleChange: PropTypes.func.isRequired,
-	relatives: PropTypes.arrayOf(
-		PropTypes.shape({
-			pid: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-			type: PropTypes.oneOf(["brother", "father", "son"]).isRequired,
-		}),
-	).isRequired,
 };
 
 export default RelativesForm;

@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import type { MouseEvent } from "react";
 import PlayerNameLabels from "./PlayerNameLabels";
 import { helpers } from "../util";
@@ -9,11 +8,13 @@ const width100 = {
 
 const BoxScoreRow = ({
 	className,
+	highlightCols,
 	onClick,
 	p,
 	stats,
 }: {
 	className?: string;
+	highlightCols?: number[];
 	onClick?: (event: MouseEvent) => void;
 	p: any;
 	stats: string[];
@@ -27,23 +28,22 @@ const BoxScoreRow = ({
 					jerseyNumber={p.jerseyNumber}
 					pid={p.pid}
 					skills={p.skills}
-					watch={p.watch}
-					disableWatchToggle
 				>
 					{p.name}
 				</PlayerNameLabels>
 			</td>
-			{stats.map(stat => (
-				<td key={stat}>{helpers.roundStat(p.processed[stat], stat, true)}</td>
+			{stats.map((stat, i) => (
+				<td
+					key={stat}
+					className={
+						highlightCols?.includes(i) ? "sorting_highlight" : undefined
+					}
+				>
+					{helpers.roundStat(p.processed[stat], stat, true)}
+				</td>
 			))}
 		</tr>
 	);
-};
-
-BoxScoreRow.propTypes = {
-	className: PropTypes.string,
-	onClick: PropTypes.func,
-	p: PropTypes.object.isRequired,
 };
 
 export default BoxScoreRow;

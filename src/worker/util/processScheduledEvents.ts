@@ -33,13 +33,25 @@ const processTeamInfo = async (
 		region: t.region,
 		name: t.name,
 		imgURL: t.imgURL,
+		imgURLSmall: t.imgURLSmall,
 	};
 	Object.assign(t, info);
 
+	// If imgURL is defined in scheduled event but imgURLSmall is not, delete old imgURLSmall. Otherwise LAC wind up having a the Wings logo in imgURLSmall!
+	const deleteImgURLSmall = info.imgURL && !info.imgURLSmall && t.imgURLSmall;
+
+	if (deleteImgURLSmall) {
+		delete t.imgURLSmall;
+	}
+
 	// Make sure this didn't fuck up the cid somehow, such as if the user moved a team to a new conference, but then the scheduled event only has the div because it assumes conference didn't change. THIS WOULD BE LESS LIKELY TO HAPPEN IF NEW DIVS/CONFS WERE NOT CREATED BEFORE TEAM DID/CID VALUES WERE UPDATED! https://mail.google.com/mail/u/0/#inbox/FMfcgxwKkRDqKPHCkJdLXcZvNCxhbGzn
-	const div = g.get("divs").find(div => div.did === t.did);
+	const divs = g.get("divs");
+	const div = divs.find(div => div.did === t.did) ?? divs[0];
 	if (div) {
+		t.did = div.did;
 		t.cid = div.cid;
+	} else {
+		throw new Error("No divisions");
 	}
 
 	await idb.cache.teams.put(t);
@@ -54,6 +66,11 @@ const processTeamInfo = async (
 		);
 	}
 	Object.assign(teamSeason, info);
+	if (deleteImgURLSmall) {
+		delete teamSeason.imgURLSmall;
+	}
+	teamSeason.did = div.did;
+	teamSeason.cid = div.cid;
 	await idb.cache.teamSeasons.put(teamSeason);
 
 	let updatedRegionName;
@@ -76,7 +93,7 @@ const processTeamInfo = async (
 			showNotification: false,
 			score: 20,
 		});
-	} else if (info.name && info.name !== old.name) {
+	} else if (info.name !== undefined && info.name !== old.name) {
 		const text = `the ${old.region} ${
 			old.name
 		} are now the <a href="${helpers.leagueUrl([
@@ -109,19 +126,20 @@ const processTeamInfo = async (
 		});
 	}
 
-	if (info.tid === g.get("userTid") && updatedRegionName) {
-		await league.updateMetaNameRegion(t.name, t.region);
-	}
-
 	await league.setGameAttributes({
 		teamInfoCache: teams.map(t => ({
 			abbrev: t.abbrev,
 			disabled: t.disabled,
 			imgURL: t.imgURL,
+			imgURLSmall: t.imgURLSmall,
 			name: t.name,
 			region: t.region,
 		})),
 	});
+
+	if (info.tid === g.get("userTid") && updatedRegionName) {
+		await league.updateMeta();
+	}
 
 	return eventLogTexts;
 };
@@ -142,9 +160,37 @@ const processGameAttributes = async (
 				: "Removed the three point line.",
 		);
 	}
-
+	const prevSalaryCapType = g.get("salaryCapType");
+	const newSalaryCapType = info.salaryCapType ?? prevSalaryCapType;
 	const prevSalaryCap = g.get("salaryCap");
-	if (info.salaryCap !== undefined && info.salaryCap !== prevSalaryCap) {
+	const newSalaryCap = info.salaryCap ?? prevSalaryCap;
+	if (
+		info.salaryCapType !== undefined &&
+		info.salaryCapType !== prevSalaryCapType
+	) {
+		if (info.salaryCapType === "none") {
+			texts.push("Salary cap was eliminated.");
+		} else if (prevSalaryCapType === "none") {
+			texts.push(
+				`${helpers.upperCaseFirstLetter(
+					info.salaryCapType,
+				)} salary cap added at ${helpers.formatCurrency(
+					newSalaryCap / 1000,
+					"M",
+				)}.`,
+			);
+		} else {
+			texts.push(
+				`Salary cap switched to a ${
+					info.salaryCapType
+				} cap of ${helpers.formatCurrency(newSalaryCap / 1000, "M")}.`,
+			);
+		}
+	} else if (
+		info.salaryCap !== undefined &&
+		info.salaryCap !== prevSalaryCap &&
+		newSalaryCapType !== "none"
+	) {
 		const increased =
 			info.salaryCap > prevSalaryCap ? "increased" : "decreased";
 		texts.push(
@@ -194,6 +240,15 @@ const processGameAttributes = async (
 		texts.push(
 			`Regular season ${increased} from ${prevNumGames} to ${info.numGames} games.`,
 		);
+	}
+
+	const prevPlayIn = g.get("playIn");
+	if (info.playIn !== undefined && info.playIn !== prevPlayIn) {
+		if (info.playIn) {
+			texts.push(`Play-in tournament added before the playoffs.`);
+		} else {
+			texts.push(`Play-in tournament removed.`);
+		}
 	}
 
 	const prevDraftType = g.get("draftType");

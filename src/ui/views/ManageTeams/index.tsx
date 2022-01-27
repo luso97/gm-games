@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { Fragment, useReducer, ChangeEvent, FormEvent } from "react";
 import useTitleBar from "../../hooks/useTitleBar";
 import { helpers, logEvent, toWorker } from "../../util";
@@ -53,14 +52,14 @@ const reducer = (state: State, action: Action) => {
 			}
 
 			if (action.field.startsWith("colors")) {
-				// @ts-ignore
+				// @ts-expect-error
 				t.colors[action.field.replace("colors", "")] = action.value;
 			} else if (action.field === "did") {
 				t[action.field] = parseInt(action.value);
 			} else if (action.field === "disabled") {
 				t[action.field] = action.value === "1";
 			} else {
-				// @ts-ignore
+				// @ts-expect-error
 				t[action.field] = action.value;
 			}
 			return {
@@ -82,32 +81,43 @@ const ManageTeams = (props: View<"manageTeams">) => {
 		teams: props.teams,
 	});
 
-	const handleInputChange = (tid: number) => (
-		field: string,
-		event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-	) => {
-		const value = event.target.value;
+	const handleInputChange =
+		(tid: number) =>
+		(
+			field: string,
+			event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+		) => {
+			const value = event.target.value;
 
-		dispatch({ type: "updateTeam", tid, field, value });
-	};
+			dispatch({ type: "updateTeam", tid, field, value });
+		};
 
 	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
 		dispatch({ type: "startSaving" });
 
-		await toWorker("main", "updateTeamInfo", state.teams);
+		try {
+			await toWorker("main", "updateTeamInfo", state.teams);
 
-		let text = "Saved team info.";
+			let text = "Saved team info.";
 
-		if (props.phase >= PHASE.PLAYOFFS) {
-			text += `<br /><br />${nextSeasonWarning}`;
+			if (props.phase >= PHASE.PLAYOFFS) {
+				text += `<br /><br />${nextSeasonWarning}`;
+			}
+
+			logEvent({
+				type: "success",
+				text,
+				saveToDb: false,
+			});
+		} catch (error) {
+			logEvent({
+				type: "error",
+				text: error.message,
+				saveToDb: false,
+				persistent: true,
+			});
 		}
-
-		logEvent({
-			type: "success",
-			text,
-			saveToDb: false,
-		});
 
 		dispatch({ type: "doneSaving" });
 	};
@@ -129,11 +139,13 @@ const ManageTeams = (props: View<"manageTeams">) => {
 	return (
 		<>
 			{!props.godMode ? (
-				<p className="alert alert-warning d-inline-block">
-					Enable <a href={helpers.leagueUrl(["god_mode"])}>God Mode</a> to
-					access additional features, such as creating new teams and
-					activating/inactivating existing teams.
-				</p>
+				<div>
+					<span className="alert alert-warning d-inline-block">
+						Enable <a href={helpers.leagueUrl(["god_mode"])}>God Mode</a> to
+						access additional features, such as creating new teams and
+						activating/inactivating existing teams.
+					</span>
+				</div>
 			) : null}
 
 			{props.godMode ? (
@@ -144,17 +156,19 @@ const ManageTeams = (props: View<"manageTeams">) => {
 			) : null}
 
 			{props.phase >= PHASE.PLAYOFFS ? (
-				<p className="alert alert-warning d-inline-block">
-					{nextSeasonWarning}
-				</p>
+				<div>
+					<span className="alert alert-warning d-inline-block">
+						{nextSeasonWarning}
+					</span>
+				</div>
 			) : null}
 
-			<div className="row d-none d-lg-flex font-weight-bold mb-2">
+			<div className="row gx-2 d-none d-lg-flex fw-bold mb-2">
 				<div className="col-lg-2">
 					<br />
 					Region
 				</div>
-				<div className="col-lg-2">
+				<div className="col-lg-1">
 					<br />
 					Name
 				</div>
@@ -180,6 +194,10 @@ const ManageTeams = (props: View<"manageTeams">) => {
 					<br />
 					Logo URL
 				</div>
+				<div className="col-lg-1">
+					<br />
+					Small Logo
+				</div>
 				<div className="col-lg-2">
 					<br />
 					Jersey
@@ -191,13 +209,14 @@ const ManageTeams = (props: View<"manageTeams">) => {
 			</div>
 
 			<form onSubmit={handleSubmit}>
-				<div className="row">
+				<div className="row gx-2">
 					{teams.map(t => (
 						<Fragment key={t.tid}>
 							<TeamForm
 								classNamesCol={[
 									"col-6 col-lg-2",
-									"col-6 col-lg-2",
+									"col-6 col-lg-1",
+									"col-6 col-lg-1",
 									"col-6 col-lg-1",
 									"col-6 col-lg-1",
 									"col-6 col-lg-1",
@@ -229,15 +248,6 @@ const ManageTeams = (props: View<"manageTeams">) => {
 			</form>
 		</>
 	);
-};
-
-ManageTeams.propTypes = {
-	defaultStadiumCapacity: PropTypes.number.isRequired,
-	confs: PropTypes.arrayOf(PropTypes.object).isRequired,
-	divs: PropTypes.arrayOf(PropTypes.object).isRequired,
-	godMode: PropTypes.bool.isRequired,
-	phase: PropTypes.number.isRequired,
-	teams: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
 export default ManageTeams;

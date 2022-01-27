@@ -1,5 +1,5 @@
 import { bySport, isSport, PHASE, POSITIONS } from "../../common";
-import { player, season, team } from "../core";
+import { season, team } from "../core";
 import { idb } from "../db";
 import { g } from "../util";
 import type {
@@ -7,6 +7,7 @@ import type {
 	ViewInput,
 	TeamSeasonAttr,
 } from "../../common/types";
+import { addMood } from "./freeAgents";
 
 const footballScore = (p: {
 	ratings: {
@@ -63,15 +64,26 @@ const updateRoster = async (
 			"imgURL",
 			"region",
 			"name",
+			"avgAge",
 		];
-		const t = await idb.getCopy.teamsPlus({
-			season: inputs.season,
-			tid: inputs.tid,
-			attrs: ["tid", "strategy", "region", "name", "keepRosterSorted"],
-			seasonAttrs,
-			stats: ["pts", "oppPts", "gp"],
-			addDummySeason: true,
-		});
+		const t = await idb.getCopy.teamsPlus(
+			{
+				season: inputs.season,
+				tid: inputs.tid,
+				attrs: [
+					"tid",
+					"strategy",
+					"region",
+					"name",
+					"keepRosterSorted",
+					"playThroughInjuries",
+				],
+				seasonAttrs,
+				stats: ["pts", "oppPts", "gp"],
+				addDummySeason: true,
+			},
+			"noCopyCache",
+		);
 
 		if (!t) {
 			const returnValue = {
@@ -97,10 +109,11 @@ const updateRoster = async (
 			"hof",
 			"latestTransaction",
 			"mood",
+			"value",
 		]; // tid and draft are used for checking if a player can be released without paying his salary
 
 		const ratings = ["ovr", "pot", "dovr", "dpot", "skills", "pos", "ovrs"];
-		const stats2 = [...stats, "yearsWithTeam", "jerseyNumber"];
+		const stats2 = [...stats, "yearsWithTeam", "jerseyNumber", "min", "gp"];
 
 		let players: any[];
 		let payroll: number | undefined;
@@ -109,15 +122,10 @@ const updateRoster = async (
 			const schedule = await season.getSchedule();
 
 			// Show players currently on the roster
-			const playersAll = await idb.cache.players.indexGetAll(
-				"playersByTid",
-				inputs.tid,
+			const playersAll = await addMood(
+				await idb.cache.players.indexGetAll("playersByTid", inputs.tid),
 			);
 			payroll = (await team.getPayroll(inputs.tid)) / 1000;
-
-			for (const p of playersAll) {
-				(p as any).mood = await player.moodInfos(p);
-			}
 
 			// numGamesRemaining doesn't need to be calculated except for userTid, but it is.
 			let numGamesRemaining = 0;
@@ -152,14 +160,14 @@ const updateRoster = async (
 			}
 
 			for (const p of players) {
-				// Can release from user's team, except in playoffs because then no free agents can be signed to meet the minimum roster requirement
+				// Can alway release player, even if below the minimum roster limit, cause why not .Except in the playoffs.
 				if (
 					inputs.tid === g.get("userTid") &&
 					(g.get("phase") !== PHASE.PLAYOFFS ||
-						players.length > g.get("maxRosterSize")) &&
+						(g.get("phase") === PHASE.PLAYOFFS &&
+							players.length > g.get("minRosterSize"))) &&
 					!g.get("gameOver") &&
 					!g.get("otherTeamsWantToHire") &&
-					players.length > g.get("numPlayersOnCourt") &&
 					g.get("phase") !== PHASE.FANTASY_DRAFT &&
 					g.get("phase") !== PHASE.EXPANSION_DRAFT
 				) {
@@ -173,10 +181,12 @@ const updateRoster = async (
 			}
 		} else {
 			// Show all players with stats for the given team and year
-			// Needs all seasons because of YWT!
-			const playersAll = await idb.getCopies.players({
-				statsTid: inputs.tid,
-			});
+			const playersAll = await idb.getCopies.players(
+				{
+					statsTid: inputs.tid,
+				},
+				"noCopyCache",
+			);
 			players = await idb.getCopies.playersPlus(playersAll, {
 				attrs,
 				ratings,
@@ -201,14 +211,24 @@ const updateRoster = async (
 			}
 		}
 
+		const playoffsOvr =
+			(g.get("phase") === PHASE.PLAYOFFS &&
+				g.get("season") === inputs.season) ||
+			inputs.playoffs === "playoffs";
+
 		const playersCurrent = players.filter(
 			(p: any) => p.injury.gamesRemaining === 0,
 		);
 		const t2 = {
 			...t,
-			ovr: team.ovr(players),
-			ovrCurrent: team.ovr(playersCurrent),
+			ovr: team.ovr(players, {
+				playoffs: playoffsOvr,
+			}),
+			ovrCurrent: team.ovr(playersCurrent, {
+				playoffs: playoffsOvr,
+			}),
 		};
+		t2.seasonAttrs.avgAge = t2.seasonAttrs.avgAge ?? team.avgAge(players);
 
 		return {
 			abbrev: inputs.abbrev,
@@ -217,6 +237,7 @@ const updateRoster = async (
 			currentSeason: g.get("season"),
 			editable,
 			godMode: g.get("godMode"),
+			salaryCapType: g.get("salaryCapType"),
 			maxRosterSize: g.get("maxRosterSize"),
 			numConfs: g.get("confs", "current").length,
 			numPlayersOnCourt: g.get("numPlayersOnCourt"),

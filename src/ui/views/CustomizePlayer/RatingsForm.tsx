@@ -1,6 +1,5 @@
-import PropTypes from "prop-types";
 import { Fragment, ChangeEvent, useState, useEffect } from "react";
-import { bySport } from "../../../common";
+import { bySport, RATINGS } from "../../../common";
 import { getCols, helpers, toWorker } from "../../util";
 
 const rows = bySport<
@@ -37,10 +36,12 @@ const rows = bySport<
 });
 
 const RatingsForm = ({
+	challengeNoRatings,
 	godMode,
 	handleChange,
 	ratingsRow,
 }: {
+	challengeNoRatings: boolean;
 	godMode: boolean;
 	handleChange: (
 		type: string,
@@ -54,7 +55,17 @@ const RatingsForm = ({
 	useEffect(() => {
 		let mounted = true;
 		(async () => {
-			const newOvr = await toWorker("main", "ovr", ratingsRow, ratingsRow.pos);
+			const boundedRatings = {
+				...ratingsRow,
+			};
+			for (const key of RATINGS) {
+				boundedRatings[key] = helpers.bound(boundedRatings[key], 0, 100);
+			}
+
+			const newOvr = await toWorker("main", "ovr", {
+				ratings: boundedRatings,
+				pos: boundedRatings.pos,
+			});
 			if (mounted) {
 				setOvr(newOvr);
 			}
@@ -65,11 +76,17 @@ const RatingsForm = ({
 		};
 	}, [ratingsRow]);
 
+	const hideRatings = !godMode && challengeNoRatings;
+
 	const fuzzRating = (
 		ratingsRow: any,
 		rating: string,
 		ratingOverride?: number,
 	) => {
+		if (hideRatings) {
+			return "";
+		}
+
 		const raw = ratingOverride ?? ratingsRow[rating];
 
 		return godMode || rating === "hgt"
@@ -100,9 +117,9 @@ const RatingsForm = ({
 													<h3>{title}</h3>
 													{ratings.map(rating => {
 														return (
-															<div key={rating} className="form-group">
-																<label>
-																	{getCols(`rating:${rating}`)[0].desc}
+															<div key={rating} className="mb-3">
+																<label className="form-label">
+																	{getCols([`rating:${rating}`])[0].desc}
 																</label>
 																<input
 																	type="text"
@@ -127,27 +144,23 @@ const RatingsForm = ({
 				);
 			})}
 
-			<div className="ml-1">
-				<label className="form-check-label ml-3 mb-3">
-					<input
-						className="form-check-input"
-						onChange={event => {
-							handleChange("rating", "locked", event);
-						}}
-						type="checkbox"
-						checked={!!ratingsRow.locked}
-						disabled={!godMode}
-					/>
+			<div className="form-check mb-3">
+				<input
+					className="form-check-input"
+					onChange={event => {
+						handleChange("rating", "locked", event);
+					}}
+					type="checkbox"
+					checked={!!ratingsRow.locked}
+					disabled={!godMode}
+					id="checkLockRatings"
+				/>
+				<label className="form-check-label" htmlFor="checkLockRatings">
 					Lock ratings (ratings will not change as player ages)
 				</label>
 			</div>
 		</>
 	);
-};
-
-RatingsForm.propTypes = {
-	handleChange: PropTypes.func,
-	ratingsRow: PropTypes.object,
 };
 
 export default RatingsForm;

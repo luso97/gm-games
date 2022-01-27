@@ -1,5 +1,5 @@
-import { display, Face } from "facesjs";
-import PropTypes from "prop-types";
+import { display } from "facesjs";
+import type { Face } from "facesjs";
 import { useEffect, useState } from "react";
 import { DEFAULT_JERSEY } from "../../common";
 
@@ -41,12 +41,6 @@ const PlayerPicture = ({
 	}
 
 	return null;
-};
-
-PlayerPicture.propTypes = {
-	face: PropTypes.object,
-	imgURL: PropTypes.string,
-	teamColors: PropTypes.arrayOf(PropTypes.string),
 };
 
 export default PlayerPicture;

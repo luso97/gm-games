@@ -1,7 +1,7 @@
 import autoPlay from "./autoPlay";
+import clone from "./clone";
 import close from "./close";
-import create from "./create";
-import exportLeague from "./exportLeague";
+import createStream from "./createStream";
 import getName from "./getName";
 import getValidNumGamesPlayoffSeries from "./getValidNumGamesPlayoffSeries";
 import initAutoPlay from "./initAutoPlay";
@@ -9,13 +9,13 @@ import initRepeatSeason from "./initRepeatSeason";
 import loadGameAttributes from "./loadGameAttributes";
 import remove from "./remove";
 import setGameAttributes from "./setGameAttributes";
-import updateMetaNameRegion from "./updateMetaNameRegion";
+import updateMeta from "./updateMeta";
 
 export default {
 	autoPlay,
+	clone,
 	close,
-	create,
-	exportLeague,
+	createStream,
 	getName,
 	getValidNumGamesPlayoffSeries,
 	initAutoPlay,
@@ -23,5 +23,5 @@ export default {
 	loadGameAttributes,
 	remove,
 	setGameAttributes,
-	updateMetaNameRegion,
+	updateMeta,
 };

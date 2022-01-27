@@ -54,8 +54,11 @@ const getLeagueInfo = async (options: GetLeagueOptions) => {
 	if (options.type === "real") {
 		const { initialGameAttributes, initialTeams } = formatScheduledEvents(
 			scheduledEventsAll,
-			options.season,
-			options.phase,
+			{
+				keepAllTeams: options.realStats === "all",
+				season: options.season,
+				phase: options.phase,
+			},
 		);
 
 		const stores =
@@ -82,7 +85,10 @@ const getLeagueInfo = async (options: GetLeagueOptions) => {
 
 		const { initialGameAttributes, initialTeams } = formatScheduledEvents(
 			scheduledEventsAll,
-			lastSeason,
+			{
+				keepAllTeams: false,
+				season: lastSeason,
+			},
 		);
 
 		const stores = ["teams", "players", "gameAttributes", "startingSeason"];
@@ -95,7 +101,7 @@ const getLeagueInfo = async (options: GetLeagueOptions) => {
 		};
 	}
 
-	// @ts-ignore
+	// @ts-expect-error
 	throw new Error(`Unknown type "${options.type}"`);
 };
 

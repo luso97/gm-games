@@ -4,7 +4,44 @@ import { DEFAULT_JERSEY, DEFAULT_STADIUM_CAPACITY } from "../../../common";
 import type { Conf, Div, View } from "../../../common/types";
 import { helpers, logEvent } from "../../util";
 import TeamForm from "../ManageTeams/TeamForm";
-import type { NewLeagueTeam } from "./types";
+import type { NewLeagueTeamWithoutRank } from "./types";
+
+export const getGodModeWarnings = ({
+	is,
+	t,
+	godModeLimits,
+}: {
+	is?: boolean;
+	t?: {
+		pop: string;
+		stadiumCapacity: string;
+	};
+	godModeLimits: View<"newLeague">["godModeLimits"];
+}) => {
+	const pop = t ? parseFloat(t.pop) : NaN;
+	const stadiumCapacity = t ? parseInt(t.stadiumCapacity) : NaN;
+
+	const errors = [];
+	if (!Number.isNaN(pop) && pop > godModeLimits.pop) {
+		errors.push(
+			`a region's population ${is ? "is " : ""}over ${
+				godModeLimits.pop
+			} million`,
+		);
+	}
+	if (
+		!Number.isNaN(stadiumCapacity) &&
+		stadiumCapacity > godModeLimits.stadiumCapacity
+	) {
+		errors.push(
+			`a team's stadium capacity ${
+				is ? "is " : ""
+			}over ${helpers.numberWithCommas(godModeLimits.stadiumCapacity)}`,
+		);
+	}
+
+	return errors;
+};
 
 const GodModeWarning = ({
 	controlledTeam,
@@ -16,25 +53,7 @@ const GodModeWarning = ({
 	};
 	godModeLimits: View<"newLeague">["godModeLimits"];
 }) => {
-	const pop = controlledTeam ? parseFloat(controlledTeam.pop) : NaN;
-	const stadiumCapacity = controlledTeam
-		? parseInt(controlledTeam.stadiumCapacity)
-		: NaN;
-
-	const errors = [];
-	if (!Number.isNaN(pop) && pop > godModeLimits.pop) {
-		errors.push(`a region's population is over ${godModeLimits.pop} million`);
-	}
-	if (
-		!Number.isNaN(stadiumCapacity) &&
-		stadiumCapacity > godModeLimits.stadiumCapacity
-	) {
-		errors.push(
-			`a team's stadium capacity is over ${helpers.numberWithCommas(
-				godModeLimits.stadiumCapacity,
-			)}`,
-		);
-	}
+	const errors = getGodModeWarnings({ t: controlledTeam, godModeLimits });
 	if (errors.length >= 1) {
 		return (
 			<div className="alert alert-danger mb-0">
@@ -55,11 +74,11 @@ const UpsertTeamModal = ({
 	onSave,
 	godModeLimits,
 }: {
-	t?: NewLeagueTeam;
+	t?: NewLeagueTeamWithoutRank;
 	confs: Conf[];
 	divs: Div[];
 	onCancel: () => void;
-	onSave: (t: NewLeagueTeam) => void;
+	onSave: (t: NewLeagueTeamWithoutRank) => void;
 	godModeLimits: View<"newLeague">["godModeLimits"];
 }) => {
 	const [controlledTeam, setControlledTeam] = useState(() => {
@@ -77,6 +96,7 @@ const UpsertTeamModal = ({
 			jersey: t.jersey ?? DEFAULT_JERSEY,
 			did: String(t.did),
 			imgURL: t.imgURL,
+			imgURLSmall: t.imgURLSmall,
 		};
 	});
 
@@ -102,6 +122,10 @@ const UpsertTeamModal = ({
 			did,
 			cid: div.cid,
 			imgURL: controlledTeam.imgURL,
+			imgURLSmall:
+				controlledTeam.imgURLSmall === ""
+					? undefined
+					: controlledTeam.imgURLSmall,
 		};
 
 		const errors = [];
@@ -139,7 +163,6 @@ const UpsertTeamModal = ({
 					<form
 						id="foo"
 						onSubmit={event => {
-							console.log("onSubmit");
 							event.preventDefault();
 							save();
 						}}
@@ -147,6 +170,7 @@ const UpsertTeamModal = ({
 						<div className="row">
 							<TeamForm
 								classNamesCol={[
+									"col-6",
 									"col-6",
 									"col-6",
 									"col-6",

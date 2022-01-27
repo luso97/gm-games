@@ -4,13 +4,15 @@ import { DataTable, PlayerNameLabels } from "../components";
 import type { View } from "../../common/types";
 import { frivolitiesMenu } from "./Frivolities";
 
-export const genView = (type: "college" | "country" | "jerseyNumbers") => {
+export const genView = (
+	type: "college" | "country" | "draftPosition" | "jerseyNumbers",
+) => {
 	return ({
 		challengeNoRatings,
 		infos,
 		stats,
 		userTid,
-		valueStat,
+		displayStat,
 	}: View<"colleges">) => {
 		useTitleBar({
 			title:
@@ -18,6 +20,8 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 					? "Colleges"
 					: type === "country"
 					? "Countries"
+					: type === "draftPosition"
+					? "Best Player at Every Pick"
 					: "Jersey Numbers",
 			customMenu: frivolitiesMenu,
 		});
@@ -29,7 +33,7 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 		const superCols = [
 			{
 				title: "",
-				colspan: 6,
+				colspan: 8,
 			},
 			{
 				title: "Best Player",
@@ -37,17 +41,21 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 			},
 		];
 
-		const cols = getCols(
+		const cols = getCols([
 			type === "college"
 				? "College"
 				: type === "country"
 				? "Country"
+				: type === "draftPosition"
+				? "Pick"
 				: "stat:jerseyNumber",
 			"# Players",
 			"Active",
 			"HoF",
 			"stat:gp",
-			`stat:${valueStat}`,
+			"stat:gpPerPlayer",
+			`stat:${displayStat}`,
+			`stat:${displayStat}PerPlayer`,
 			"Name",
 			"Pos",
 			"Drafted",
@@ -56,7 +64,7 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 			"Peak Ovr",
 			"Team",
 			...stats.map(stat => `stat:${stat}`),
-		);
+		]);
 
 		const rows = infos.map(c => {
 			const p = c.p;
@@ -76,25 +84,26 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 								? "college"
 								: type === "country"
 								? "country"
+								: type === "draftPosition"
+								? "at_pick"
 								: "jersey_number",
 							window.encodeURIComponent(c.name),
 						])}
 					>
-						{c.name}
+						{type === "draftPosition" && c.name === "undrafted"
+							? "none"
+							: c.name}
 					</a>,
 					c.numPlayers,
 					c.numActivePlayers,
 					c.numHof,
 					helpers.roundStat(c.gp, "gp"),
-					helpers.roundStat(c.valueStat, valueStat),
+					(c.gp / c.numPlayers).toFixed(1),
+					helpers.roundStat(c.displayStat, displayStat),
+					(c.displayStat / c.numPlayers).toFixed(1),
 					{
 						value: (
-							<PlayerNameLabels
-								jerseyNumber={p.jerseyNumber}
-								pid={p.pid}
-								watch={p.watch}
-								disableWatchToggle
-							>
+							<PlayerNameLabels jerseyNumber={p.jerseyNumber} pid={p.pid}>
 								{p.name}
 							</PlayerNameLabels>
 						),
@@ -104,7 +113,7 @@ export const genView = (type: "college" | "country" | "jerseyNumbers") => {
 							"table-info": p.statsTids.includes(userTid),
 						},
 					},
-					p.ratings[p.ratings.length - 1].pos,
+					p.ratings.at(-1).pos,
 					p.draft.year,
 					p.retiredYear === Infinity ? null : p.retiredYear,
 					p.draft.round > 0 ? `${p.draft.round}-${p.draft.pick}` : "",

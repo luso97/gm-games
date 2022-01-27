@@ -6,6 +6,7 @@ import {
 	local,
 	localActions,
 	realtimeUpdate,
+	requestPersistentStorage,
 	safeLocalStorage,
 } from "../util";
 import { showEvent } from "../util/logEvent";
@@ -57,7 +58,24 @@ const initAds = (goldUntil: number | undefined) => {
 		hideAds = true;
 	}
 
+	const mobile = window.screen.width < 768;
+
 	if (!hideAds) {
+		// _disabled names are to hide from Blockthrough, so it doesn't leak through for Gold subscribers. Run this regardless of window.freestar, so Blockthrough can still work for some users.
+		const divsAll = [
+			AD_DIVS.mobile,
+			AD_DIVS.leaderboard,
+			AD_DIVS.rectangle1,
+			AD_DIVS.rectangle2,
+			AD_DIVS.rail,
+		];
+		for (const id of divsAll) {
+			const div = document.getElementById(`${id}_disabled`);
+			if (div) {
+				div.id = id;
+			}
+		}
+
 		window.freestar.queue.push(() => {
 			// Show hidden divs. skyscraper has its own code elsewhere to manage display.
 			const divsMobile = [AD_DIVS.mobile];
@@ -66,8 +84,7 @@ const initAds = (goldUntil: number | undefined) => {
 				AD_DIVS.rectangle1,
 				AD_DIVS.rectangle2,
 			];
-			const divs =
-				window.screen && window.screen.width < 768 ? divsMobile : divsDesktop;
+			const divs = mobile ? divsMobile : divsDesktop;
 
 			for (const id of divs) {
 				const div = document.getElementById(id);
@@ -77,7 +94,7 @@ const initAds = (goldUntil: number | undefined) => {
 				}
 			}
 
-			// Special case for rail, to tell it there is no BBGM gold
+			// Special case for rail, to tell it there is no gold
 			const rail = document.getElementById(AD_DIVS.rail);
 			if (rail) {
 				delete rail.dataset.gold;
@@ -99,10 +116,11 @@ const initAds = (goldUntil: number | undefined) => {
 				// Add margin to footer - do this manually rather than using stickyFooterAd so <Footer> does not have to re-render
 				const footer = document.getElementById("main-footer");
 				if (footer) {
-					footer.style.marginBottom = "52px";
+					footer.style.paddingBottom = "52px";
 				}
 
 				// Hack to hopefully stop the Microsoft ad from breaking everything
+				// Maybe this is breaking country tracking in Freestar, and maybe for direct ads too?
 				window.googletag = window.googletag || {};
 				window.googletag.cmd = window.googletag.cmd || [];
 				window.googletag.cmd.push(() => {
@@ -115,7 +133,7 @@ const initAds = (goldUntil: number | undefined) => {
 				});
 			}
 
-			if (window.screen && window.screen.width >= 768) {
+			if (!mobile) {
 				// Show the logo too
 				const logo = document.getElementById("bbgm-ads-logo");
 
@@ -125,6 +143,65 @@ const initAds = (goldUntil: number | undefined) => {
 			}
 		});
 	}
+};
+
+// This does the opposite of initAds. To be called when a user subscribes to gold or logs in to an account with an active subscription
+const initGold = () => {
+	window.freestar.queue.push(() => {
+		const divsAll = [
+			AD_DIVS.mobile,
+			AD_DIVS.leaderboard,
+			AD_DIVS.rectangle1,
+			AD_DIVS.rectangle2,
+		];
+
+		for (const id of divsAll) {
+			const div = document.getElementById(id);
+
+			if (div) {
+				div.style.display = "none";
+			}
+
+			window.freestar.deleteAdSlots(id);
+		}
+
+		// Special case for rail, to tell it there is no BBGM gold
+		const rail = document.getElementById(AD_DIVS.rail);
+		if (rail) {
+			rail.dataset.gold = "true";
+			updateSkyscraperDisplay();
+		}
+
+		localActions.update({
+			stickyFooterAd: false,
+		});
+
+		// Add margin to footer - do this manually rather than using stickyFooterAd so <Footer> does not have to re-render
+		const footer = document.getElementById("main-footer");
+		if (footer) {
+			footer.style.marginBottom = "";
+		}
+
+		const logo = document.getElementById("bbgm-ads-logo");
+		if (logo) {
+			logo.style.display = "none";
+		}
+
+		// Rename to hide from Blockthrough
+		for (const id of [...divsAll, AD_DIVS.rail]) {
+			const div = document.getElementById(id);
+
+			if (div) {
+				div.id = `${id}_disabled`;
+			}
+		}
+		console.log(
+			"initGold end",
+			"display",
+			document.getElementById("basketball-gm_mobile_leaderboard")?.style
+				.display,
+		);
+	});
 };
 
 const deleteGames = (gids: number[]) => {
@@ -139,7 +216,7 @@ const mergeGames = (games: LocalStateUI["games"]) => {
 const newLid = async (lid: number) => {
 	const parts = window.location.pathname.split("/");
 
-	if (parts[1] === "l" && parseInt(parts[2], 10) !== lid) {
+	if (parts[1] === "l" && parseInt(parts[2]) !== lid) {
 		parts[2] = String(lid);
 		const newPathname = parts.join("/");
 		await realtimeUpdate(["firstRun"], newPathname);
@@ -161,8 +238,11 @@ const resetLeague = () => {
 	localActions.resetLeague();
 };
 
-const setGameAttributes = (gameAttributes: Partial<GameAttributesLeague>) => {
-	localActions.updateGameAttributes(gameAttributes);
+const setGameAttributes = (
+	gameAttributes: Partial<GameAttributesLeague>,
+	flagOverrides: LocalStateUI["flagOverrides"] | undefined,
+) => {
+	localActions.updateGameAttributes(gameAttributes, flagOverrides);
 };
 
 const showEvent2 = (options: LogEventShowOptions) => {
@@ -212,14 +292,17 @@ const updateLocal = (obj: Partial<LocalStateUI>) => {
 const updateTeamOvrs = (ovrs: number[]) => {
 	const games = local.getState().games;
 
-	// Find upcoming game, it's the only one that needs updating
-	const game = games.find(game => game.teams[0].pts === undefined);
-	if (game) {
-		const { teams } = game;
+	// Find upcoming game, it's the only one that needs updating because it's the only one displayed in a ScoreBox in LeagueTopBar
+	const gameIndex = games.findIndex(game => game.teams[0].pts === undefined);
+	if (gameIndex >= 0) {
+		const { teams } = games[gameIndex];
 		if (
 			teams[0].ovr !== ovrs[teams[0].tid] ||
 			teams[1].ovr !== ovrs[teams[1].tid]
 		) {
+			games[gameIndex] = {
+				...games[gameIndex],
+			};
 			teams[0].ovr = ovrs[teams[0].tid];
 			teams[1].ovr = ovrs[teams[1].tid];
 
@@ -237,9 +320,11 @@ export default {
 	confirmDeleteAllLeagues,
 	deleteGames,
 	initAds,
+	initGold,
 	mergeGames,
 	newLid,
 	realtimeUpdate: realtimeUpdate2,
+	requestPersistentStorage,
 	resetLeague,
 	setGameAttributes,
 	showEvent: showEvent2,

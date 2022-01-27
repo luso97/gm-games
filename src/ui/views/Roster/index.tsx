@@ -1,7 +1,6 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { useState } from "react";
-import arrayMove from "array-move";
+import { arrayMoveImmutable } from "array-move";
 import { isSport, PHASE, PLAYER, WEBSITE_ROOT } from "../../../common";
 import {
 	CountryFlag,
@@ -26,7 +25,7 @@ const justDrafted = (
 	season: number,
 ) => {
 	return (
-		p.draft.round > 0 &&
+		p.contract.rookie &&
 		((p.draft.year === season && phase >= PHASE.DRAFT) ||
 			(p.draft.year === season - 1 &&
 				phase < PHASE.REGULAR_SEASON &&
@@ -52,12 +51,10 @@ const handleRelease = async (
 		okText: "Release Player",
 	});
 	if (proceed) {
-		const errorMsg = await toWorker(
-			"main",
-			"releasePlayer",
-			p.pid,
-			wasPlayerJustDrafted,
-		);
+		const errorMsg = await toWorker("main", "releasePlayer", {
+			pid: p.pid,
+			justDrafted: wasPlayerJustDrafted,
+		});
 		if (errorMsg) {
 			logEvent({
 				type: "error",
@@ -84,6 +81,7 @@ const Roster = ({
 	players,
 	playoffs,
 	salaryCap,
+	salaryCapType,
 	season,
 	showSpectatorWarning,
 	showRelease,
@@ -127,7 +125,7 @@ const Roster = ({
 
 	const profit = t.seasonAttrs !== undefined ? t.seasonAttrs.profit : 0;
 
-	const statCols = getCols(...stats.map(stat => `stat:${stat}`));
+	const statCols = getCols(stats.map(stat => `stat:${stat}`));
 
 	const showMood = season === currentSeason;
 
@@ -156,7 +154,9 @@ const Roster = ({
 				payroll={payroll}
 				profit={profit}
 				salaryCap={salaryCap}
+				salaryCapType={salaryCapType}
 				showTradeFor={showTradeFor}
+				showTradingBlock={showTradingBlock}
 				t={t}
 				tid={tid}
 			/>
@@ -173,12 +173,13 @@ const Roster = ({
 				disabled={!editable}
 				values={playersSorted}
 				highlightHandle={({ index }) => index < numPlayersOnCourt}
-				rowClassName={({ index, isDragged, value: p }) =>
+				rowClassName={({ index, value: p }) =>
 					classNames({
 						separator:
-							isSport("basketball") &&
-							index === numPlayersOnCourt - 1 &&
-							!isDragged,
+							(isSport("basketball") && index === numPlayersOnCourt - 1) ||
+							(!isSport("basketball") &&
+								playersSorted[index + 1] &&
+								p.ratings.pos !== playersSorted[index + 1].ratings.pos),
 						"table-danger": p.hof,
 						"table-info": p.tid === tid && season !== currentSeason,
 					})
@@ -188,7 +189,7 @@ const Roster = ({
 						return;
 					}
 					const pids = players.map(p => p.pid);
-					const newSortedPids = arrayMove(pids, oldIndex, newIndex);
+					const newSortedPids = arrayMoveImmutable(pids, oldIndex, newIndex);
 					setSortedPids(newSortedPids);
 					await toWorker("main", "reorderRosterDrag", newSortedPids);
 				}}
@@ -234,7 +235,7 @@ const Roster = ({
 										<br />
 										<span style={ptStyles["1.25"]}>+ More Playing Time</span>
 										<br />
-										<span style={ptStyles["1.75"]}>
+										<span style={ptStyles["1.5"]}>
 											++ Even More Playing Time
 										</span>
 									</p>
@@ -271,11 +272,13 @@ const Roster = ({
 										</a>
 										).
 									</p>
-									<p>
-										However, if you just drafted a player and the regular season
-										has not started yet, his contract is not guaranteed and you
-										can release him for free.
-									</p>
+									{salaryCapType === "soft" ? (
+										<p>
+											However, if you just drafted a player and the regular
+											season has not started yet, his contract is not guaranteed
+											and you can release him for free.
+										</p>
+									) : null}
 								</HelpPopover>
 							</th>
 						) : null}
@@ -292,6 +295,7 @@ const Roster = ({
 									pid={p.pid}
 									injury={p.injury}
 									jerseyNumber={p.stats.jerseyNumber}
+									season={season}
 									skills={p.ratings.skills}
 									watch={p.watch}
 								>
@@ -394,26 +398,6 @@ const Roster = ({
 			/>
 		</>
 	);
-};
-
-Roster.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	budget: PropTypes.bool.isRequired,
-	currentSeason: PropTypes.number.isRequired,
-	editable: PropTypes.bool.isRequired,
-	maxRosterSize: PropTypes.number.isRequired,
-	numConfs: PropTypes.number.isRequired,
-	numPlayoffRounds: PropTypes.number.isRequired,
-	payroll: PropTypes.number,
-	phase: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	salaryCap: PropTypes.number.isRequired,
-	season: PropTypes.number.isRequired,
-	showRelease: PropTypes.bool.isRequired,
-	showTradeFor: PropTypes.bool.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	t: PropTypes.object.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default Roster;

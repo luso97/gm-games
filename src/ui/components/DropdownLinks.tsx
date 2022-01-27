@@ -1,5 +1,4 @@
 import classNames from "classnames";
-import PropTypes from "prop-types";
 import { memo, useCallback, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { Dropdown, Nav } from "react-bootstrap";
@@ -32,19 +31,12 @@ const TopMenuToggle = ({ long, openID, short, toggle }: TopMenuToggleProps) => {
 			id="whatever"
 			onMouseEnter={handleMouseEnter}
 		>
-			<span className="d-xs-inline d-sm-none d-md-inline">{long}</span>
-			<span className="d-none d-sm-inline d-md-none" title={long}>
+			<span className="d-none d-md-inline">{long}</span>
+			<span className="d-md-none" title={long}>
 				{short}
 			</span>
 		</Dropdown.Toggle>
 	);
-};
-
-TopMenuToggle.propTypes = {
-	long: PropTypes.string.isRequired,
-	openID: PropTypes.string,
-	short: PropTypes.string.isRequired,
-	toggle: PropTypes.func,
 };
 
 const TopMenuDropdown = ({
@@ -71,7 +63,7 @@ const TopMenuDropdown = ({
 				openID={openID}
 				toggle={toggle}
 			/>
-			<Dropdown.Menu alignRight>
+			<Dropdown.Menu align="end">
 				{!hideTitle ? (
 					<Dropdown.Header className="d-none d-sm-block d-md-none">
 						{long}
@@ -83,18 +75,9 @@ const TopMenuDropdown = ({
 	);
 };
 
-TopMenuDropdown.propTypes = {
-	children: PropTypes.any,
-	long: PropTypes.string.isRequired,
-	hideTitle: PropTypes.bool,
-	onToggle: PropTypes.func.isRequired,
-	openID: PropTypes.string,
-	short: PropTypes.string.isRequired,
-};
-
 const getText = (text: MenuItemLink["text"]) => {
 	if (text.hasOwnProperty("top")) {
-		// @ts-ignore
+		// @ts-expect-error
 		return text.top;
 	}
 
@@ -130,6 +113,7 @@ const makeAnchorProps = (menuItem: MenuItemLink) => {
 const MenuItem = ({
 	godMode,
 	hideTitle,
+	inLeague,
 	lid,
 	menuItem,
 	openID,
@@ -138,7 +122,8 @@ const MenuItem = ({
 }: {
 	godMode?: boolean;
 	hideTitle?: boolean;
-	lid?: number;
+	inLeague: boolean | undefined;
+	lid: number | undefined;
 	menuItem: MenuItemLink | MenuItemHeader | MenuItemText;
 	onToggle: (a: string, b: MouseEvent<HTMLAnchorElement>) => void;
 	openID?: string;
@@ -148,15 +133,19 @@ const MenuItem = ({
 		return <Dropdown.Header>{menuItem.text}</Dropdown.Header>;
 	}
 
-	if (!menuItem.league && lid !== undefined) {
+	if (!menuItem.league && inLeague) {
 		return null;
 	}
 
-	if (!menuItem.nonLeague && lid === undefined) {
+	if (!menuItem.nonLeague && !inLeague) {
 		return null;
 	}
 
 	if (menuItem.type === "link") {
+		if (menuItem.commandPaletteOnly) {
+			return null;
+		}
+
 		if (menuItem.godMode && !godMode) {
 			return null;
 		}
@@ -208,6 +197,7 @@ const MenuItem = ({
 				<MenuItem
 					godMode={godMode}
 					lid={lid}
+					inLeague={inLeague}
 					key={i}
 					menuItem={child}
 					openID={openID}
@@ -241,12 +231,20 @@ type DropdownLinksProps = {
 	className?: string;
 	godMode?: boolean;
 	hideTitle?: boolean;
+	inLeague: boolean | undefined;
 	lid: number | undefined;
 	menuItems: (MenuItemLink | MenuItemHeader)[];
 };
 
 const DropdownLinks = memo(
-	({ className, godMode, hideTitle, lid, menuItems }: DropdownLinksProps) => {
+	({
+		className,
+		godMode,
+		hideTitle,
+		inLeague,
+		lid,
+		menuItems,
+	}: DropdownLinksProps) => {
 		const [openID, setOpenID] = useState<string | undefined>();
 		const handleTopMenuToggle = useCallback(
 			(id: string, event: MouseEvent<HTMLAnchorElement>) => {
@@ -268,6 +266,7 @@ const DropdownLinks = memo(
 						godMode={godMode}
 						lid={lid}
 						hideTitle={hideTitle}
+						inLeague={inLeague}
 						key={i}
 						menuItem={menuItem}
 						openID={openID}
@@ -279,14 +278,5 @@ const DropdownLinks = memo(
 		);
 	},
 );
-
-// @ts-ignore
-DropdownLinks.propTypes = {
-	className: PropTypes.string,
-	godMode: PropTypes.bool,
-	hideTitle: PropTypes.bool,
-	lid: PropTypes.number,
-	menuItems: PropTypes.array.isRequired,
-};
 
 export default DropdownLinks;

@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { gradientStyleFactory } from "../../util";
 import type { RatingKey } from "../../../common/types.hockey";
 
@@ -11,10 +10,16 @@ type Props = {
 		pot: number;
 	} & Record<RatingKey, number>;
 	stats: any;
+	type?: "career" | "current" | "draft" | number;
 	challengeNoRatings: boolean;
 };
 
-const RatingsStats = ({ challengeNoRatings, ratings, stats }: Props) => {
+const RatingsStats = ({ challengeNoRatings, ratings, stats, type }: Props) => {
+	const seasonPrefix =
+		typeof type === "number" ? `${type} ` : type === "career" ? "Peak " : "";
+	const seasonPrefix2 =
+		type === "career" || type === "draft" ? "Career " : seasonPrefix;
+
 	let ratingsBlock;
 
 	if (challengeNoRatings) {
@@ -23,7 +28,7 @@ const RatingsStats = ({ challengeNoRatings, ratings, stats }: Props) => {
 		ratingsBlock = (
 			<div className="row mb-2">
 				<div className="col-4">
-					<b>Ratings</b>
+					<b>{seasonPrefix}Ratings</b>
 					<br />
 					<span style={gradientStyle(ratings.hgt)}>Hgt: {ratings.hgt}</span>
 					<br />
@@ -67,7 +72,7 @@ const RatingsStats = ({ challengeNoRatings, ratings, stats }: Props) => {
 		ratingsBlock = (
 			<div className="row mb-2">
 				<div className="col-12">
-					<b>Ratings</b>
+					<b>{seasonPrefix}Ratings</b>
 					<br />
 					<br />
 					<br />
@@ -88,7 +93,7 @@ const RatingsStats = ({ challengeNoRatings, ratings, stats }: Props) => {
 					whiteSpace: "normal",
 				}}
 			>
-				<div className="font-weight-bold mb-1">Stats</div>
+				<div className="fw-bold mb-1">{seasonPrefix2}Stats</div>
 				{stats.keyStats}
 			</div>
 		);
@@ -102,11 +107,6 @@ const RatingsStats = ({ challengeNoRatings, ratings, stats }: Props) => {
 			{statsBlock}
 		</>
 	);
-};
-
-RatingsStats.propTypes = {
-	ratings: PropTypes.object,
-	stats: PropTypes.object,
 };
 
 export default RatingsStats;

@@ -11,19 +11,13 @@ const recomputeLocalUITeamOvrs = async () => {
 			Infinity,
 		])
 	).map(p => ({
-		pid: p.pid,
 		tid: p.tid,
 		injury: p.injury,
+		value: p.value,
 		ratings: {
-			ovr: player.fuzzRating(
-				p.ratings[p.ratings.length - 1].ovr,
-				p.ratings[p.ratings.length - 1].fuzz,
-			),
-			ovrs: player.fuzzOvrs(
-				p.ratings[p.ratings.length - 1].ovrs,
-				p.ratings[p.ratings.length - 1].fuzz,
-			),
-			pos: p.ratings[p.ratings.length - 1].pos,
+			ovr: player.fuzzRating(p.ratings.at(-1).ovr, p.ratings.at(-1).fuzz),
+			ovrs: player.fuzzOvrs(p.ratings.at(-1).ovrs, p.ratings.at(-1).fuzz),
+			pos: p.ratings.at(-1).pos,
 		},
 	}));
 
@@ -34,7 +28,7 @@ const recomputeLocalUITeamOvrs = async () => {
 		return team.ovr(playersCurrent);
 	});
 
-	toUI("updateTeamOvrs", [ovrs]);
+	await toUI("updateTeamOvrs", [ovrs]);
 };
 
 export default recomputeLocalUITeamOvrs;

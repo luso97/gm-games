@@ -1,18 +1,22 @@
-import PropTypes from "prop-types";
 import type { ReactNode } from "react";
 import RatingsStatsPopover from "./RatingsStatsPopover";
 import SkillsBlock from "./SkillsBlock";
 import { helpers } from "../util";
 import type { PlayerInjury } from "../../common/types";
-import { bySport } from "../../common";
+import InjuryIcon from "./InjuryIcon";
 
 const PlayerNameLabels = (props: {
 	children: ReactNode;
-	disableWatchToggle?: boolean;
 	jerseyNumber?: string;
-	injury?: PlayerInjury;
+	injury?: PlayerInjury & {
+		playingThrough?: boolean;
+	};
 	pos?: string;
 	pid?: number;
+
+	// season is passed to RatingsStatsPopover only, where it's used to determine whether to show a historical season's data
+	season?: number;
+
 	skills?: string[];
 	style?: {
 		[key: string]: string;
@@ -21,39 +25,15 @@ const PlayerNameLabels = (props: {
 }) => {
 	const {
 		children,
-		disableWatchToggle,
 		injury,
 		jerseyNumber,
 		pid,
 		pos,
+		season,
 		skills,
 		style,
 		watch,
 	} = props;
-
-	let injuryIcon: ReactNode = null;
-
-	if (injury !== undefined) {
-		if (injury.gamesRemaining === -1) {
-			// This is used in box scores, where it would be confusing to display "out X more games" in old box scores
-			injuryIcon = (
-				<span className="badge badge-danger badge-injury" title={injury.type}>
-					+
-				</span>
-			);
-		} else if (injury.gamesRemaining > 0 || injury.type !== "Healthy") {
-			// type check is for 1 game injuries, they're stored as 0 in the box score because number of games is determined after the game is played
-			const gameOrWeek = bySport({ default: "game", football: "week" });
-			const title = `${injury.type} (out ${injury.gamesRemaining} more ${
-				injury.gamesRemaining === 1 ? gameOrWeek : `${gameOrWeek}s`
-			})`;
-			injuryIcon = (
-				<span className="badge badge-danger badge-injury" title={title}>
-					{injury.gamesRemaining}
-				</span>
-			);
-		}
-	}
 
 	return (
 		<span style={style}>
@@ -66,31 +46,13 @@ const PlayerNameLabels = (props: {
 			) : (
 				children
 			)}
-			{injuryIcon}
+			<InjuryIcon injury={injury} />
 			<SkillsBlock skills={skills} />
 			{pid !== undefined ? (
-				<RatingsStatsPopover
-					disableWatchToggle={disableWatchToggle}
-					pid={pid}
-					watch={watch}
-				/>
+				<RatingsStatsPopover pid={pid} season={season} watch={watch} />
 			) : null}
 		</span>
 	);
-};
-
-PlayerNameLabels.propTypes = {
-	children: PropTypes.any,
-	injury: PropTypes.shape({
-		gamesRemaining: PropTypes.number.isRequired,
-		type: PropTypes.string.isRequired,
-	}),
-	jerseyNumber: PropTypes.string,
-	pos: PropTypes.string,
-	pid: PropTypes.number,
-	skills: PropTypes.arrayOf(PropTypes.string),
-	style: PropTypes.object,
-	watch: PropTypes.bool,
 };
 
 export default PlayerNameLabels;

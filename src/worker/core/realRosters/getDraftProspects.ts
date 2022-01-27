@@ -46,7 +46,7 @@ const processScheduledEvents = (
 	};
 };
 
-const getDraftProspects = (
+const getDraftProspects = async (
 	basketball: Basketball,
 	activePlayers: {
 		srID: string;
@@ -60,7 +60,7 @@ const getDraftProspects = (
 	numPlayersInitialDraftYear: number,
 	options: GetLeagueOptionsReal,
 ) => {
-	const formatPlayer = formatPlayerFactory(
+	const formatPlayer = await formatPlayerFactory(
 		basketball,
 		options,
 		options.season,
@@ -79,7 +79,23 @@ const getDraftProspects = (
 			seenSlugs.add(ratings.slug);
 			return !seen;
 		})
-		.filter(ratings => ratings.season > options.season || options.randomDebuts)
+		.filter(ratings => {
+			if (options.randomDebuts) {
+				return true;
+			}
+
+			// Normal rookies, whose first ratings season is their rookie year
+			if (ratings.season > options.season) {
+				return true;
+			}
+
+			// For 2021 (or later) draft prospects - anyone active in 2021 would have already been filered out by seenSlugs
+			if (ratings.season === options.season) {
+				return true;
+			}
+
+			return false;
+		})
 		.map(ratings =>
 			formatPlayer(ratings, {
 				draftProspect: true,

@@ -3,8 +3,9 @@ const crypto = require("crypto");
 const fs = require("fs");
 const fse = require("fs-extra");
 const htmlmin = require("html-minifier-terser");
-const sass = require("node-sass");
+const sass = require("sass");
 const path = require("path");
+const { PurgeCSS } = require("purgecss");
 const replace = require("replace");
 const getSport = require("./getSport");
 
@@ -13,30 +14,67 @@ const fileHash = contents => {
 	return crypto.createHash("md5").update(contents).digest("hex").slice(0, 10);
 };
 
-const buildCSS = (watch /*: boolean*/ = false) => {
+const buildCSS = async (watch /*: boolean*/ = false) => {
 	const filenames = ["light", "dark"];
-	for (const filename of filenames) {
-		const start = process.hrtime();
-
-		// If more Sass files are needed, then create them and @import them into this main Sass file.
+	const rawCSS = filenames.map(filename => {
 		const sassFilePath = `public/css/${filename}.scss`;
 		const sassResult = sass.renderSync({
 			file: sassFilePath,
 		});
-		const source = sassResult.css.toString();
+		return sassResult.css.toString();
+	});
+
+	const purgeCSSResults = watch
+		? []
+		: await new PurgeCSS().purge({
+				content: ["build/gen/*.js"],
+				css: rawCSS.map(raw => ({ raw })),
+				safelist: {
+					standard: [/^qc-cmp2-persistent-link$/],
+					greedy: [
+						// react-bootstrap stuff
+						/^modal/,
+						/^navbar/,
+						/^popover/,
+						/^tooltip/,
+						/^bs-tooltip/,
+
+						// For align="end" in react-bootstrap
+						/^dropdown-menu-end$/,
+
+						// flag-icons
+						/^fi$/,
+						/^fi-/,
+
+						/^dark-select/,
+						/^bar-graph/,
+					],
+				},
+		  });
+
+	for (let i = 0; i < filenames.length; i++) {
+		const filename = filenames[i];
+
+		let output;
+		if (!watch) {
+			const purgeCSSResult = purgeCSSResults[i].css;
+			const result = new CleanCSS().minify(purgeCSSResult);
+			if (result.errors.length > 0) {
+				console.log("clean-css errors", result.errors);
+			}
+			if (result.warnings.length > 0) {
+				console.log("clean-css warnings", result.warnings);
+			}
+			output = result.styles;
+		} else {
+			output = rawCSS[i];
+		}
 
 		let outFilename;
 		if (watch) {
 			outFilename = `build/gen/${filename}.css`;
-
-			replace({
-				regex: `-CSS_HASH_${filename.toUpperCase()}`,
-				replacement: "",
-				paths: ["build/index.html"],
-				silent: true,
-			});
 		} else {
-			const hash = fileHash(source);
+			const hash = fileHash(output);
 			outFilename = `build/gen/${filename}-${hash}.css`;
 
 			replace({
@@ -47,37 +85,7 @@ const buildCSS = (watch /*: boolean*/ = false) => {
 			});
 		}
 
-		let output;
-		if (!watch) {
-			const result = new CleanCSS().minify(source);
-			if (result.errors.length > 0) {
-				console.log("clean-css errors", result.errors);
-			}
-			if (result.warnings.length > 0) {
-				console.log("clean-css warnings", result.warnings);
-			}
-			output = result.styles;
-		} else {
-			output = source;
-		}
-
 		fs.writeFileSync(outFilename, output);
-
-		if (!watch) {
-			const bytes = Buffer.byteLength(output, "utf8");
-
-			const diff = process.hrtime(start);
-			const NS_PER_SECOND = 10 ** 9;
-			const timeInS = diff[0] + diff[1] / NS_PER_SECOND;
-
-			console.log(
-				`${(bytes / 1024 / 1024).toFixed(
-					2,
-				)} MB written to ${outFilename} (${timeInS.toFixed(
-					2,
-				)} seconds) at ${new Date().toLocaleTimeString()}`,
-			);
-		}
 	}
 };
 
@@ -157,7 +165,7 @@ const setSport = () => {
 	});
 };
 
-const copyFiles = () => {
+const copyFiles = watch => {
 	const foldersToIgnore = ["basketball", "css", "football", "hockey"];
 
 	fse.copySync("public", "build", {
@@ -167,6 +175,11 @@ const copyFiles = () => {
 				if (filename.startsWith(path.join("public", folder))) {
 					return false;
 				}
+			}
+
+			// Remove service worker, so I don't have to deal with it being wonky in dev
+			if (watch && filename === path.join("public", "sw.js")) {
+				return false;
 			}
 
 			return true;
@@ -187,15 +200,17 @@ const copyFiles = () => {
 		fse.removeSync(`build/${folder}`);
 	}
 
-	const realPlayerDataFilename = path.join(
-		"data",
-		`real-player-data.${sport}.json`,
-	);
-	if (fs.existsSync(realPlayerDataFilename)) {
-		fse.copySync(realPlayerDataFilename, "build/gen/real-player-data.json");
+	const realPlayerFilenames = ["real-player-data", "real-player-stats"];
+	for (const filename of realPlayerFilenames) {
+		const sourcePath = path.join("data", `${filename}.${sport}.json`);
+		if (fs.existsSync(sourcePath)) {
+			fse.copySync(sourcePath, `build/gen/${filename}.json`);
+		}
 	}
 
-	fse.copySync("node_modules/flag-icon-css/flags/4x3", "build/img/flags");
+	fse.copySync("data/names.json", "build/gen/names.json");
+
+	fse.copySync("node_modules/flag-icons/flags/4x3", "build/img/flags");
 	const flagHtaccess = `<IfModule mod_headers.c>
 	Header set Cache-Control "public,max-age=31536000"
 </IfModule>`;
@@ -237,12 +252,26 @@ const setTimestamps = (rev /*: string*/, watch /*: boolean*/ = false) => {
 			paths: ["build/index.html"],
 			silent: true,
 		});
+
+		replace({
+			regex: `-CSS_HASH_(LIGHT|DARK)`,
+			replacement: "",
+			paths: ["build/index.html"],
+			silent: true,
+		});
 	}
 
 	replace({
 		regex: "REV_GOES_HERE",
 		replacement: rev,
-		paths: ["build/index.html"],
+		paths: [
+			"build/index.html",
+
+			// This is currently just for lastChangesVersion, so don't worry about it not working in watch mode
+			...(watch
+				? []
+				: [`build/gen/worker-${rev}.js`, `build/gen/worker-legacy-${rev}.js`]),
+		],
 		silent: true,
 	});
 
@@ -456,6 +485,17 @@ if (window.enableLogging) {
 	});
 
 	replace({
+		regex: "GOOGLE_SURVEYS_ID",
+		replacement: bySport({
+			basketball: "_5lgefwumzxr6qxsbcz46dpx624",
+			football: "_ez6qiutxtbl66x5e22u5mzuyqq",
+			hockey: "_zrz3msjci2slargulizluenoni",
+		}),
+		paths: ["build/index.html"],
+		silent: true,
+	});
+
+	replace({
 		regex: "BUGSNAG_API_KEY",
 		replacement: bySport({
 			basketball: "c10b95290070cb8888a7a79cc5408555",
@@ -466,9 +506,10 @@ if (window.enableLogging) {
 		silent: true,
 	});
 
+	const sport = getSport();
+
 	const quantcastCode = "";
-	/*const sport = getSport();
-	if (!watch && sport === "basketball") {
+	/*if (!watch && sport === "basketball") {
 		quantcastCode = `<script type="text/javascript">
 if (window.enableLogging) {
 var _qevents = _qevents || [];(function() {
@@ -495,8 +536,8 @@ qacct:"p-Ye5RY6xC03ZWz"
 		silent: true,
 	});
 
-	const facebookPixelCode = "";
-	/*if (!watch) {
+	let facebookPixelCode = "";
+	if (!watch && sport === "basketball") {
 		facebookPixelCode = `<!-- Facebook Pixel Code -->
 <script>
 !function(f,b,e,v,n,t,s)
@@ -507,22 +548,14 @@ n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '${
-			process.env.SPORT === "basketball"
-				? "1285618145138713"
-				: "216939956468092"
-		}');
+fbq('init', '1285618145138713');
 fbq('track', 'PageView');
 </script>
 <noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id=${
-			process.env.SPORT === "basketball"
-				? "1285618145138713"
-				: "216939956468092"
-		}&ev=PageView&noscript=1"
+src="https://www.facebook.com/tr?id=1285618145138713&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Facebook Pixel Code -->`;
-	}*/
+	}
 	replace({
 		regex: "FACEBOOK_PIXEL_CODE",
 		replacement: facebookPixelCode,
@@ -533,9 +566,9 @@ src="https://www.facebook.com/tr?id=${
 	return rev;
 };
 
-const minifyIndexHTML = () => {
+const minifyIndexHTML = async () => {
 	const content = fs.readFileSync("build/index.html", "utf8");
-	const minified = htmlmin.minify(content, {
+	const minified = await htmlmin.minify(content, {
 		collapseBooleanAttributes: true,
 		collapseWhitespace: true,
 		minifyCSS: true,

@@ -1,20 +1,26 @@
 import { idb } from "../../db";
-import { g, helpers, initUILocalGames, local } from "../../util";
+import {
+	defaultInjuries,
+	defaultTragicDeaths,
+	g,
+	helpers,
+	initUILocalGames,
+	local,
+} from "../../util";
 import { wrap } from "../../util/g";
 import type { GameAttributesLeague } from "../../../common/types";
 import { finances, draft, team } from "..";
 import gameAttributesToUI from "./gameAttributesToUI";
-import { DIFFICULTY, unwrapGameAttribute } from "../../../common";
+import { unwrapGameAttribute } from "../../../common";
+import { getAutoTicketPriceByTid } from "../game/attendance";
+import goatFormula from "../../util/goatFormula";
+import updateMeta from "./updateMeta";
+import { initDefaults } from "../../util/loadNames";
 
 const updateMetaDifficulty = async (difficulty: number) => {
-	if (local.autoSave) {
-		const l = await idb.meta.get("leagues", g.get("lid"));
-
-		if (l) {
-			l.difficulty = difficulty;
-			await idb.meta.put("leagues", l);
-		}
-	}
+	await updateMeta({
+		difficulty,
+	});
 };
 
 const setGameAttributes = async (
@@ -24,19 +30,43 @@ const setGameAttributes = async (
 
 	if (
 		gameAttributes.difficulty !== undefined &&
-		gameAttributes.difficulty <= DIFFICULTY.Easy
+		g.hasOwnProperty("lowestDifficulty") &&
+		gameAttributes.difficulty < g.get("lowestDifficulty")
 	) {
-		gameAttributes.easyDifficultyInPast = true;
+		gameAttributes.lowestDifficulty = gameAttributes.difficulty;
+	}
+
+	if (gameAttributes.injuries) {
+		// Test if it's the same as default
+		if (
+			JSON.stringify(gameAttributes.injuries) ===
+			JSON.stringify(defaultInjuries)
+		) {
+			gameAttributes.injuries = undefined;
+		}
+	}
+
+	if (gameAttributes.tragicDeaths) {
+		// Test if it's the same as default
+		if (
+			JSON.stringify(gameAttributes.tragicDeaths) ===
+			JSON.stringify(defaultTragicDeaths)
+		) {
+			gameAttributes.tragicDeaths = undefined;
+		}
+	}
+
+	// Test if it's the same as default
+	if (gameAttributes.goatFormula === goatFormula.DEFAULT_FORMULA) {
+		gameAttributes.goatFormula = undefined;
 	}
 
 	for (const key of helpers.keys(gameAttributes)) {
 		const currentValue = unwrapGameAttribute(g, key);
 
 		if (
-			// @ts-ignore
 			(gameAttributes[key] === undefined ||
 				currentValue !== gameAttributes[key]) &&
-			// @ts-ignore
 			!Number.isNaN(gameAttributes[key])
 		) {
 			// No needless update for arrays - this matters for wrapped values like numGamesPlayoffSeries so it doesn't create an extra entry every year!
@@ -105,18 +135,24 @@ const setGameAttributes = async (
 									Math.round((t.budget[key].amount * factor) / 10) * 10;
 							}
 
-							const factor =
-								helpers.defaultTicketPrice(t.budget.ticketPrice.rank, value) /
-								helpers.defaultTicketPrice(t.budget.ticketPrice.rank);
+							if (t.autoTicketPrice !== false) {
+								t.budget.ticketPrice.amount = await getAutoTicketPriceByTid(
+									t.tid,
+								);
+							} else {
+								const factor =
+									helpers.defaultTicketPrice(t.budget.ticketPrice.rank, value) /
+									helpers.defaultTicketPrice(t.budget.ticketPrice.rank);
 
-							t.budget.ticketPrice.amount = parseFloat(
-								(t.budget.ticketPrice.amount * factor).toFixed(2),
-							);
+								t.budget.ticketPrice.amount = parseFloat(
+									(t.budget.ticketPrice.amount * factor).toFixed(2),
+								);
+							}
 
 							updated = true;
 						}
 					} else {
-						team.autoBudgetSettings(t, popRank, value);
+						await team.autoBudgetSettings(t, popRank, value);
 					}
 
 					if (updated) {
@@ -146,9 +182,16 @@ const setGameAttributes = async (
 	} else if (
 		toUpdate.includes("numSeasonsFutureDraftPicks") ||
 		toUpdate.includes("challengeNoDraftPicks") ||
+		toUpdate.includes("numDraftRounds") ||
 		(toUpdate.includes("userTids") && g.get("challengeNoDraftPicks"))
 	) {
 		await draft.genPicks();
+	}
+
+	// Reset playerBioInfo caches
+	if (toUpdate.includes("playerBioInfo")) {
+		local.playerBioInfo = undefined;
+		await initDefaults(true);
 	}
 };
 

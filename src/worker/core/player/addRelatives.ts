@@ -10,7 +10,7 @@ const parseLastName = (lastName: string): [string, number | undefined] => {
 		return [lastName, undefined];
 	}
 
-	const suffix = parts[parts.length - 1];
+	const suffix = parts.at(-1);
 	const parsedName = parts.slice(0, -1).join(" ");
 
 	if (suffix === "Sr.") {
@@ -49,17 +49,14 @@ const getRelatives = async (
 	p: Player,
 	type: RelativeType,
 ): Promise<Player[]> => {
-	const players = await Promise.all(
-		p.relatives
-			.filter(rel => rel.type === type)
-			.map(({ pid }) =>
-				idb.getCopy.players({
-					pid,
-				}),
-			),
+	const pids = p.relatives.filter(rel => rel.type === type).map(rel => rel.pid);
+	const players = await idb.getCopies.players(
+		{
+			pids,
+		},
+		"noCopyCache",
 	);
 
-	// @ts-ignore
 	return players.filter(p2 => !!p2);
 };
 
@@ -87,8 +84,7 @@ const makeSimilar = (existingRelative: Player, newRelative: Player) => {
 	}
 
 	if (existingRelative.stats.length > 0 && Math.random() < 0.5) {
-		newRelative.jerseyNumber =
-			existingRelative.stats[existingRelative.stats.length - 1].jerseyNumber;
+		newRelative.jerseyNumber = existingRelative.stats.at(-1).jerseyNumber;
 	}
 };
 
@@ -108,9 +104,12 @@ export const makeSon = async (p: Player) => {
 	);
 	const draftYear = p.draft.year - random.randInt(21, maxYearsAgo);
 	const possibleFathers = (
-		await idb.getCopies.players({
-			draftYear,
-		})
+		await idb.getCopies.players(
+			{
+				draftYear,
+			},
+			"noCopyCache",
+		)
 	).filter(
 		father =>
 			typeof father.diedYear !== "number" || father.diedYear >= p.born.year,
@@ -134,8 +133,9 @@ export const makeSon = async (p: Player) => {
 	const [fatherLastName, fatherSuffixNumber] = parseLastName(father.lastName);
 	const sonSuffixNumber =
 		typeof fatherSuffixNumber === "number" ? fatherSuffixNumber + 1 : 2;
-	const sonSuffix = getSuffix(sonSuffixNumber); // Only rename to be a Jr if the father has no son yet (first is always Jr)
+	const sonSuffix = getSuffix(sonSuffixNumber);
 
+	// Only rename to be a Jr if the father has no son yet (first is always Jr)
 	if (!hasRelative(father, "son")) {
 		p.firstName = father.firstName;
 		p.lastName = `${fatherLastName} ${sonSuffix}`;
@@ -147,8 +147,9 @@ export const makeSon = async (p: Player) => {
 		p.lastName = fatherLastName;
 	}
 
-	p.born.loc = father.born.loc; // Handle case where father has other sons
+	p.born.loc = father.born.loc;
 
+	// Handle case where father has other sons
 	if (hasRelative(father, "son")) {
 		const existingSons = await getRelatives(father, "son");
 
@@ -159,8 +160,9 @@ export const makeSon = async (p: Player) => {
 				pid: p.pid,
 				name: `${p.firstName} ${p.lastName}`,
 			});
-			await idb.cache.players.put(existingSon); // Add existing brothers to new son
+			await idb.cache.players.put(existingSon);
 
+			// Add existing brothers to new son
 			addRelative(p, {
 				type: "brother",
 				pid: existingSon.pid,
@@ -184,8 +186,9 @@ export const makeSon = async (p: Player) => {
 				// Add father to each brother (assuming they don't somehow already have another father)
 				brother.born.loc = father.born.loc;
 				addRelative(brother, relFather);
-				await idb.cache.players.put(brother); // Add existing brothers as sons to father
+				await idb.cache.players.put(brother);
 
+				// Add existing brothers as sons to father
 				addRelative(father, {
 					type: "son",
 					pid: brother.pid,
@@ -216,9 +219,12 @@ export const makeBrother = async (p: Player) => {
 	const draftYear = p.draft.year - random.randInt(0, 5);
 	const existingRelativePids = p.relatives.map(rel => rel.pid);
 	const possibleBrothers = (
-		await idb.getCopies.players({
-			draftYear,
-		})
+		await idb.getCopies.players(
+			{
+				draftYear,
+			},
+			"noCopyCache",
+		)
 	).filter(p2 => {
 		if (p2.pid === p.pid) {
 			return false;
@@ -236,16 +242,26 @@ export const makeBrother = async (p: Player) => {
 		return;
 	}
 
-	const brother = random.choice(possibleBrothers); // Two brothers can't have different fathers
+	const brother = random.choice(possibleBrothers);
 
+	// Two brothers can't have different fathers
 	if (hasRelative(p, "father") && hasRelative(brother, "father")) {
 		return;
 	}
 
+	// Don't want to have to rename existing relatives
+	if (hasRelative(p, "father") && hasRelative(brother, "brother")) {
+		return;
+	}
+
+	// Which player keeps their last name? Basically, if one has a father already, don't overwrite their last name
+	const keepLastName = hasRelative(p, "father") ? p : brother;
+	const newLastName = p === keepLastName ? brother : p;
+
 	// In case the brother is a Jr...
-	const [brotherLastName] = parseLastName(brother.lastName);
-	p.lastName = brotherLastName;
-	p.born.loc = brother.born.loc;
+	const [keptLastName] = parseLastName(keepLastName.lastName);
+	newLastName.lastName = keptLastName;
+	newLastName.born.loc = keepLastName.born.loc;
 
 	const edgeCases = async (brother1: Player, brother2: Player) => {
 		// Handle case where one brother already has a brother
@@ -259,8 +275,9 @@ export const makeBrother = async (p: Player) => {
 					pid: brother2.pid,
 					name: `${brother2.firstName} ${brother2.lastName}`,
 				});
-				await idb.cache.players.put(otherBrother); // Add other brother to brother
+				await idb.cache.players.put(otherBrother);
 
+				// Add other brother to brother
 				addRelative(brother2, {
 					type: "brother",
 					pid: otherBrother.pid,
@@ -274,15 +291,17 @@ export const makeBrother = async (p: Player) => {
 			const fathers = await getRelatives(brother1, "father");
 
 			if (fathers.length > 0) {
-				const father = fathers[0]; // Add brother to father
+				const father = fathers[0];
 
+				// Add brother to father
 				addRelative(father, {
 					type: "son",
 					pid: brother2.pid,
 					name: `${brother2.firstName} ${brother2.lastName}`,
 				});
-				await idb.cache.players.put(father); // Add father to brother
+				await idb.cache.players.put(father);
 
+				// Add father to brother
 				addRelative(brother2, {
 					type: "father",
 					pid: father.pid,

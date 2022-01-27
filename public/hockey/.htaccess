@@ -1,13 +1,13 @@
-<FilesMatch "\.(ttf|otf|eot|woff)$">
+<FilesMatch "\.(ttf|otf|eot|woff|woff2)$">
   <IfModule mod_headers.c>
     Header set Access-Control-Allow-Origin "*"
     Header set Cache-Control "max-age=31536000"
   </IfModule>
 </FilesMatch>
 
-<FilesMatch "^(ui|worker)-.*\.js$">
+<FilesMatch "^(chunk|ui|worker)-.*\.js$">
   <IfModule mod_headers.c>
-    Header set Cache-Control "max-age=31536000"
+    Header set Cache-Control "public,max-age=31536000"
   </IfModule>
 </FilesMatch>
 
@@ -17,9 +17,9 @@
   </IfModule>
 </FilesMatch>
 
-<FilesMatch "^real-player-.*\.json$">
+<FilesMatch "^(names|real-player)-.*\.json$">
   <IfModule mod_headers.c>
-    Header set Cache-Control "max-age=31536000"
+    Header set Cache-Control "public,max-age=31536000"
   </IfModule>
 </FilesMatch>
 
@@ -67,6 +67,6 @@ RewriteCond %{REQUEST_URI} !^/leagues
 RewriteCond %{REQUEST_URI} !^/manifest
 RewriteCond %{REQUEST_URI} !^/robots.txt
 RewriteCond %{REQUEST_URI} !^/sw.js
-RewriteCond %{REQUEST_URI} !^/upgrade-39
+RewriteCond %{REQUEST_URI} !^/upgrade-50
 RewriteCond %{REQUEST_URI} !^/(.well-known)(/|$)
 RewriteRule ^.*$ index.html

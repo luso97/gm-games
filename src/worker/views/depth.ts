@@ -66,18 +66,17 @@ const stats = bySport<Record<string, string[]>>({
 		PR: ["pr", "prYds", "prYdsPerAtt", "prLng", "prTD"],
 	},
 	hockey: {
-		F: ["amin", "g", "a", "ops", "dps", "ps"],
-		D: ["amin", "g", "a", "ops", "dps", "ps"],
-		G: ["gaa", "svPct", "gps"],
+		F: ["gp", "amin", "g", "a", "ops", "dps", "ps"],
+		D: ["gp", "amin", "g", "a", "ops", "dps", "ps"],
+		G: ["gp", "gaa", "svPct", "gps"],
 	},
 });
 
 const updateDepth = async (
-	{ abbrev, pos, tid }: ViewInput<"depth">,
+	{ abbrev, playoffs, pos, tid }: ViewInput<"depth">,
 	updateEvents: UpdateEvents,
 	state: any,
 ) => {
-	console.log();
 	if (!isSport("football") && !isSport("hockey")) {
 		throw new Error("Not implemented");
 	}
@@ -89,16 +88,17 @@ const updateDepth = async (
 		updateEvents.includes("gameAttributes") ||
 		updateEvents.includes("team") ||
 		pos !== state.pos ||
+		playoffs !== state.playoffs ||
 		abbrev !== state.abbrev
 	) {
 		const editable = tid === g.get("userTid") && !g.get("spectator");
-		// @ts-ignore
 		const ratings = ["hgt", "stre", "spd", "endu", ...posRatings(pos)];
 		const playersAll = await idb.cache.players.indexGetAll("playersByTid", tid);
 		const players = await idb.getCopies.playersPlus(playersAll, {
 			attrs: ["pid", "name", "age", "injury", "watch"],
 			ratings: ["skills", "pos", "ovr", "pot", "ovrs", "pots", ...ratings],
-			// @ts-ignore
+			playoffs: playoffs === "playoffs",
+			regularSeason: playoffs !== "playoffs",
 			stats: [...stats[pos], "jerseyNumber"],
 			season: g.get("season"),
 			showNoStats: true,
@@ -115,14 +115,10 @@ const updateDepth = async (
 
 		const depthPlayers = team.getDepthPlayers(t.depth, players);
 
-		// https://github.com/microsoft/TypeScript/issues/21732
-		// @ts-ignore
 		const stats2: string[] = stats.hasOwnProperty(pos) ? stats[pos] : [];
 
 		const players2: any[] = depthPlayers.hasOwnProperty(pos)
-			? // https://github.com/microsoft/TypeScript/issues/21732
-			  // @ts-ignore
-			  depthPlayers[pos]
+			? depthPlayers[pos]
 			: [];
 
 		let multiplePositionsWarning: string | undefined;
@@ -180,6 +176,7 @@ const updateDepth = async (
 			multiplePositionsWarning,
 			pos,
 			players: players2,
+			playoffs,
 			ratings,
 			season: g.get("season"),
 			stats: stats2,

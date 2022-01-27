@@ -1,16 +1,11 @@
-import PropTypes from "prop-types";
-import {
-	CountryFlag,
-	DataTable,
-	Height,
-	PlayerNameLabels,
-	Weight,
-} from "../components";
+import { CountryFlag, DataTable, PlayerNameLabels } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers } from "../util";
 import type { View } from "../../common/types";
 import { PLAYER } from "../../common";
 import { dataTableWrappedMood } from "../components/Mood";
+import { wrappedHeight } from "../components/Height";
+import { wrappedWeight } from "../components/Weight";
 
 const PlayerBios = ({
 	abbrev,
@@ -29,7 +24,7 @@ const PlayerBios = ({
 		dropdownFields: { teamsAndAllWatch: abbrev, seasons: season },
 	});
 
-	const cols = getCols(
+	const cols = getCols([
 		"Name",
 		"Pos",
 		"stat:jerseyNumber",
@@ -48,7 +43,7 @@ const PlayerBios = ({
 		"Ovr",
 		"Pot",
 		...stats.map(stat => `stat:${stat}`),
-	);
+	]);
 
 	const rows = players.map(p => {
 		const showRatings = !challengeNoRatings || p.tid === PLAYER.RETIRED;
@@ -60,6 +55,7 @@ const PlayerBios = ({
 				<PlayerNameLabels
 					pid={p.pid}
 					injury={p.injury}
+					season={season}
 					skills={p.ratings.skills}
 					watch={p.watch}
 				>
@@ -86,18 +82,8 @@ const PlayerBios = ({
 					{p.stats.abbrev}
 				</a>,
 				p.age,
-				{
-					// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-					// @ts-ignore
-					value: <Height inches={p.hgt} />,
-					sortValue: p.hgt,
-				},
-				{
-					// https://github.com/DefinitelyTyped/DefinitelyTyped/issues/20544
-					// @ts-ignore
-					value: <Weight pounds={p.weight} />,
-					sortValue: p.weight,
-				},
+				wrappedHeight(p.hgt),
+				wrappedWeight(p.weight),
 				dataTableWrappedMood({
 					defaultType:
 						p.tid === PLAYER.FREE_AGENT || p.tid === PLAYER.UNDRAFTED
@@ -123,7 +109,7 @@ const PlayerBios = ({
 									window.encodeURIComponent(helpers.getCountry(p.born.loc)),
 								])}
 							>
-								<CountryFlag className="mr-1" country={p.born.loc} />
+								<CountryFlag className="me-1" country={p.born.loc} />
 								{p.born.loc}
 							</a>
 						</>
@@ -173,15 +159,6 @@ const PlayerBios = ({
 			/>
 		</>
 	);
-};
-
-PlayerBios.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	currentSeason: PropTypes.number.isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	season: PropTypes.number.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default PlayerBios;

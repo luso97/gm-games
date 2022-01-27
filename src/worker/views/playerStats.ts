@@ -51,9 +51,13 @@ const updatePlayers = async (
 				Infinity,
 			]);
 		} else {
-			playersAll = await idb.getCopies.players({
-				activeSeason: inputs.season,
-			});
+			playersAll = await idb.getCopies.players(
+				{
+					activeSeason:
+						typeof inputs.season === "number" ? inputs.season : undefined,
+				},
+				"noCopyCache",
+			);
 		}
 
 		let tid: number | undefined = g
@@ -80,9 +84,7 @@ const updatePlayers = async (
 		}
 
 		if (tid === undefined && inputs.abbrev === "watch") {
-			playersAll = playersAll.filter(
-				p => p.watch && typeof p.watch !== "function",
-			);
+			playersAll = playersAll.filter(p => p.watch);
 		}
 
 		let players = await idb.getCopies.playersPlus(playersAll, {
@@ -91,15 +93,17 @@ const updatePlayers = async (
 				"nameAbbrev",
 				"name",
 				"age",
+				"born",
+				"ageAtDeath",
 				"injury",
 				"tid",
 				"abbrev",
 				"hof",
 				"watch",
 			],
-			ratings: ["skills", "pos"],
-			stats: ["abbrev", "tid", "jerseyNumber", ...stats],
-			season: inputs.season, // If null, then show career stats!
+			ratings: ["skills", "pos", "season"],
+			stats: ["abbrev", "tid", "jerseyNumber", "season", ...stats],
+			season: typeof inputs.season === "number" ? inputs.season : undefined,
 			tid,
 			statType,
 			playoffs: inputs.playoffs === "playoffs",
@@ -107,30 +111,29 @@ const updatePlayers = async (
 			mergeStats: true,
 		});
 
-		// Only keep players with more than 5 mpg in regular season, of any PT in playoffs
+		if (inputs.season === "all") {
+			players = players
+				.map(p =>
+					p.stats.map((ps: any) => {
+						const ratings =
+							p.ratings.find((pr: any) => pr.season === ps.season) ??
+							p.ratings.at(-1);
+
+						return {
+							...p,
+							ratings,
+							stats: ps,
+						};
+					}),
+				)
+				.flat();
+		}
+
+		// Only keep players who actually played
 		if (inputs.abbrev !== "watch" && isSport("basketball")) {
-			// Find max gp to use for filtering
-			let gp = 0;
-
-			for (const p of players) {
-				if (p.stats.gp > gp) {
-					gp = p.stats.gp;
-				}
-			}
-
-			// Special case for career totals - use g.get("numGames") games, unless this is the first season
-			if (inputs.season === undefined) {
-				if (g.get("season") > g.get("startingSeason")) {
-					gp = g.get("numGames");
-				}
-			}
-
 			players = players.filter(p => {
-				// Minutes played
-				let min;
-
 				if (inputs.statType === "gameHighs") {
-					if (inputs.season !== undefined) {
+					if (inputs.season !== "career") {
 						return p.stats.gp > 0;
 					} else if (inputs.playoffs !== "playoffs") {
 						return p.careerStats.gp > 0;
@@ -138,33 +141,12 @@ const updatePlayers = async (
 					return p.careerStatsPlayoffs.gp > 0;
 				}
 
-				if (inputs.statType === "totals") {
-					if (inputs.season !== undefined) {
-						min = p.stats.min;
-					} else if (inputs.playoffs !== "playoffs") {
-						min = p.careerStats.min;
-					}
-				} else if (inputs.season !== undefined) {
-					min = p.stats.gp * p.stats.min;
+				if (inputs.season !== "career") {
+					return p.stats.gp > 0;
+				} else if (inputs.playoffs === "playoffs") {
+					return p.careerStatsPlayoffs.gp > 0;
 				} else if (inputs.playoffs !== "playoffs") {
-					min = p.careerStats.gp * p.careerStats.min;
-				}
-
-				if (inputs.playoffs !== "playoffs") {
-					if (min !== undefined && min > gp * 5) {
-						return true;
-					}
-				}
-
-				// Or, keep players who played in playoffs
-				if (inputs.playoffs === "playoffs") {
-					if (inputs.season !== undefined) {
-						if (p.stats.gp > 0) {
-							return true;
-						}
-					} else if (p.careerStatsPlayoffs.gp > 0) {
-						return true;
-					}
+					return p.careerStats.gp > 0;
 				}
 
 				return false;
@@ -178,7 +160,7 @@ const updatePlayers = async (
 			const onlyShowIf = statsTable.onlyShowIf;
 
 			let obj: "careerStatsPlayoffs" | "careerStats" | "stats";
-			if (inputs.season === undefined) {
+			if (inputs.season === "career") {
 				if (inputs.playoffs === "playoffs") {
 					obj = "careerStatsPlayoffs";
 				} else {

@@ -7,12 +7,15 @@ import orderBy from "lodash-es/orderBy";
 async function updateSeasons(
 	inputs: unknown,
 	updateEvents: UpdateEvents,
-): Promise<{
-	abbrevs: string[];
-	season: number;
-	seasons: (number | undefined)[][];
-	userTid: number;
-} | void> {
+): Promise<
+	| {
+			abbrevs: string[];
+			season: number;
+			seasons: (number | undefined)[][];
+			userAbbrev: string;
+	  }
+	| undefined
+> {
 	if (
 		updateEvents.includes("firstRun") ||
 		updateEvents.includes("gameSim") ||
@@ -26,9 +29,12 @@ async function updateSeasons(
 			season <= g.get("season");
 			season++
 		) {
-			const players = await idb.getCopies.players({
-				activeSeason: season,
-			});
+			const players = await idb.getCopies.players(
+				{
+					activeSeason: season,
+				},
+				"noCopyCache",
+			);
 
 			// Can't use getCopies.players easily because it doesn't elegantly handle when a player plays for two teams in a season
 			const minutesAll = range(g.get("numTeams")).map(
@@ -50,7 +56,6 @@ async function updateSeasons(
 				}
 			}
 
-			// @ts-ignore
 			if (prevMinutesAll) {
 				// compare against previous season
 				seasons.push(
@@ -73,10 +78,13 @@ async function updateSeasons(
 
 							if (sumMinutesContinuity === 0) {
 								// Is it really 0, or did team not exist for one of these seasons?
-								const teamSeasons = await idb.getCopies.teamSeasons({
-									tid: i,
-									seasons: [season - 1, season],
-								});
+								const teamSeasons = await idb.getCopies.teamSeasons(
+									{
+										tid: i,
+										seasons: [season - 1, season],
+									},
+									"noCopyCache",
+								);
 								if (teamSeasons.length < 2) {
 									return undefined;
 								}
@@ -139,7 +147,7 @@ async function updateSeasons(
 			abbrevs: abbrevsSorted,
 			season: g.get("season"),
 			seasons: seasonsSorted,
-			userTid: g.get("userTid"),
+			userAbbrev: g.get("teamInfoCache")[g.get("userTid")].abbrev,
 		};
 	}
 }

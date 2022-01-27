@@ -11,7 +11,7 @@ import {
 	updatePlayMenu,
 	updateStatus,
 } from ".";
-import type { Conditions, League, ThenArg } from "../../common/types";
+import type { Conditions, League } from "../../common/types";
 
 let heartbeatIntervalID: number;
 
@@ -34,7 +34,7 @@ const runHeartbeat = async (l: League) => {
 	await idb.meta.put("leagues", l);
 };
 
-const startHeartbeat = async (l: ThenArg<ReturnType<typeof getLeague>>) => {
+const startHeartbeat = async (l: Awaited<ReturnType<typeof getLeague>>) => {
 	// First one within this transaction
 	await runHeartbeat(l);
 
@@ -75,15 +75,9 @@ const checkHeartbeat = async (lid: number) => {
 		return;
 	}
 
-	let errorMessage =
-		"A league can only be open in one tab at a time. If this league is not open in another tab, please wait a few seconds and reload. Or switch to Chrome on a desktop/laptop, which doesn't have this limitation.";
-
-	if (navigator.userAgent.includes("Firefox")) {
-		errorMessage +=
-			" (Firefox used to let you open a league in multiple tabs, but a bug introduced in Firefox 57 forced me to disable that feature.)";
-	}
-
-	throw new Error(errorMessage);
+	throw new Error(
+		"A league can only be open in one tab at a time. If this league is not open in another tab, please wait a few seconds and reload. Or switch to Chrome/Firefox on a desktop/laptop, which doesn't have this limitation.",
+	);
 };
 
 // beforeLeague runs when the user switches leagues (including the initial league selection).
@@ -128,8 +122,10 @@ const beforeLeague = async (
 
 		// Confirm league exists before proceeding
 		await getLeague(newLid);
+		idb.league = await connectLeague(newLid);
+
+		// Do this after connecting to league, in case there is an error during connection, the lid will stil be in sync between worker and ui
 		g.setWithoutSavingToDB("lid", newLid);
-		idb.league = await connectLeague(g.get("lid"));
 
 		if (loadingNewLid !== newLid) {
 			return;

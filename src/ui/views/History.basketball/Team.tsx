@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { helpers } from "../../../ui/util";
 
 const Player = ({
@@ -24,12 +23,6 @@ const Player = ({
 	);
 };
 
-Player.propTypes = {
-	p: PropTypes.object.isRequired,
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number.isRequired,
-};
-
 const Teams = ({
 	className,
 	name,
@@ -48,18 +41,24 @@ const Teams = ({
 	let content;
 
 	if (nested) {
-		content = team.map(t => (
-			<div className="mb-3" key={t.title}>
-				<h3>{t.title}</h3>
-				{t.players.map((p: any) =>
-					p ? (
-						<Player key={p.pid} p={p} season={season} userTid={userTid} />
-					) : (
-						""
-					),
-				)}
-			</div>
-		));
+		content = team.map(t => {
+			if (t.players.length === 0) {
+				return null;
+			}
+
+			return (
+				<div className="mb-3" key={t.title}>
+					<h3>{t.title}</h3>
+					{t.players.map((p: any) =>
+						p ? (
+							<Player key={p.pid} p={p} season={season} userTid={userTid} />
+						) : (
+							""
+						),
+					)}
+				</div>
+			);
+		});
 	} else if (team.length === 0) {
 		content = <p>None</p>;
 	} else {
@@ -74,15 +73,6 @@ const Teams = ({
 			{content}
 		</div>
 	);
-};
-
-Teams.propTypes = {
-	className: PropTypes.string,
-	name: PropTypes.string,
-	nested: PropTypes.bool,
-	team: PropTypes.array.isRequired,
-	season: PropTypes.number.isRequired,
-	userTid: PropTypes.number.isRequired,
 };
 
 export default Teams;

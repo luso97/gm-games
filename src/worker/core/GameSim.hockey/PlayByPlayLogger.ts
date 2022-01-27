@@ -7,7 +7,7 @@ type PlayByPlayEventInputScore = {
 	t: TeamNum;
 	names: [string] | [string, string] | [string, string, string];
 	pids: [number] | [number, number] | [number, number, number];
-	goalType: "ev" | "sh" | "pp";
+	goalType: "ev" | "sh" | "pp" | "en";
 	shotType: string;
 };
 
@@ -77,6 +77,18 @@ type PlayByPlayEventInput =
 			t: TeamNum;
 			names: [string];
 			penaltyPID: number;
+	  }
+	| {
+			type: "pullGoalie";
+			clock: number;
+			t: TeamNum;
+			name: string;
+	  }
+	| {
+			type: "noPullGoalie";
+			clock: number;
+			t: TeamNum;
+			name: string;
 	  };
 
 export type PlayByPlayEvent =

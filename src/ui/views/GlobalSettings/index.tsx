@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { useState, ChangeEvent, FormEvent } from "react";
 import useTitleBar from "../../hooks/useTitleBar";
 import { logEvent, safeLocalStorage, toWorker } from "../../util";
@@ -6,8 +5,9 @@ import RealData from "./RealData";
 import Storage from "./Storage";
 import type { View } from "../../../common/types";
 import { isSport } from "../../../common";
+import { MoreLinks } from "../../components";
 
-const Options = (props: View<"globalSettings">) => {
+const GlobalSettings = (props: View<"globalSettings">) => {
 	const [state, setState] = useState(() => {
 		const themeLocalStorage = safeLocalStorage.getItem("theme");
 		let theme: "dark" | "light" | "default";
@@ -36,15 +36,15 @@ const Options = (props: View<"globalSettings">) => {
 		};
 	});
 
-	const handleChange = (name: string) => (
-		event: ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>,
-	) => {
-		const value = event.target.value;
-		setState(state2 => ({
-			...state2,
-			[name]: value,
-		}));
-	};
+	const handleChange =
+		(name: string) =>
+		(event: ChangeEvent<HTMLSelectElement | HTMLTextAreaElement>) => {
+			const value = event.target.value;
+			setState(state2 => ({
+				...state2,
+				[name]: value,
+			}));
+		};
 
 	const handleFormSubmit = async (event: FormEvent) => {
 		event.preventDefault();
@@ -84,13 +84,17 @@ const Options = (props: View<"globalSettings">) => {
 
 	return (
 		<>
+			<MoreLinks type="globalSettings" page="/settings" />
+
 			<form onSubmit={handleFormSubmit}>
 				<div className="row">
-					<div className="col-sm-3 col-6 form-group">
-						<label htmlFor="options-color-scheme">Color Scheme</label>
+					<div className="col-sm-3 col-6 mb-3">
+						<label className="form-label" htmlFor="options-color-scheme">
+							Color Scheme
+						</label>
 						<select
 							id="options-color-scheme"
-							className="form-control"
+							className="form-select"
 							onChange={handleChange("theme")}
 							value={state.theme}
 						>
@@ -99,11 +103,13 @@ const Options = (props: View<"globalSettings">) => {
 							<option value="dark">Dark</option>
 						</select>
 					</div>
-					<div className="col-sm-3 col-6 form-group">
-						<label htmlFor="options-units">Units</label>
+					<div className="col-sm-3 col-6 mb-3">
+						<label className="form-label" htmlFor="options-units">
+							Units
+						</label>
 						<select
 							id="options-units"
-							className="form-control"
+							className="form-select"
 							onChange={handleChange("units")}
 							value={state.units}
 						>
@@ -112,8 +118,8 @@ const Options = (props: View<"globalSettings">) => {
 							<option value="metric">Metric</option>
 						</select>
 					</div>
-					<div className="col-sm-3 col-6 form-group">
-						<label>Persistent Storage</label>
+					<div className="col-sm-3 col-6 mb-3">
+						<label className="form-label">Persistent Storage</label>
 						<Storage />
 					</div>
 				</div>
@@ -135,8 +141,4 @@ const Options = (props: View<"globalSettings">) => {
 	);
 };
 
-Options.propTypes = {
-	title: PropTypes.string,
-};
-
-export default Options;
+export default GlobalSettings;

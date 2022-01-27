@@ -1,5 +1,5 @@
 import { idb } from "../../db";
-import { g } from "../../util";
+import { g, local } from "../../util";
 import type { OwnerMood } from "../../../common/types";
 
 /**
@@ -17,11 +17,23 @@ const updateOwnerMood = async (): Promise<
 	  }
 	| undefined
 > => {
-	const t = await idb.getCopy.teamsPlus({
-		seasonAttrs: ["won", "playoffRoundsWon", "profit"],
-		season: g.get("season"),
-		tid: g.get("userTid"),
-	});
+	// If auto play seasons or multi team mode, no messages - keep in sync with genMessage
+	if (
+		local.autoPlayUntil ||
+		g.get("spectator") ||
+		g.get("userTids").length > 1
+	) {
+		return;
+	}
+
+	const t = await idb.getCopy.teamsPlus(
+		{
+			seasonAttrs: ["won", "playoffRoundsWon", "profit"],
+			season: g.get("season"),
+			tid: g.get("userTid"),
+		},
+		"noCopyCache",
+	);
 
 	if (!t) {
 		return;

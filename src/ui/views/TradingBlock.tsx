@@ -1,13 +1,14 @@
-import PropTypes from "prop-types";
 import { useRef, useState, ReactNode } from "react";
 import { PHASE } from "../../common";
 import useTitleBar from "../hooks/useTitleBar";
 import { getCols, helpers, toWorker } from "../util";
 import { DataTable, PlayerNameLabels } from "../components";
-import type { View, ThenArg } from "../../common/types";
+import type { View } from "../../common/types";
 import type api from "../../worker/api";
 
-type OfferType = ThenArg<ReturnType<typeof api["getTradingBlockOffers"]>>[0];
+type OfferType = Awaited<
+	ReturnType<typeof api["main"]["getTradingBlockOffers"]>
+>[0];
 
 type OfferProps = {
 	challengeNoRatings: boolean;
@@ -45,7 +46,7 @@ const Offer = (props: OfferProps) => {
 
 	let offerPlayers: ReactNode = null;
 	if (players.length > 0) {
-		const cols = getCols(
+		const cols = getCols([
 			"Name",
 			"Pos",
 			"Age",
@@ -54,7 +55,7 @@ const Offer = (props: OfferProps) => {
 			"Contract",
 			"Exp",
 			...stats.map(stat => `stat:${stat}`),
-		);
+		]);
 
 		const rows = players.map(p => {
 			return {
@@ -97,7 +98,7 @@ const Offer = (props: OfferProps) => {
 	if (picks.length > 0) {
 		offerPicks = (
 			<div className="col-md-4">
-				<table className="table table-striped table-bordered table-sm">
+				<table className="table table-striped table-sm">
 					<thead>
 						<tr>
 							<th>Draft Picks</th>
@@ -129,18 +130,18 @@ const Offer = (props: OfferProps) => {
 				{tied > 0 ? <>-{tied}</> : null}, {strategy},{" "}
 				{helpers.formatCurrency(payroll / 1000, "M")} payroll
 			</p>
-			<p className="text-danger">{warning}</p>
-			<div className="row" style={{ clear: "both" }}>
+			<div className="row">
 				{offerPlayers}
 				{offerPicks}
 				{picks.length === 0 && players.length === 0 ? (
 					<div className="col-12">Nothing.</div>
 				) : null}
 			</div>
+			{warning ? <p className="text-danger">{warning}</p> : null}
 
 			<button
 				type="submit"
-				className="btn btn-light-bordered"
+				className="btn btn-light-bordered mb-4"
 				onClick={() => handleClickNegotiate(tid, pids, dpids)}
 			>
 				Negotiate
@@ -149,29 +150,14 @@ const Offer = (props: OfferProps) => {
 	);
 };
 
-Offer.propTypes = {
-	abbrev: PropTypes.string.isRequired,
-	dpids: PropTypes.arrayOf(PropTypes.number).isRequired,
-	handleClickNegotiate: PropTypes.func.isRequired,
-	i: PropTypes.number.isRequired,
-	lost: PropTypes.number.isRequired,
-	name: PropTypes.string.isRequired,
-	payroll: PropTypes.number.isRequired,
-	picks: PropTypes.arrayOf(PropTypes.object).isRequired,
-	pids: PropTypes.arrayOf(PropTypes.number).isRequired,
-	players: PropTypes.arrayOf(PropTypes.object).isRequired,
-	region: PropTypes.string.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	strategy: PropTypes.string.isRequired,
-	tid: PropTypes.number.isRequired,
-	tied: PropTypes.number,
-	warning: PropTypes.string,
-	won: PropTypes.number.isRequired,
-};
-
-const pickCols = getCols("", "Draft Picks");
-pickCols[0].sortSequence = [];
-pickCols[1].width = "100%";
+const pickCols = getCols(["", "Draft Picks"], {
+	"": {
+		sortSequence: [],
+	},
+	"Draft Picks": {
+		width: "100%",
+	},
+});
 
 const TradingBlock = (props: View<"tradingBlock">) => {
 	const [state, setState] = useState<{
@@ -218,8 +204,7 @@ const TradingBlock = (props: View<"tradingBlock">) => {
 		const offers: OfferType[] = await toWorker(
 			"main",
 			"getTradingBlockOffers",
-			state.pids,
-			state.dpids,
+			{ pids: state.pids, dpids: state.dpids },
 		);
 
 		setState(prevState => ({
@@ -299,17 +284,24 @@ const TradingBlock = (props: View<"tradingBlock">) => {
 	}
 
 	const cols = getCols(
-		"",
-		"Name",
-		"Pos",
-		"Age",
-		"Ovr",
-		"Pot",
-		"Contract",
-		"Exp",
-		...stats.map(stat => `stat:${stat}`),
+		[
+			"",
+			"Name",
+			"Pos",
+			"Age",
+			"Ovr",
+			"Pot",
+			"Contract",
+			"Exp",
+			...stats.map(stat => `stat:${stat}`),
+		],
+		{
+			"": {
+				sortSequence: [],
+				noSearch: true,
+			},
+		},
 	);
-	cols[0].sortSequence = [];
 
 	const rows = userRoster.map(p => {
 		return {
@@ -425,14 +417,6 @@ const TradingBlock = (props: View<"tradingBlock">) => {
 			) : null}
 		</>
 	);
-};
-
-TradingBlock.propTypes = {
-	gameOver: PropTypes.bool.isRequired,
-	phase: PropTypes.number.isRequired,
-	stats: PropTypes.arrayOf(PropTypes.string).isRequired,
-	userPicks: PropTypes.arrayOf(PropTypes.object).isRequired,
-	userRoster: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 
 export default TradingBlock;

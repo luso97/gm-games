@@ -1,10 +1,13 @@
-import PropTypes from "prop-types";
-import { memo, Fragment, ReactNode } from "react";
+import { memo, Fragment, MouseEvent, ReactNode, useState } from "react";
 import ResponsiveTableWrapper from "./ResponsiveTableWrapper";
-import { getCols, helpers } from "../util";
-import { getPeriodName, processPlayerStats } from "../../common";
+import { getCols, helpers, processPlayerStats } from "../util";
+import { filterPlayerStats, getPeriodName } from "../../common";
 import type { PlayByPlayEventScore } from "../../worker/core/GameSim.hockey/PlayByPlayLogger";
 import { formatClock } from "../util/processLiveGameEvents.hockey";
+import { PLAYER_GAME_STATS } from "../../common/constants.hockey";
+import { sortByStats, StatsHeader } from "./BoxScore.football";
+import updateSortBys from "./DataTable/updateSortBys";
+import type { SortBy } from "./DataTable";
 
 type Team = {
 	abbrev: string;
@@ -20,34 +23,6 @@ type BoxScore = {
 	numPeriods?: number;
 };
 
-const statsByType = {
-	skaters: [
-		"g",
-		"a",
-		"pts",
-		"pm",
-		"pim",
-		"s",
-		"sPct",
-		"hit",
-		"blk",
-		"gv",
-		"tk",
-		"fow",
-		"fol",
-		"foPct",
-		"min",
-		"ppMin",
-		"shMin",
-	],
-	goalies: ["ga", "sa", "sv", "svPct", "pim", "min", "ppMin", "shMin"],
-};
-
-const sortsByType = {
-	skaters: ["min"],
-	goalies: ["min"],
-};
-
 const StatsTable = ({
 	Row,
 	forceRowUpdate,
@@ -58,12 +33,29 @@ const StatsTable = ({
 	Row: any;
 	forceRowUpdate: boolean;
 	title: string;
-	type: keyof typeof sortsByType;
+	type: keyof typeof PLAYER_GAME_STATS;
 	t: Team;
 }) => {
-	const stats = statsByType[type];
-	const cols = getCols(...stats.map(stat => `stat:${stat}`));
-	const sorts = sortsByType[type];
+	const stats = PLAYER_GAME_STATS[type].stats;
+	const cols = getCols(stats.map(stat => `stat:${stat}`));
+
+	const [sortBys, setSortBys] = useState(() => {
+		return PLAYER_GAME_STATS[type].sortBy.map(
+			stat => [stats.indexOf(stat), "desc"] as SortBy,
+		);
+	});
+
+	const onClick = (event: MouseEvent, i: number) => {
+		setSortBys(
+			prevSortBys =>
+				updateSortBys({
+					cols,
+					event,
+					i,
+					prevSortBys,
+				}) ?? [],
+		);
+	};
 
 	const players = t.players
 		.map(p => {
@@ -72,19 +64,8 @@ const StatsTable = ({
 				processed: processPlayerStats(p, stats),
 			};
 		})
-		.filter(
-			p =>
-				(type === "skaters" && p.gpSkater > 0) ||
-				(type === "goalies" && p.gpGoalie > 0),
-		)
-		.sort((a, b) => {
-			for (const sort of sorts) {
-				if (b.processed[sort] !== a.processed[sort]) {
-					return b.processed[sort] - a.processed[sort];
-				}
-			}
-			return 0;
-		});
+		.filter(p => filterPlayerStats(p, stats, type))
+		.sort(sortByStats(stats, sortBys));
 
 	const showFooter = players.length > 1;
 	const sumsByStat: Record<string, number> = {};
@@ -108,20 +89,22 @@ const StatsTable = ({
 		}
 	}
 
+	const sortable = players.length > 1;
+	const highlightCols = sortable ? sortBys.map(sortBy => sortBy[0]) : undefined;
+
 	return (
-		<div key={t.abbrev} className="mb-3">
+		<div className="mb-3">
 			<ResponsiveTableWrapper>
-				<table className="table table-striped table-bordered table-sm table-hover">
+				<table className="table table-striped table-sm table-hover">
 					<thead>
 						<tr>
 							<th colSpan={2}>{title}</th>
-							{cols.map(({ desc, title, width }, i) => {
-								return (
-									<th key={i} title={desc} style={{ width }}>
-										{title}
-									</th>
-								);
-							})}
+							<StatsHeader
+								cols={cols}
+								onClick={onClick}
+								sortBys={sortBys}
+								sortable={sortable}
+							/>
 						</tr>
 					</thead>
 					<tbody>
@@ -132,6 +115,7 @@ const StatsTable = ({
 								p={p}
 								stats={stats}
 								forceUpdate={forceRowUpdate}
+								highlightCols={highlightCols}
 							/>
 						))}
 					</tbody>
@@ -185,6 +169,19 @@ const getCount = (events: PlayByPlayEventScore[]) => {
 		}
 	}
 	return count;
+};
+
+const goalTypeTitle = (goalType: "ev" | "sh" | "pp" | "en") => {
+	switch (goalType) {
+		case "ev":
+			return "Even strength";
+		case "sh":
+			return "Short handed";
+		case "pp":
+			return "Power play";
+		case "en":
+			return "Empty net";
+	}
 };
 
 const ScoringSummary = memo(
@@ -254,7 +251,9 @@ const ScoringSummary = memo(
 										)}
 									</td>
 									<td>{formatClock(event.clock)}</td>
-									<td>{event.goalType.toUpperCase()}</td>
+									<td title={goalTypeTitle(event.goalType)}>
+										{event.goalType.toUpperCase()}
+									</td>
 									<td style={{ whiteSpace: "normal" }}>
 										{event.shotType === "reboundShot"
 											? "Rebound shot"
@@ -281,12 +280,6 @@ const ScoringSummary = memo(
 		return prevProps.count === nextProps.count;
 	},
 );
-
-// @ts-ignore
-ScoringSummary.propTypes = {
-	events: PropTypes.array.isRequired,
-	teams: PropTypes.array.isRequired,
-};
 
 const BoxScore = ({
 	boxScore,
@@ -327,11 +320,6 @@ const BoxScore = ({
 			))}
 		</div>
 	);
-};
-
-BoxScore.propTypes = {
-	boxScore: PropTypes.object.isRequired,
-	Row: PropTypes.any,
 };
 
 export default BoxScore;

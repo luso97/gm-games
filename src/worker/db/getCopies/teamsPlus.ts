@@ -1,5 +1,5 @@
 import orderBy from "lodash-es/orderBy";
-import { mergeByPk } from "./helpers";
+import { maybeDeepCopy, mergeByPk } from "./helpers";
 import { team } from "../../core";
 import { idb } from "..";
 import { g, helpers } from "../../util";
@@ -11,6 +11,7 @@ import type {
 	TeamStatAttr,
 	TeamStatType,
 	TeamStats,
+	GetCopyType,
 } from "../../../common/types";
 import { DEFAULT_POINTS_FORMULA } from "../../../common";
 
@@ -18,7 +19,7 @@ const processAttrs = <
 	Attrs extends Readonly<TeamAttr[]>,
 	SeasonAttrs extends Readonly<TeamSeasonAttr[]> | undefined,
 	StatAttrs extends Readonly<TeamStatAttr[]> | undefined,
-	Season extends number | undefined
+	Season extends number | undefined,
 >(
 	output: TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season>,
 	t: Team,
@@ -26,19 +27,17 @@ const processAttrs = <
 ) => {
 	for (const attr of attrs) {
 		if (attr === "budget") {
-			// @ts-ignore
+			// Always copy, because we mutate below to convert units
 			output.budget = helpers.deepCopy(t.budget);
 
-			// @ts-ignore
 			for (const [key, value] of Object.entries(output.budget)) {
 				if (key !== "ticketPrice") {
 					// ticketPrice is the only thing in dollars always
-					// @ts-ignore
 					value.amount /= 1000;
 				}
 			}
 		} else {
-			// @ts-ignore
+			// @ts-expect-error
 			output[attr] = t[attr];
 		}
 	}
@@ -48,13 +47,14 @@ const processSeasonAttrs = async <
 	Attrs extends Readonly<TeamAttr[]> | undefined,
 	SeasonAttrs extends Readonly<TeamSeasonAttr[]>,
 	StatAttrs extends Readonly<TeamStatAttr[]> | undefined,
-	Season extends number | undefined
+	Season extends number | undefined,
 >(
 	output: TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season>,
 	t: Team,
 	seasonAttrs: SeasonAttrs,
 	addDummySeason: boolean,
 	season: Season,
+	type: GetCopyType | undefined,
 ) => {
 	let seasons;
 
@@ -70,6 +70,7 @@ const processSeasonAttrs = async <
 				[t.tid, "Z"],
 			]),
 			"teamSeasons",
+			type,
 		);
 	} else if (season >= g.get("season") - 2) {
 		// Single season, from cache
@@ -106,7 +107,7 @@ const processSeasonAttrs = async <
 		"colors",
 	];
 
-	// @ts-ignore
+	// @ts-expect-error
 	output.seasonAttrs = await Promise.all(
 		seasons.map(async ts => {
 			const row: any = {}; // Revenue and expenses calculation
@@ -173,6 +174,8 @@ const processSeasonAttrs = async <
 					row.pts = team.evaluatePointsFormula(ts, {
 						season: ts.season,
 					});
+				} else if (attr === "ptsMax") {
+					row.ptsMax = team.ptsMax(ts);
 				} else if (attr === "ptsPct") {
 					row.ptsPct = team.ptsPct(ts);
 				} else if (attr === "ptsDefault") {
@@ -180,13 +183,16 @@ const processSeasonAttrs = async <
 						formula: DEFAULT_POINTS_FORMULA,
 						season: ts.season,
 					});
+				} else if (attr === "avgAge") {
+					// Will be undefined if not cached, in which case will need to be dynamically computed elsewhere
+					row.avgAge = ts[attr];
 				} else {
-					// @ts-ignore
+					// @ts-expect-error
 					row[attr] = ts[attr];
 				}
 
 				if (row[attr] === undefined && copyFromTeamIfUndefined.includes(attr)) {
-					// @ts-ignore
+					// @ts-expect-error
 					row[attr] = t[attr];
 				}
 			}
@@ -196,7 +202,7 @@ const processSeasonAttrs = async <
 	);
 
 	if (season !== undefined) {
-		// @ts-ignore
+		// @ts-expect-error
 		output.seasonAttrs = output.seasonAttrs[0];
 	}
 };
@@ -206,9 +212,10 @@ const filterOrderStats = (
 	stats: TeamStats[],
 	playoffs: boolean,
 	regularSeason: boolean,
+	type: GetCopyType | undefined,
 ): TeamStats[] => {
 	return orderBy(
-		helpers.deepCopy(
+		maybeDeepCopy(
 			stats.filter(ts => {
 				if (playoffs && ts.playoffs) {
 					return true;
@@ -220,6 +227,7 @@ const filterOrderStats = (
 
 				return false;
 			}),
+			type,
 		),
 		["season", "playoffs", "rid"],
 	);
@@ -229,7 +237,7 @@ const processStats = async <
 	Attrs extends Readonly<TeamAttr[]> | undefined,
 	SeasonAttrs extends Readonly<TeamSeasonAttr[]> | undefined,
 	StatAttrs extends Readonly<TeamStatAttr[]>,
-	Season extends number | undefined
+	Season extends number | undefined,
 >(
 	output: TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season>,
 	t: Team,
@@ -239,7 +247,8 @@ const processStats = async <
 	statType: TeamStatType,
 	addDummySeason: boolean,
 	showNoStats: boolean,
-	season?: Season,
+	season: Season | undefined,
+	type: GetCopyType | undefined,
 ) => {
 	let teamStats;
 
@@ -277,6 +286,7 @@ const processStats = async <
 				.getAll(t.tid),
 			await teamStatsFromCache(),
 			"teamStats",
+			type,
 		);
 	} else if (season === g.get("season")) {
 		teamStats = await teamStatsFromCache();
@@ -289,13 +299,13 @@ const processStats = async <
 	}
 
 	// Handle playoffs/regularSeason
-	teamStats = filterOrderStats(teamStats, playoffs, regularSeason);
+	teamStats = filterOrderStats(teamStats, playoffs, regularSeason, type);
 
 	if (teamStats.length === 0 && (addDummySeason || showNoStats)) {
 		teamStats.push({});
 	}
 
-	// @ts-ignore
+	// @ts-expect-error
 	output.stats = teamStats.map(ts => {
 		return team.processStats(ts, stats, playoffs, statType);
 	});
@@ -304,7 +314,7 @@ const processStats = async <
 		season !== undefined &&
 		((playoffs && !regularSeason) || (!playoffs && regularSeason))
 	) {
-		// @ts-ignore
+		// @ts-expect-error
 		output.stats = output.stats[0];
 	}
 };
@@ -313,7 +323,7 @@ const processTeam = async <
 	Attrs extends Readonly<TeamAttr[]> | undefined,
 	SeasonAttrs extends Readonly<TeamSeasonAttr[]> | undefined,
 	StatAttrs extends Readonly<TeamStatAttr[]> | undefined,
-	Season extends number | undefined
+	Season extends number | undefined,
 >(
 	t: Team,
 	{
@@ -326,6 +336,7 @@ const processTeam = async <
 		statType,
 		addDummySeason,
 		showNoStats,
+		type,
 	}: {
 		season?: number;
 		attrs?: Attrs;
@@ -336,13 +347,14 @@ const processTeam = async <
 		statType: TeamStatType;
 		addDummySeason: boolean;
 		showNoStats: boolean;
+		type: GetCopyType | undefined;
 	},
 ) => {
-	// @ts-ignore
+	// @ts-expect-error
 	const output: TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season> = {};
 
 	if (attrs) {
-		// @ts-ignore
+		// @ts-expect-error
 		processAttrs(output, t, attrs);
 	}
 
@@ -350,15 +362,15 @@ const processTeam = async <
 
 	if (seasonAttrs) {
 		promises.push(
-			// @ts-ignore
-			processSeasonAttrs(output, t, seasonAttrs, addDummySeason, season),
+			// @ts-expect-error
+			processSeasonAttrs(output, t, seasonAttrs, addDummySeason, season, type),
 		);
 	}
 
 	if (stats) {
 		promises.push(
 			processStats(
-				// @ts-ignore
+				// @ts-expect-error
 				output,
 				t,
 				stats,
@@ -368,16 +380,17 @@ const processTeam = async <
 				addDummySeason,
 				showNoStats,
 				season,
+				type,
 			),
 		);
 	}
 
 	await Promise.all(promises);
 
-	if (seasonAttrs && ((output as never) as any).seasonAttrs === undefined) {
+	if (seasonAttrs && (output as never as any).seasonAttrs === undefined) {
 		return;
 	}
-	if (stats && ((output as never) as any).stats === undefined) {
+	if (stats && (output as never as any).stats === undefined) {
 		return;
 	}
 
@@ -409,32 +422,35 @@ async function getCopies<
 	Attrs extends Readonly<TeamAttr[]> | undefined,
 	SeasonAttrs extends Readonly<TeamSeasonAttr[]> | undefined,
 	StatAttrs extends Readonly<TeamStatAttr[]> | undefined,
-	Season extends number | undefined = undefined
->({
-	tid,
-	season,
-	attrs,
-	seasonAttrs,
-	stats,
-	playoffs = false,
-	regularSeason = true,
-	statType = "perGame",
-	addDummySeason = false,
-	active,
-	showNoStats = false,
-}: {
-	tid?: number;
-	season?: Season;
-	attrs?: Attrs;
-	seasonAttrs?: SeasonAttrs;
-	stats?: StatAttrs;
-	playoffs?: boolean;
-	regularSeason?: boolean;
-	statType?: TeamStatType;
-	addDummySeason?: boolean;
-	active?: true;
-	showNoStats?: boolean;
-} = {}): Promise<TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season>[]> {
+	Season extends number | undefined = undefined,
+>(
+	{
+		tid,
+		season,
+		attrs,
+		seasonAttrs,
+		stats,
+		playoffs = false,
+		regularSeason = true,
+		statType = "perGame",
+		addDummySeason = false,
+		active,
+		showNoStats = false,
+	}: {
+		tid?: number;
+		season?: Season;
+		attrs?: Attrs;
+		seasonAttrs?: SeasonAttrs;
+		stats?: StatAttrs;
+		playoffs?: boolean;
+		regularSeason?: boolean;
+		statType?: TeamStatType;
+		addDummySeason?: boolean;
+		active?: true;
+		showNoStats?: boolean;
+	} = {},
+	type?: GetCopyType,
+): Promise<TeamFiltered<Attrs, SeasonAttrs, StatAttrs, Season>[]> {
 	const options = {
 		season,
 		attrs,
@@ -445,6 +461,7 @@ async function getCopies<
 		statType,
 		addDummySeason,
 		showNoStats,
+		type,
 	};
 
 	if (tid === undefined) {
@@ -458,7 +475,7 @@ async function getCopies<
 			teams = teams.filter(t => !t.disabled);
 		}
 
-		// @ts-ignore
+		// @ts-expect-error
 		return (await Promise.all(teams.map(t => processTeam(t, options)))).filter(
 			x => x !== undefined,
 		);
@@ -468,7 +485,7 @@ async function getCopies<
 	if (t) {
 		const val = await processTeam(t, options);
 		if (val) {
-			// @ts-ignore
+			// @ts-expect-error
 			return [val];
 		}
 	}

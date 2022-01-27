@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import type { ReactNode } from "react";
 import { BoxPlot, MoreLinks } from "../components";
 import useTitleBar from "../hooks/useTitleBar";
@@ -108,15 +107,15 @@ const PlayerStatDists = ({
 					{Object.keys(statsAll)
 						.filter(stat => typeof statsAll[stat][0] === "number")
 						.map(stat => {
-							const col = getCols(`stat:${stat}`)[0];
+							const col = getCols([`stat:${stat}`])[0];
 							const bbgmPlot = (
 								<tr key={`${stat}-bbgm`}>
-									<td className="pr-3 text-right" title={col.desc}>
+									<td className="pe-3 text-end" title={col.desc}>
 										{col.title}
 									</td>
 									<td style={width100}>
 										<BoxPlot
-											color="var(--blue)"
+											color="var(--bs-blue)"
 											data={statsAll[stat]}
 											scale={(scale as any)[stat]}
 										/>
@@ -131,7 +130,7 @@ const PlayerStatDists = ({
 										<td style={width100}>
 											<div style={{ marginTop: "-26px" }}>
 												<BoxPlot
-													color="var(--green)"
+													color="var(--bs-green)"
 													labels={false}
 													scale={
 														isSport("basketball")
@@ -151,24 +150,6 @@ const PlayerStatDists = ({
 			</table>
 		</>
 	);
-};
-
-PlayerStatDists.propTypes = {
-	numGames: PropTypes.number.isRequired,
-	season: PropTypes.number.isRequired,
-	statType: PropTypes.oneOf([
-		"advanced",
-		"per36",
-		"perGame",
-		"shotLocations",
-		"totals",
-		"passing",
-		"rushing",
-		"defense",
-		"kicking",
-		"returns",
-	]),
-	statsAll: PropTypes.object.isRequired,
 };
 
 export default PlayerStatDists;

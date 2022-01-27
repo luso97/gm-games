@@ -42,6 +42,12 @@ const MoreLinks = (
 				type: "awards";
 				season?: number;
 		  }
+		| {
+				type: "schedule";
+		  }
+		| {
+				type: "globalSettings";
+		  }
 	) & {
 		page: string;
 		keepSelfLink?: boolean;
@@ -55,7 +61,7 @@ const MoreLinks = (
 	}));
 
 	let links: {
-		url: (string | number)[];
+		url: (string | number)[] | string;
 		name: string;
 		className?: string;
 	}[];
@@ -223,6 +229,7 @@ const MoreLinks = (
 				url: ["team_stat_dists", season],
 				name: "Stat Distributions",
 			},
+			{ url: ["league_stats"], name: "League Stats" },
 		];
 	} else if (props.type === "freeAgents") {
 		links = [
@@ -242,18 +249,28 @@ const MoreLinks = (
 			{ url: ["history_all"], name: "League History" },
 			{ url: ["team_records"], name: "Team Records" },
 			{ url: ["awards_records"], name: "Awards Records" },
+			...(isSport("basketball")
+				? [
+						{
+							url: ["all_star", "history"],
+							name: "All-Star History",
+						},
+				  ]
+				: []),
+			{ url: ["season_preview"], name: "Season Previews" },
 		];
-		if (isSport("basketball")) {
-			links.push({
-				url: ["all_star_history"],
-				name: "All-Star History",
-			});
-		}
 	} else if (props.type === "importExport") {
 		links = [
 			{ url: ["import_players"], name: "Import Players" },
 			{ url: ["export_players"], name: "Export Players" },
 			{ url: ["export_league"], name: "Export League" },
+		];
+	} else if (props.type === "schedule") {
+		links = [{ url: ["schedule"], name: "Team Schedule" }];
+	} else if (props.type === "globalSettings") {
+		links = [
+			{ url: "/settings", name: "Global Settings" },
+			{ url: "/settings/default", name: "Default New League Settings" },
 		];
 	} else {
 		throw new Error("Invalid MoreLinks type");
@@ -267,12 +284,21 @@ const MoreLinks = (
 		<p>
 			More:{" "}
 			{links
-				.filter(({ url }) => keepSelfLink || url[0] !== page)
+				.filter(({ url }) => {
+					if (keepSelfLink) {
+						return true;
+					}
+					const key = typeof url === "string" ? url : url[0];
+					return key !== page;
+				})
 				.map(({ className, url, name }, i) => {
 					return (
 						<Fragment key={url[0]}>
 							{i > 0 ? " | " : null}
-							<a className={className} href={helpers.leagueUrl(url)}>
+							<a
+								className={className}
+								href={typeof url === "string" ? url : helpers.leagueUrl(url)}
+							>
 								{name}
 							</a>
 						</Fragment>

@@ -1,6 +1,7 @@
 import { bySport, PHASE } from "../../common";
 import type {
 	DiscriminateUnion,
+	DraftPickSeason,
 	EventBBGM,
 	MinimalPlayerRatings,
 	Phase,
@@ -10,7 +11,7 @@ import type {
 	UpdateEvents,
 	ViewInput,
 } from "../../common/types";
-import { player } from "../core";
+import { player, team } from "../core";
 import { idb } from "../db";
 import { g, getTeamInfoBySeason, helpers } from "../util";
 import { assetIsPlayer, getPlayerFromPick } from "../util/formatEventText";
@@ -34,7 +35,7 @@ const findRatingsRow = (
 			return ratings;
 		}
 
-		return allRatings[allRatings.length - 1];
+		return allRatings.at(-1);
 	} else {
 		for (let i = allRatings.length - 1; i >= 0; i--) {
 			const ratings = allRatings[i];
@@ -54,7 +55,8 @@ const findStatSum = (
 	phase: Phase,
 	statSumsBySeason?: Record<number, number>,
 ) => {
-	let index = statsIndex ?? 0;
+	// >= 0 check is for rookies traded after the draft, where they have no stats entry so it is -1
+	let index = statsIndex !== undefined && statsIndex >= 0 ? statsIndex : 0;
 
 	// If no data was deleted/edited, should work with just statsIndex
 	const firstTry = allStats[index];
@@ -79,11 +81,12 @@ const findStatSum = (
 			hockey: row.ops + row.dps + row.gps,
 		});
 
-		// Only after trade
+		// Only after trade - undefined means traded draft pick, -1 means traded while stats array was empty (so all is after trade)
 		if (
 			i > index ||
 			(i === index && phase <= PHASE.PLAYOFFS) ||
-			statsIndex === undefined
+			statsIndex === undefined ||
+			statsIndex === -1
 		) {
 			statSum += stat;
 		}
@@ -133,7 +136,7 @@ const getActualPlayerInfo = (
 		retiredYear: p.retiredYear,
 		skills: ratings.skills,
 		stat,
-		watch: p.watch,
+		watch: !!p.watch,
 	};
 };
 
@@ -166,6 +169,7 @@ const getSeasonsToPlot = async (
 	for (let i = start; i <= end; i++) {
 		type Team = {
 			winp?: number;
+			ptsPct?: number;
 			won?: number;
 			lost?: number;
 			tied?: number;
@@ -198,6 +202,7 @@ const getSeasonsToPlot = async (
 				teams[j].tied = teamSeason.tied;
 				teams[j].otl = teamSeason.otl;
 				teams[j].winp = helpers.calcWinp(teamSeason);
+				teams[j].ptsPct = team.ptsPct(teamSeason);
 			}
 
 			teams[j].stat = statSumsBySeason[j][i];
@@ -235,7 +240,7 @@ type CommonPick = {
 	abbrev?: string; // from originalTid
 	tid: number; // from originalTid
 	round: number;
-	season: number | "fantasy" | "expansion";
+	season: DraftPickSeason;
 };
 
 type TradeEvent = DiscriminateUnion<EventBBGM, "type", "trade">;
@@ -273,7 +278,7 @@ export const processAssets = async (
 
 	for (const asset of event.teams[i].assets) {
 		if (assetIsPlayer(asset)) {
-			const p = await idb.getCopy.players({ pid: asset.pid });
+			const p = await idb.getCopy.players({ pid: asset.pid }, "noCopyCache");
 			const common = {
 				pid: asset.pid,
 				contract: asset.contract,
@@ -365,7 +370,7 @@ const updateTradeSummary = async (
 		updateEvents.includes("playerMovement") ||
 		eid !== state.eid
 	) {
-		const event = await idb.getCopy.events({ eid });
+		const event = await idb.getCopy.events({ eid }, "noCopyCache");
 		if (
 			!event ||
 			event.type !== "trade" ||
@@ -418,6 +423,9 @@ const updateTradeSummary = async (
 			statSumsBySeason,
 		);
 
+		const pointsFormula = g.get("pointsFormula");
+		const usePts = pointsFormula !== "";
+
 		return {
 			challengeNoRatings: g.get("challengeNoRatings"),
 			eid,
@@ -426,6 +434,7 @@ const updateTradeSummary = async (
 			phase: event.phase,
 			stat: bySport({ basketball: "WS", football: "AV", hockey: "PS" }),
 			seasonsToPlot,
+			usePts,
 		};
 	}
 };

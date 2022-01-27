@@ -1,7 +1,11 @@
 import { finances, player, season, team } from "..";
 import { idb } from "../../db";
 import { achievement, g, helpers, local, logEvent } from "../../util";
-import type { Conditions, PhaseReturn } from "../../../common/types";
+import type {
+	Conditions,
+	PhaseReturn,
+	PlayoffSeries,
+} from "../../../common/types";
 
 const newPhasePlayoffs = async (
 	conditions: Conditions,
@@ -13,35 +17,46 @@ const newPhasePlayoffs = async (
 	local.playingUntilEndOfRound = false;
 
 	// Set playoff matchups
-	const { series, tidPlayoffs } = await season.genPlayoffSeries();
+	const { byConf, playIns, series, tidPlayIn, tidPlayoffs } =
+		await season.genPlayoffSeries();
 
-	for (const tid of tidPlayoffs) {
-		logEvent(
-			{
-				type: "madePlayoffs",
-				text: `The <a href="${helpers.leagueUrl([
-					"roster",
-					`${g.get("teamInfoCache")[tid]?.abbrev}_${tid}`,
-					g.get("season"),
-				])}">${
-					g.get("teamInfoCache")[tid]?.name
-				}</a> made the <a href="${helpers.leagueUrl([
-					"playoffs",
-					g.get("season"),
-				])}">playoffs</a>.`,
-				showNotification: tid === g.get("userTid"),
-				tids: [tid],
-				score: 0,
-			},
-			conditions,
-		);
+	for (const type of ["playoffs", "play-in tournament"] as const) {
+		const tids = type === "playoffs" ? tidPlayoffs : tidPlayIn;
+
+		for (const tid of tids) {
+			logEvent(
+				{
+					type: "madePlayoffs",
+					text: `The <a href="${helpers.leagueUrl([
+						"roster",
+						`${g.get("teamInfoCache")[tid]?.abbrev}_${tid}`,
+						g.get("season"),
+					])}">${
+						g.get("teamInfoCache")[tid]?.name
+					}</a> made the <a href="${helpers.leagueUrl([
+						"playoffs",
+						g.get("season"),
+					])}">${type}</a>.`,
+					showNotification: tid === g.get("userTid"),
+					tids: [tid],
+					score: 0,
+				},
+				conditions,
+			);
+		}
 	}
 
-	await idb.cache.playoffSeries.put({
+	const playoffSeries: PlayoffSeries = {
+		byConf,
 		season: g.get("season"),
 		currentRound: 0,
 		series,
-	});
+	};
+	if (playIns) {
+		playoffSeries.currentRound = -1;
+		playoffSeries.playIns = playIns;
+	}
+	await idb.cache.playoffSeries.put(playoffSeries);
 
 	// Add row to team stats and team season attributes
 	const teamSeasons = await idb.cache.teamSeasons.indexGetAll(
@@ -49,10 +64,16 @@ const newPhasePlayoffs = async (
 		[[g.get("season")], [g.get("season"), "Z"]],
 	);
 
+	const tidAll = new Set([...tidPlayoffs, ...tidPlayIn]);
+
 	for (const teamSeason of teamSeasons) {
-		if (tidPlayoffs.includes(teamSeason.tid)) {
+		if (tidAll.has(teamSeason.tid)) {
 			await idb.cache.teamStats.add(team.genStatsRow(teamSeason.tid, true));
-			teamSeason.playoffRoundsWon = 0;
+
+			// Play-in teams have not made the playoffs yet, technically
+			if (tidPlayoffs.includes(teamSeason.tid)) {
+				teamSeason.playoffRoundsWon = 0;
+			}
 
 			// More hype for making the playoffs
 			teamSeason.hype += 0.05;
@@ -69,20 +90,34 @@ const newPhasePlayoffs = async (
 			}
 		}
 
+		// Average age and team ovr, cache now that season is over
+		const playersRaw = await idb.cache.players.indexGetAll(
+			"playersByTid",
+			teamSeason.tid,
+		);
+		const players = await idb.getCopies.playersPlus(playersRaw, {
+			attrs: ["age", "value"],
+			fuzz: true,
+			stats: ["gp", "min"],
+			ratings: ["ovr", "pos", "ovrs"],
+			season: g.get("season"),
+			tid: teamSeason.tid,
+		});
+		teamSeason.avgAge = team.avgAge(players);
+		teamSeason.ovrEnd = team.ovr(players);
+
 		await idb.cache.teamSeasons.put(teamSeason);
 	}
 
 	// Add row to player stats
-	await Promise.all(
-		tidPlayoffs.map(async tid => {
-			const players = await idb.cache.players.indexGetAll("playersByTid", tid);
+	for (const tid of tidAll) {
+		const players = await idb.cache.players.indexGetAll("playersByTid", tid);
 
-			for (const p of players) {
-				await player.addStatsRow(p, true);
-				await idb.cache.players.put(p);
-			}
-		}),
-	);
+		for (const p of players) {
+			await player.addStatsRow(p, true);
+			await idb.cache.players.put(p);
+		}
+	}
 
 	await finances.assessPayrollMinLuxury();
 	await season.newSchedulePlayoffsDay();

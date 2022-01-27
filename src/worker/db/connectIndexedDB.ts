@@ -1,4 +1,6 @@
-import { openDB, IDBPDatabase, IDBPTransaction } from "idb";
+import { openDB } from "idb";
+import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
+import { WEBSITE_ROOT } from "../../common";
 import { logEvent } from "../util";
 
 // If duplicate message is sent multiple times in a row (like IndexedDB transaction abort with many open requests), only show one
@@ -30,16 +32,20 @@ const connectIndexedDB = async <DBTypes>({
 		db: IDBPDatabase<DBTypes>;
 		lid: number;
 		oldVersion: number;
-		transaction: IDBPTransaction<DBTypes>;
-	}) => void;
+		transaction: IDBPTransaction<
+			DBTypes,
+			StoreNames<DBTypes>[],
+			"versionchange"
+		>;
+	}) => Promise<void>;
 }) => {
 	// Would like to await on create/migrate and inside those functions, but Firefox
 	const db = await openDB<DBTypes>(name, version, {
-		upgrade(db, oldVersion, newVerison, transaction) {
+		async upgrade(db, oldVersion, newVerison, transaction) {
 			if (oldVersion === 0) {
 				create(db);
 			} else {
-				migrate({ db, lid, oldVersion, transaction });
+				await migrate({ db, lid, oldVersion, transaction });
 			}
 		},
 		blocked() {
@@ -55,15 +61,14 @@ const connectIndexedDB = async <DBTypes>({
 		terminated() {
 			logEvent({
 				type: "error",
-				text: "Something bad happened. Please try reloading the game.",
+				text: "Something bad happened. Please try restarting your browser.",
 				saveToDb: false,
 				persistent: true,
 			});
 		},
 	});
 
-	const quotaErrorMessage =
-		'browser isn\'t letting the game store any more data!<br><br>Try <a href="/">deleting some old leagues</a> or deleting old data (Tools > Delete Old Data within a league). Clearing space elsewhere on your hard drive might help too. <a href="https://basketball-gm.com/manual/debugging/quota-errors/"><b>Read this for more info.</b></a>';
+	const quotaErrorMessage = `browser isn't letting the game store any more data!<br><br>Try <a href="/">deleting some old leagues</a> or deleting old data (Tools > Delete Old Data within a league). Clearing space elsewhere on your hard drive might help too. <a href="https://${WEBSITE_ROOT}/manual/debugging/quota-errors/"><b>Read this for more info.</b></a>`;
 
 	db.addEventListener("abort", (event: any) => {
 		console.log(`${name} database abort event`, event.target.error);

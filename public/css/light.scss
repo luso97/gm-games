@@ -1,87 +1,129 @@
+@use "sass:math";
+
 // These are so clicking on an element in one of the top navbar dropdown lists does not flash blue
 $dropdown-link-active-color: #16181b !default; // Matches hover: darken($gray-900, 5%)
 $dropdown-link-active-bg: #f8f9fa !default; // Matches hover: $gray-100
 
+// Make it more like Bootstrap 4
+$link-decoration: none;
+$link-hover-decoration: underline;
+$enable-smooth-scroll: false;
+$badge-padding-y: 0.25em;
+$badge-padding-x: 0.4em;
+$popover-body-padding-y: 0.5rem;
+$popover-body-padding-x: 0.75rem;
+$form-select-indicator-padding: 1.1rem;
+$form-select-bg-position: right 0.15rem center;
+
+.form-check-inline {
+	margin-right: 0.75rem !important;
+}
+.form-switch .form-check-input {
+	width: 1.75rem !important;
+	height: 1rem !important;
+}
+
 $font-size-base: 0.8125rem;
 $black: #000 !default;
 
+// Taken from Bootstrap 4, for consistency
+$font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+	"Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif,
+	"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+$font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas,
+	"Liberation Mono", "Courier New", monospace;
+
 // Country list is from CountryFlag.tsx, inlined here to skip a few of the special ones like the UN and EU flags
-$include: af, ax, al, dz, as, ad, ao, ai, ag, ar, am, aw, au, at, az, bs, bh, bd,
-	bb, by, be, bz, bj, bm, bt, bo, bq, ba, bw, br, io, bn, bg, bf, bi, cv, cv, kh,
-	cm, ca, ky, cf, td, cl, cn, cx, cc, co, km, ck, cr, hr, cu, cw, cy, cz, ci, cd,
-	cd, dk, dj, dm, do, ec, eg, sv, gb-eng, gq, er, ee, et, fk, fo, fm, fj, fi, fr,
-	gf, pf, tf, ga, gm, ge, de, gh, gi, gr, gl, gd, gp, gu, gt, gg, gn, gw, gy, ht,
-	va, hn, hk, hu, is, in, id, ir, iq, ie, im, il, it, jm, jp, je, jo, kz, ke, ki,
-	xk, kw, kg, la, lv, lb, ls, lr, ly, li, lt, lu, mo, mg, mw, my, mv, ml, mt, mh,
-	mq, mr, mu, yt, mx, md, mc, mn, me, ms, ma, mz, mm, na, nr, np, nl, nc, nz, ni,
-	ne, ng, nu, nf, kp, mk, mk, gb-nir, mp, no, om, pk, pw, pa, pg, py, pe, ph, pn,
-	pl, pt, pr, qa, cg, ro, ru, rw, re, bl, sh, kn, lc, mf, pm, vc, ws, sm, st, sa,
-	gb-sct, sn, rs, sc, sl, sg, sx, sk, si, sb, so, za, gs, kr, ss, es, lk, ps, sd,
-	sr, sj, sz, se, ch, sy, tw, tj, tz, th, tl, tl, tg, tk, to, tt, tn, tr, tm, tc,
-	tv, ug, ua, ae, gb, um, us, us, uy, uz, vu, ve, vn, vg, vi, vi, gb-wls, wf, eh,
-	ye, zm, zw;
+$include: af, ax, al, dz, as, ad, ao, ai, aq, ag, ar, am, aw, au, at, az, bs, bh,
+	bd, bb, by, be, bz, bj, bm, bt, bo, bq, ba, bw, bv, br, io, bn, bg, bf, bi, cv,
+	cv, kh, cm, ca, es-ct, ky, cf, td, cl, cn, cx, cc, co, km, ck, cr, hr, cu, cw,
+	cy, cz, ci, cd, cd, dk, dj, dm, do, ec, eg, sv, gb-eng, gq, er, ee, et, fk, fo,
+	fm, fj, fi, fr, gf, pf, tf, ga, es-ga, gm, ge, de, gh, gi, gr, gl, gd, gp, gu,
+	gt, gg, gn, gw, gy, ht, hm, va, hn, hk, hu, is, in, id, ir, iq, ie, im, il, it,
+	jm, jp, je, jo, kz, ke, ki, xk, kw, kg, la, lv, lb, ls, lr, ly, li, lt, lu, mo,
+	mg, mw, my, mv, ml, mt, mh, mq, mr, mu, yt, mx, md, mc, mn, me, ms, ma, mz, mm,
+	na, nr, np, nl, nc, nz, ni, ne, ng, nu, nf, kp, mk, mk, gb-nir, mp, no, om, pk,
+	pw, pa, pg, py, pe, ph, pn, pl, pt, pr, qa, cg, ro, ru, rw, re, bl, sh, kn, lc,
+	mf, pm, vc, ws, sm, st, sa, gb-sct, sn, rs, sc, sl, sg, sx, sk, si, sb, so, za,
+	gs, kr, ss, es, lk, ps, ps, sd, sr, sj, sz, se, ch, sy, tw, tj, tz, th, tl, tl,
+	tg, tk, to, tt, tn, tr, tm, tc, tv, ug, ua, ae, gb, um, us, us, uy, uz, vu, ve,
+	vn, vg, vi, vi, gb-wls, wf, eh, ye, zm, zw;
 
 // Inlined from flag-icon.scss to save the square flag classes
 $flag-icon-css-path: "/img/flags";
-.flag-icon {
+.fi {
 	background-size: contain;
 	background-position: 50%;
 	background-repeat: no-repeat;
 	position: relative;
 	display: inline-block;
-	width: (4 / 3) * 1em;
+	width: math.div(4, 3) * 1em;
 	line-height: 1em;
 	&:before {
 		content: "\00a0";
 	}
-	&.flag-icon-squared {
-		width: 1em;
-	}
 }
 @mixin flag-icon($country) {
-	.flag-icon-#{$country} {
+	.fi-#{$country} {
 		background-image: url(#{$flag-icon-css-path}/#{$country}.svg);
 	}
 }
 @each $country in $include {
 	@include flag-icon($country);
 }
+.flag-image {
+	max-width: math.div(4, 3) * 1em;
+	max-height: 1em;
+	width: auto;
+	height: auto;
+}
 
-// Taken from bootstrap.scss, but with unused things deleted
+// Taken from bootstrap.scss, but with unused things deleted. PurgeCSS would do the same thing from just importing the main bootstrap.scss file, but it has some false positives (such as offcanvas placeholder).
 @import "node_modules/bootstrap/scss/functions";
 @import "node_modules/bootstrap/scss/variables";
 @import "node_modules/bootstrap/scss/mixins";
+@import "node_modules/bootstrap/scss/utilities";
 @import "node_modules/bootstrap/scss/root";
 @import "node_modules/bootstrap/scss/reboot";
 @import "node_modules/bootstrap/scss/type";
+@import "node_modules/bootstrap/scss/containers";
 @import "node_modules/bootstrap/scss/grid";
 @import "node_modules/bootstrap/scss/tables";
 @import "node_modules/bootstrap/scss/forms";
 @import "node_modules/bootstrap/scss/buttons";
+@import "node_modules/bootstrap/scss/transitions";
 @import "node_modules/bootstrap/scss/dropdown";
 @import "node_modules/bootstrap/scss/button-group";
-@import "node_modules/bootstrap/scss/input-group";
-@import "node_modules/bootstrap/scss/custom-forms";
 @import "node_modules/bootstrap/scss/nav";
 @import "node_modules/bootstrap/scss/navbar";
 @import "node_modules/bootstrap/scss/card";
 @import "node_modules/bootstrap/scss/pagination";
 @import "node_modules/bootstrap/scss/badge";
 @import "node_modules/bootstrap/scss/alert";
+@import "node_modules/bootstrap/scss/progress";
 @import "node_modules/bootstrap/scss/list-group";
 @import "node_modules/bootstrap/scss/close";
 @import "node_modules/bootstrap/scss/modal";
 @import "node_modules/bootstrap/scss/tooltip";
 @import "node_modules/bootstrap/scss/popover";
-@import "node_modules/bootstrap/scss/utilities";
+@import "node_modules/bootstrap/scss/spinners";
+@import "node_modules/bootstrap/scss/helpers";
+@import "node_modules/bootstrap/scss/utilities/api";
 
 @import "datatable";
 @import "bbgm-notifications";
 @import "glyphicons";
 @import "sidebar";
 
-body {
-	padding-top: 52px;
+@each $color, $value in $table-variants {
+	.table-#{$color} {
+		// Make it more like Bootstrap 4 - allow using these classes on non-table elements
+		background-color: $value;
+
+		// Make it more like Bootstrap 4 - no striping of table rows when highlighted
+		--bs-table-striped-bg: $value;
+		--bs-table-striped-color: color-contrast(opaque($body-bg, $value));
+	}
 }
 
 h1 {
@@ -98,6 +140,9 @@ h4 {
 }
 h5 {
 	font-size: 12px;
+}
+.modal-title {
+	font-size: 20px;
 }
 
 .bbgm-container {
@@ -147,7 +192,8 @@ h5 {
 }
 
 .god-mode,
-.sidebar a.god-mode {
+.sidebar a.god-mode,
+select.god-mode:focus {
 	background-color: $purple;
 	color: $white;
 }
@@ -173,6 +219,10 @@ a.god-mode.active {
 }
 
 .btn-god-mode {
+	@include button-variant($purple, $purple);
+}
+
+.btn-outline-god-mode {
 	@include button-variant($purple, $gray-400);
 }
 
@@ -183,7 +233,26 @@ a.god-mode.active {
 .play-button {
 	font-size: 1.01562rem;
 	padding: 14px !important;
+	color: #fff !important; // white in light and dark
 	height: 51px;
+}
+.play-button-success {
+	background-color: $green;
+
+	&:hover,
+	&:active,
+	&:focus {
+		background-color: shade-color($green, $btn-hover-bg-shade-amount);
+	}
+}
+.play-button-danger {
+	background-color: $red;
+
+	&:hover,
+	&:active,
+	&:focus {
+		background-color: shade-color($red, $btn-hover-bg-shade-amount);
+	}
 }
 
 .dropdown-item {
@@ -248,7 +317,7 @@ a.god-mode.active {
 	background-position: 81px 34px;
 }
 
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(sm) {
 	.dashboard-top-wrapper {
 		text-align: center;
 
@@ -268,7 +337,6 @@ a.god-mode.active {
 .dashboard-controls {
 	padding-top: 0 !important;
 	padding-bottom: 0 !important;
-	vertical-align: middle !important;
 }
 
 .dashboard-play-loading {
@@ -276,7 +344,7 @@ a.god-mode.active {
 }
 
 .dashboard-table table td {
-	vertical-align: inherit;
+	vertical-align: middle;
 }
 
 @keyframes oscillate-bg {
@@ -314,10 +382,13 @@ table {
 	font-variant: tabular-nums;
 }
 
-.table-bordered {
-	tbody tr.separator td {
-		border-bottom: 1px solid $gray-700;
-	}
+.table:not(.table-borderless):not(.table-bordered) {
+	border-top: $table-border-width solid $table-border-color;
+}
+
+// .table is so this doesn't apply to a floating row while dragging
+.table tr.separator td {
+	border-bottom: 1px solid $gray-700;
 }
 
 .roster-handle {
@@ -345,7 +416,7 @@ table {
 	text-decoration: none;
 }
 
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(sm) {
 	.mx-xs-auto {
 		margin-left: auto !important;
 		margin-right: auto !important;
@@ -388,17 +459,8 @@ table {
 	background-position: center center;
 	background-repeat: no-repeat;
 	background-size: contain;
-	width: 120px;
-	height: 120px;
-}
-
-.team-picture-splash {
-	background-position: center center;
-	background-repeat: no-repeat;
-	background-size: contain;
-	width: 90px;
-	height: 90px;
-	float: left;
+	width: 128px;
+	height: 128px;
 }
 
 .skill {
@@ -424,8 +486,7 @@ table {
 
 .jersey-number-popover {
 	font-size: 10px;
-	line-height: 18px;
-	vertical-align: 4%;
+	line-height: 16px;
 }
 
 .watch,
@@ -443,9 +504,10 @@ table {
 
 .pt-modifier-select {
 	margin: 0;
-	width: auto;
-	padding: 0;
+	padding: 0 0.25rem;
 	height: 20px;
+	padding-right: 0.1rem;
+	background-position: right 0.1em center;
 }
 
 // These colors are duplicated from Roster.js
@@ -455,7 +517,7 @@ table {
 		color: $black;
 	}
 
-	option[value="1.75"] {
+	option[value="1.5"] {
 		background-color: $blue;
 		color: $white;
 	}
@@ -531,7 +593,9 @@ table {
 	line-height: 32px;
 	padding-right: 1em;
 	text-align: right;
-	width: 100px;
+	width: 85px;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 .finances-settings-text {
@@ -547,13 +611,7 @@ table {
 
 .finances-settings-field {
 	width: 115px;
-
-	.input-group-append,
-	.input-group-prepend {
-		height: 27px;
-	}
 }
-
 .finances-settings button {
 	display: none;
 }
@@ -610,33 +668,12 @@ table {
 	margin-bottom: 0;
 }
 
-.alert-top {
-	margin-top: 20px;
-	padding-bottom: 2px;
-	padding-top: 12px;
-
-	button {
-		margin-top: -4px;
-	}
-}
-
-.alert-changes {
-	h4 {
-		margin-top: 0;
-	}
-
-	ul {
-		margin-bottom: 9px;
-		padding-left: 18px;
-	}
-}
-
 // HACK so that other table classes can be overriden in teamHistory (and possibly elsewhere).
 tr.table-warning > td {
 	@extend .table-warning;
 }
 tr.table-warning:hover > td {
-	@extend .table-warning:hover;
+	@extend .table-warning, :hover;
 }
 
 // Keep in sync with setPlayByPlayDivHeight
@@ -697,17 +734,24 @@ tr.table-warning:hover > td {
 	border-radius: 0.2rem;
 }
 
+// Not sure why these need more than 2 args to button-variant, but otherwise hover seems broken
 .btn-light-bordered {
-	@extend .btn-light;
-	background-color: $white;
-	border: 1px solid $gray-400 !important;
-	color: $gray-700 !important;
+	@include button-variant($light, $gray-400, $black, darken($light, 7));
 }
 .btn-light-bordered-primary {
-	@extend .btn-light;
-	background-color: $white;
-	border: 1px solid $blue !important;
-	color: $gray-700 !important;
+	@include button-variant($light, $blue, $black, darken($light, 7));
+}
+.btn-light-bordered-2 {
+	@include button-variant($light, $gray-300, $black, darken($light, 7));
+}
+.btn-light-bordered-group-left {
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+}
+.btn-light-bordered-group-right {
+	border-left-width: 0 !important;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
 }
 
 .navbar-border {
@@ -719,6 +763,15 @@ tr.table-warning:hover > td {
 .play-button-wrapper {
 	margin: -8px 0;
 	height: 51px;
+}
+.dropdown-mobile {
+	.dropdown-item {
+		padding-top: 0.75rem !important;
+		padding-bottom: 0.75rem !important;
+	}
+	.kbd {
+		display: none;
+	}
 }
 .dropdown-links .dropdown.show.nav-item {
 	background-color: $gray-200;
@@ -772,6 +825,7 @@ tr.table-warning:hover > td {
 .table tfoot {
 	tr:first-child {
 		th {
+			border-top-color: $table-border-color;
 			border-top-width: 2px;
 		}
 	}
@@ -799,6 +853,8 @@ tr.table-warning:hover > td {
 
 	// https://github.com/twbs/bootstrap/issues/29313#issuecomment-589969379
 	-webkit-overflow-scrolling: auto;
+
+	width: 100%;
 
 	.table {
 		margin-bottom: 0;
@@ -875,16 +931,6 @@ tr.table-warning:hover > td {
 .chart-point {
 	fill: $white;
 }
-.chart-axis {
-	line,
-	path {
-		stroke: $secondary;
-	}
-
-	text {
-		fill: $secondary;
-	}
-}
 
 .cursor-default {
 	cursor: default;
@@ -900,13 +946,9 @@ tr.table-warning:hover > td {
 }
 
 .title-bar {
-	margin-left: -17px;
 	h1 {
-		margin-left: 17px;
-	}
-	min-height: 52px;
-	select {
-		font-size: 14px;
+		font-size: 20px;
+		margin: 7px 0; // Needed in addition to .title-bar min-height when it wraps onto multiple lines
 	}
 	option {
 		font-size: 12px;
@@ -914,6 +956,11 @@ tr.table-warning:hover > td {
 	.dropdown-links .dropdown.show.nav-item {
 		background-color: $gray-100;
 	}
+	gap: 0 10px;
+	min-height: 39px;
+}
+.dropdown-select-wrapper {
+	margin: 7px 0; // Needed in addition to .title-bar min-height when it wraps onto multiple lines
 }
 .dropdown-select {
 	display: block;
@@ -921,8 +968,7 @@ tr.table-warning:hover > td {
 	-moz-appearance: none;
 	-webkit-appearance: none;
 	appearance: none;
-	padding-left: 2px;
-	padding-right: 13px;
+	padding: 1px 13px 0 2px;
 	background-color: inherit;
 	border: 0;
 	color: inherit;
@@ -932,56 +978,98 @@ tr.table-warning:hover > td {
 	background-repeat: no-repeat, repeat;
 	background-position: right 0 top 45%, 0 0;
 	background-size: 0.62em auto, 100%;
+	font-size: 13px;
 
 	option {
 		color: #000;
 	}
 }
+@include media-breakpoint-up(md) {
+	.dropdown-select {
+		font-size: 14px;
+	}
+	.title-bar {
+		h1 {
+			font-size: 24px;
+		}
+		min-height: 45px;
+	}
+}
 
+$league-top-bar-toggle-width: 15px;
+$league-top-bar-scrollbar-track-color: $gray-300;
+$league-top-bar-scrollbar-thumb-color: $gray-500;
+.league-top-bar {
+	padding-right: $league-top-bar-toggle-width;
+
+	// Firefox
+	scrollbar-color: $league-top-bar-scrollbar-thumb-color
+		$league-top-bar-scrollbar-track-color;
+	scrollbar-width: thin;
+
+	// Other browsers
+	&::-webkit-scrollbar {
+		height: 5px;
+	}
+	&::-webkit-scrollbar-track {
+		background: $league-top-bar-scrollbar-track-color;
+		border-radius: 50px;
+	}
+	&::-webkit-scrollbar-thumb {
+		background: $league-top-bar-scrollbar-thumb-color;
+		border-radius: 50px;
+	}
+}
+.league-top-bar-safari {
+	margin-right: $league-top-bar-toggle-width + 8px;
+}
 .league-top-bar-toggle {
 	border-top-right-radius: 0 !important;
 	border-bottom-right-radius: 0 !important;
-	width: 15px;
+	width: $league-top-bar-toggle-width;
 	height: 56px;
 	z-index: 1000;
-}
-
-.score-box {
-	max-width: 400px;
+	position: absolute;
+	right: 0px;
 }
 
 .score-box-deadline {
+	height: 94px;
+}
+.score-box-deadline-small {
 	height: 54px;
 }
 
-.score-box-header {
-	height: 27px;
-	margin-top: -27px;
-}
-
-.score-box-logo {
-	margin-left: 1px;
-	height: 24px;
-	width: 24px;
-}
-
-.score-box-spread {
-	min-width: 52px;
+.score-box-all-star {
+	height: 47px;
 }
 
 .score-box-score {
 	min-width: 44px;
-	a {
-		display: block;
-		height: 100%;
-		width: 100%;
-	}
 }
 
 .score-box-action {
-	border-bottom-left-radius: 0px;
-	border-top-left-radius: 0px;
-	height: 56px;
+	.btn {
+		border-bottom-left-radius: 0px !important;
+		border-top-left-radius: 0px !important;
+		padding-top: 0 !important;
+		padding-bottom: 0 !important;
+	}
+
+	.btn:not(:first-child) {
+		border-top: 1px solid $gray-300;
+	}
+
+	height: 96px;
+}
+
+.score-box-left-wrapper {
+	flex-grow: 1;
+}
+@include media-breakpoint-up(sm) {
+	.score-box-left-wrapper {
+		flex-grow: 0;
+	}
 }
 
 .border-light {
@@ -1002,20 +1090,25 @@ tr.table-warning:hover > td {
 	font-size: inherit;
 	font-weight: inherit;
 }
-.badge-darkblue {
+.bg-darkblue {
 	background-color: #007bff;
-	color: #fff;
 }
-.badge-orange {
+.bg-orange {
 	background-color: lighten(#fd7e14, 10);
-	color: #000;
+}
+
+.bg-warning,
+.bg-orange,
+.bg-info,
+.bg-light {
+	color: $black !important;
 }
 
 .sort-inside-modal {
 	z-index: 999999999;
 }
 
-button.live-game-sim-more {
+button.fast-forward {
 	border-top-left-radius: 0;
 	border-bottom-left-radius: 0;
 	border-left-width: 0 !important;
@@ -1029,7 +1122,7 @@ button.live-game-sim-more {
 	}
 }
 
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(sm) {
 	// Same as .table-responsive
 	.player-stats-summary {
 		display: block;
@@ -1056,10 +1149,6 @@ button.live-game-sim-more {
 
 .text-yellow {
 	color: $yellow;
-}
-
-.badge-yellow {
-	@include badge-variant($yellow);
 }
 
 .ring::after {
@@ -1090,7 +1179,7 @@ button.live-game-sim-more {
 }
 
 .fake-list-group-item {
-	background-color: $table-accent-bg;
+	background-color: $table-striped-bg;
 	padding: 0.5rem 1rem;
 	width: 100%;
 }
@@ -1099,13 +1188,13 @@ button.live-game-sim-more {
 }
 @include media-breakpoint-up(md) {
 	.settings-striped-bg-alt {
-		background-color: $table-accent-bg;
+		background-color: $table-striped-bg;
 	}
 	.fake-list-group-item {
 		margin-bottom: 30px;
 	}
 }
-@include media-breakpoint-down(xs) {
+@include media-breakpoint-down(sm) {
 	.fake-list-group-item {
 		padding-right: 0;
 		padding-left: 0;
@@ -1115,7 +1204,7 @@ button.live-game-sim-more {
 	}
 }
 
-@include media-breakpoint-down(sm) {
+@include media-breakpoint-down(md) {
 	// Make it so the striped-bg color goes all the way to the edge of the screen
 	.settings-col {
 		padding-left: 0;
@@ -1133,7 +1222,7 @@ button.live-game-sim-more {
 	// To make it go over the Bootstrap custom form controls, like switch
 	z-index: 2;
 }
-@include media-breakpoint-down(md) {
+@include media-breakpoint-down(lg) {
 	.settings-buttons {
 		margin: 0 -15px;
 		border-top-left-radius: 0 !important;
@@ -1220,14 +1309,6 @@ a.anchor {
 	}
 }
 
-.new-league-customize-teams-wrapper {
-	border-right: 2px $black solid;
-}
-
-.align-middle-all td {
-	vertical-align: middle;
-}
-
 #confetti {
 	position: fixed;
 	top: 0;
@@ -1250,32 +1331,77 @@ a.anchor {
 	--gradient-base-success: #{derive-rgb-values-from-hex(lighten($success, 20%))};
 }
 
-// Hacky fix for https://github.com/react-bootstrap/react-bootstrap/issues/5270
-.popover-margin-fix-1 {
-	&[data-popper-placement="top"] {
-		margin-left: -4px !important;
-		margin-bottom: 8px !important;
-	}
-	&[data-popper-placement="right"] {
-		margin-left: 8px !important;
-		margin-top: -11px !important;
-	}
-	&[data-popper-placement="bottom"] {
-		margin-left: -4px !important;
-		margin-top: 8px !important;
-	}
-	&[data-popper-placement="left"] {
-		margin-right: 8px !important;
-		margin-top: -11px !important;
+@include media-breakpoint-up(sm) {
+	.play-through-injuries {
+		width: 200px;
 	}
 }
-.popover-margin-fix-2 {
-	&[data-popper-placement="top"],
-	&[data-popper-placement="bottom"] {
-		margin-left: -4px !important;
+
+// https://www.codeply.com/go/NiFzSCukVl/bootstrap-4-open-modal-from-another-modal
+// Increased z-index for Bootstrap 5 https://getbootstrap.com/docs/5.1/layout/z-index/
+.highest-modal {
+	z-index: 1057 !important;
+}
+.highest-modal-backdrop.show {
+	z-index: 1056 !important;
+}
+
+.border-top-light {
+	border-top: 1px solid $table-border-color !important;
+}
+
+.table-bg-striped {
+	background-color: $table-striped-bg;
+}
+
+code {
+	font-size: 1em;
+}
+
+// No animation when resetting progress bar https://github.com/react-bootstrap/react-bootstrap/issues/4981
+.progress-bar[aria-valuenow="0"] {
+	transition: none !important;
+}
+
+hr {
+	background-color: $black;
+	opacity: 0.1;
+}
+
+// Based on input-group-sm from _input-group.scss
+.input-group-xs > .form-control,
+.input-group-xs > .form-select,
+.input-group-xs > .input-group-text,
+.input-group-xs > .btn {
+	padding: $input-padding-y-sm $input-padding-x-sm;
+	@include font-size($input-font-size-sm);
+	@include border-radius($input-border-radius-sm);
+	height: 27px;
+}
+.input-group-xs > .form-select {
+	padding-right: $form-select-padding-x + $form-select-indicator-padding;
+}
+
+// Add !important to bg color so they can be used in table on achievements page
+@each $state, $value in $theme-colors {
+	$list-group-variant-bg: shift-color($value, $list-group-item-bg-scale);
+	.list-group-item-#{$state} {
+		background-color: $list-group-variant-bg !important;
 	}
-	&[data-popper-placement="right"],
-	&[data-popper-placement="left"] {
-		margin-top: -7px !important;
+}
+
+.default-settings-select {
+	max-width: 400px;
+
+	.dark-select__placeholder {
+		color: $black;
+	}
+
+	.dark-select__group-heading {
+		font-size: 90%;
+	}
+
+	.dark-select__menu {
+		z-index: 3; // Above .settings-buttons
 	}
 }
