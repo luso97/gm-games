@@ -1,9 +1,10 @@
-import classNames from "classnames";
 import useTitleBar from "../hooks/useTitleBar";
 import { helpers, logEvent, realtimeUpdate, toWorker } from "../util";
 import type { View } from "../../common/types";
 import { Mood, RatingsStatsPopover } from "../components";
+import { ProgressBarText } from "../components";
 import { isSport } from "../../common";
+import { useState } from "react";
 
 // Show the negotiations list if there are more ongoing negotiations
 const redirectNegotiationOrRoster = async (cancelled: boolean) => {
@@ -47,6 +48,7 @@ const Negotiation = ({
 	resigning,
 	salaryCap,
 	salaryCapType,
+	maximumMinimum,
 }: View<"negotiation">) => {
 	useTitleBar({ title: `Contract Negotiation - ${player.name}` });
 
@@ -88,6 +90,38 @@ const Negotiation = ({
 		);
 	}
 
+	var contractValueArrays: number[] = contractOptions.map(
+		(contract, index) => contract.amount,
+	);
+
+	const makeOffer = (pid: number) => {
+		const goodOffer =
+			valueOffered.value / (contractValueArrays[valueOffered.years - 1] * 1000);
+		const season = contractOptions[0].exp - contractOptions[0].years;
+
+		if (goodOffer > 1.0) {
+			sign(pid, valueOffered.value / 1000, season + valueOffered.years);
+		} else {
+			offer({
+				...valueOffered,
+				patience: valueOffered.patience - (1.0 - goodOffer),
+			});
+		}
+
+		if (valueOffered.patience <= 0) {
+		}
+
+		console.log(goodOffer);
+		console.log(valueOffered);
+	};
+	const firstOffer = {
+		years: 2,
+		value: (maximumMinimum.maximum - maximumMinimum.minimum) / 2,
+		patience: 1,
+	};
+
+	const [valueOffered, offer] = useState(firstOffer);
+
 	return (
 		<>
 			{message}
@@ -122,42 +156,59 @@ const Negotiation = ({
 			<div className="row">
 				<div className="col-sm-10 col-md-8 col-lg-6">
 					<div className="list-group">
-						{contractOptions.map((contract, i) => {
-							return (
-								<div
-									key={i}
-									className={classNames(
-										"d-flex align-items-center list-group-item",
-										{
-											"list-group-item-success": contract.smallestAmount,
-										},
-									)}
-								>
-									<div className="flex-grow-1">
-										{helpers.formatCurrency(contract.amount, "M")} per year
-										<span className="d-none d-sm-inline">
-											, through {contract.exp}
-										</span>{" "}
-										({contract.years}{" "}
-										{contract.years === 1 ? "season" : "seasons"})
-									</div>
-
-									<button
-										className="btn btn-success"
-										onClick={() =>
-											sign(player.pid, contract.amount, contract.exp)
-										}
-									>
-										Sign
-										<span className="d-none d-sm-inline"> Contract</span>
-									</button>
-								</div>
-							);
-						})}
+						<label className="form-label" htmlFor="cvc">
+							Salary
+						</label>
+						<div className="text-end me-1" style={{ minWidth: 38 }}>
+							{helpers.formatCurrency(valueOffered.value / 1000, "M")} per year
+						</div>
+						<input
+							type="range"
+							value={valueOffered.value}
+							className="form-range"
+							min={maximumMinimum.minimum}
+							max={maximumMinimum.maximum}
+							onChange={e =>
+								offer({ ...valueOffered, value: parseFloat(e.target.value) })
+							}
+							step="500"
+						/>
 					</div>
 				</div>
 			</div>
-
+			<div className="row">
+				<div className="col-sm-10 col-md-8 col-lg-6">
+					<div className="list-group">
+						<label className="form-label" htmlFor="cvc">
+							Years
+						</label>
+						<div className="text-end me-1" style={{ minWidth: 38 }}>
+							{valueOffered.years} years
+						</div>
+						<input
+							type="range"
+							value={valueOffered.years}
+							className="form-range"
+							min={maximumMinimum.minYears}
+							max={maximumMinimum.maxYears}
+							onChange={e =>
+								offer({ ...valueOffered, years: parseFloat(e.target.value) })
+							}
+							step="1"
+						/>
+					</div>
+				</div>
+			</div>
+			<div className="row">
+				<ProgressBarText
+					className="mt-3"
+					text="Patience"
+					percent={valueOffered.patience * 100.0}
+				/>
+			</div>
+			<button className="btn mt-3" onClick={() => makeOffer(player.pid)}>
+				Offer
+			</button>
 			<button
 				className="btn btn-danger mt-3"
 				onClick={() => cancel(player.pid)}

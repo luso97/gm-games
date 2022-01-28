@@ -162,6 +162,13 @@ const updateNegotiation = async (
 
 		const payroll = await team.getPayroll(userTid);
 
+		const maximumMinimum = {
+			maximum: g.get("maxContract"),
+			minimum: g.get("minContract"),
+			maxYears: g.get("maxContractLength"),
+			minYears: g.get("minContractLength"),
+		};
+
 		return {
 			challengeNoRatings: g.get("challengeNoRatings"),
 			contractOptions,
@@ -170,6 +177,7 @@ const updateNegotiation = async (
 			player: p,
 			resigning: negotiation.resigning,
 			salaryCap: g.get("salaryCap") / 1000,
+			maximumMinimum,
 		};
 	}
 };
