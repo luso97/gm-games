@@ -27,6 +27,7 @@ const FreeAgents = ({
 	salaryCapType,
 	stats,
 	userPlayers,
+	negotiations,
 }: View<"freeAgents">) => {
 	const [addFilters, setAddFilters] = useState<
 		(string | undefined)[] | undefined
@@ -122,6 +123,7 @@ const FreeAgents = ({
 							minContract={minContract}
 							spectator={spectator}
 							p={p}
+							negotiations={negotiations}
 							willingToNegotiate={p.mood.user.willing}
 						/>
 					),

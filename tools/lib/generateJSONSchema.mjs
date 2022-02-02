@@ -761,6 +761,9 @@ const generateJSONSchema = (sport /*: string*/) => {
 								type: "number",
 								minimum: 0,
 							},
+							negotiations: {
+								type: "boolean",
+							},
 							maxContract: {
 								type: "integer",
 								minimum: 0,

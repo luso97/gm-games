@@ -13,6 +13,8 @@ const updateNegotiationList = async () => {
 
 	const userTid = g.get("userTid");
 
+	const negotiationsBoolean = g.get("negotiations");
+
 	let negotiations = await idb.cache.negotiations.getAll(); // For Multi Team Mode, might have other team's negotiations going on
 
 	negotiations = negotiations.filter(
@@ -82,6 +84,7 @@ const updateNegotiationList = async () => {
 		stats,
 		sumContracts,
 		userPlayers,
+		negotiationsBoolean,
 	};
 };
 

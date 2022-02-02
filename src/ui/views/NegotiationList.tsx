@@ -24,6 +24,7 @@ const NegotiationList = ({
 	stats,
 	sumContracts,
 	userPlayers,
+	negotiationsBoolean,
 }: View<"negotiationList">) => {
 	const title =
 		salaryCapType === "hard" || !draftPickAutoContract
@@ -92,6 +93,7 @@ const NegotiationList = ({
 							minContract={minContract}
 							spectator={spectator}
 							p={p}
+							negotiations={negotiationsBoolean}
 							willingToNegotiate={p.mood.user.willing}
 						/>
 					),

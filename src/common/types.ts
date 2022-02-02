@@ -506,6 +506,7 @@ export type GameAttributesLeague = {
 	minPayroll: number;
 	minRosterSize: number;
 	names?: NamesLegacy;
+	negotiations: boolean;
 	nextPhase?: Phase;
 	numActiveTeams: number;
 	numDraftPicksCurrent?: number;
@@ -524,7 +525,6 @@ export type GameAttributesLeague = {
 	playIn: boolean;
 	playerMoodTraits: boolean;
 	pointsFormula: string;
-	rookieScale: number[][];
 	spectator: boolean;
 	otl: boolean;
 	otherTeamsWantToHire: boolean;

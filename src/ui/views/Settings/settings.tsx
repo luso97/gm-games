@@ -905,6 +905,20 @@ export const settings: {
 	},
 	{
 		category: "Contracts",
+		key: "negotiations",
+		name: "Negotiations instead of signings",
+		godModeRequired: "existingLeagueOnly",
+		descriptionLong: (
+			<>
+				Instead of having 5 options of contracts to offer you have to negotiate
+				with the player their salary and years of contract, with the possibility
+				that he ends the negotiation if it takes too long
+			</>
+		),
+		type: "bool",
+	},
+	{
+		category: "Contracts",
 		key: "rookiesCanRefuse",
 		name: "Can Refuse After Rookie Contract",
 		godModeRequired: "existingLeagueOnly",

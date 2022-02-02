@@ -94,7 +94,7 @@ const Negotiation = ({
 		(contract, index) => contract.amount,
 	);
 
-	const makeOffer = (pid: number) => {
+	const makeOffer = async (pid: number) => {
 		const goodOffer =
 			valueOffered.value / (contractValueArrays[valueOffered.years - 1] * 1000);
 		const season = contractOptions[0].exp - contractOptions[0].years;
@@ -109,10 +109,8 @@ const Negotiation = ({
 		}
 
 		if (valueOffered.patience <= 0) {
+			cancel(pid);
 		}
-
-		console.log(goodOffer);
-		console.log(valueOffered);
 	};
 	const firstOffer = {
 		years: 2,

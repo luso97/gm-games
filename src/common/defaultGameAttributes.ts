@@ -56,6 +56,7 @@ const defaultGameAttributes: GameAttributesLeagueWithHistory = {
 	minPayroll: 60000, // [thousands of dollars]
 	luxuryPayroll: 100000, // [thousands of dollars]
 	luxuryTax: 1.5,
+	negotiations: true,
 	minContract: 750, // [thousands of dollars]
 	maxContract: 30000, // [thousands of dollars]
 	minContractLength: 1,

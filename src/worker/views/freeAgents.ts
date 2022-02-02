@@ -76,6 +76,7 @@ const updateFreeAgents = async () => {
 		players,
 		stats,
 		userPlayers,
+		negotiations: g.get("negotiations"),
 	};
 };
 

@@ -19,6 +19,7 @@ export type Key =
 	| "maxContract"
 	| "minContractLength"
 	| "maxContractLength"
+	| "negotiations"
 	| "salaryCapType"
 	| "budget"
 	| "aiTradesFactor"

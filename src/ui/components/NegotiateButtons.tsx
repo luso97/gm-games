@@ -9,6 +9,7 @@ const NegotiateButtons = ({
 	minContract,
 	spectator,
 	p,
+	negotiations,
 	willingToNegotiate,
 }: {
 	canGoOverCap?: boolean;
@@ -17,6 +18,7 @@ const NegotiateButtons = ({
 	minContract: number;
 	spectator: boolean;
 	p: any;
+	negotiations: boolean;
 	willingToNegotiate: boolean;
 }) => {
 	if (spectator) {
@@ -43,27 +45,29 @@ const NegotiateButtons = ({
 			>
 				Negotiate
 			</button>
-			<button
-				className="btn btn-light-bordered btn-xs"
-				disabled={signDisabled}
-				onClick={async () => {
-					const errorMsg = await toWorker("main", "sign", {
-						pid: p.pid,
-						amount: contractAmount,
-						exp: p.contract.exp,
-					});
-
-					if (errorMsg) {
-						logEvent({
-							type: "error",
-							text: errorMsg,
-							saveToDb: false,
+			{negotiations ? null : (
+				<button
+					className="btn btn-light-bordered btn-xs"
+					disabled={signDisabled}
+					onClick={async () => {
+						const errorMsg = await toWorker("main", "sign", {
+							pid: p.pid,
+							amount: contractAmount,
+							exp: p.contract.exp,
 						});
-					}
-				}}
-			>
-				Sign
-			</button>
+
+						if (errorMsg) {
+							logEvent({
+								type: "error",
+								text: errorMsg,
+								saveToDb: false,
+							});
+						}
+					}}
+				>
+					Sign
+				</button>
+			)}
 		</div>
 	);
 };
