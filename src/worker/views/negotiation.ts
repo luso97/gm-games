@@ -169,6 +169,8 @@ const updateNegotiation = async (
 			minYears: g.get("minContractLength"),
 		};
 
+		const negotiationsBoolean = g.get("negotiations");
+
 		return {
 			challengeNoRatings: g.get("challengeNoRatings"),
 			contractOptions,
@@ -178,6 +180,7 @@ const updateNegotiation = async (
 			resigning: negotiation.resigning,
 			salaryCap: g.get("salaryCap") / 1000,
 			maximumMinimum,
+			negotiationsBoolean,
 		};
 	}
 };

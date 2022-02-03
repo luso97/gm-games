@@ -20,6 +20,7 @@ export const getDefaultSettings = () => {
 	const defaultSettings: Omit<Settings, "numActiveTeams"> = {
 		godMode: unwrapGameAttribute(defaultGameAttributes, "godMode"),
 		godModeInPast: unwrapGameAttribute(defaultGameAttributes, "godModeInPast"),
+		negotiations: unwrapGameAttribute(defaultGameAttributes, "negotiations"),
 		numGames: unwrapGameAttribute(defaultGameAttributes, "numGames"),
 		numGamesDiv: unwrapGameAttribute(defaultGameAttributes, "numGamesDiv"),
 		numGamesConf: unwrapGameAttribute(defaultGameAttributes, "numGamesConf"),
