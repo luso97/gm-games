@@ -37,7 +37,7 @@ const NegotiationList = ({
 		return <p>The AI will handle re-signing players in spectator mode.</p>;
 	}
 
-	const cols = getCols([
+	let cols = getCols([
 		"Name",
 		"Pos",
 		"Age",
@@ -105,6 +105,12 @@ const NegotiationList = ({
 			},
 		};
 	});
+
+	if (negotiationsBoolean) {
+		const indexOf = cols.findIndex(x => x.title == "Asking For");
+		delete cols[indexOf];
+		rows.forEach(x => delete x.data[indexOf]);
+	}
 
 	const hasRookies = players.some(p => p.contract.rookie);
 

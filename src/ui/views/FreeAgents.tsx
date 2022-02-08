@@ -74,7 +74,7 @@ const FreeAgents = ({
 		);
 	}
 
-	const cols = getCols([
+	let cols = getCols([
 		"Name",
 		"Pos",
 		"Age",
@@ -132,6 +132,13 @@ const FreeAgents = ({
 			],
 		};
 	});
+
+	if (negotiations) {
+		const indexOf = cols.findIndex(x => x.title == "Asking For");
+		cols.splice(indexOf, 1);
+		console.log(rows[0]);
+		rows.forEach(x => x.data.splice(indexOf, 1));
+	}
 
 	return (
 		<>
