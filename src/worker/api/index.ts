@@ -91,6 +91,7 @@ import type {
 	DunkAttempt,
 	AllStarPlayer,
 	League,
+	Negotiation,
 } from "../../common/types";
 import orderBy from "lodash-es/orderBy";
 import {
@@ -342,6 +343,12 @@ const beforeViewNonLeague = async (param: unknown, conditions: Conditions) => {
 
 const cancelContractNegotiation = async (pid: number) => {
 	return contractNegotiation.cancel(pid);
+};
+
+const updateContractNegotiation = async (
+	negotiation: Negotiation,
+): Promise<number | void> => {
+	return contractNegotiation.update(negotiation);
 };
 
 const checkAccount2 = (param: unknown, conditions: Conditions) =>
@@ -3914,6 +3921,7 @@ export default {
 		setPlayerNote,
 		sign,
 		updateExpansionDraftSetup,
+		updateContractNegotiation,
 		advanceToPlayerProtection,
 		autoProtect,
 		cancelExpansionDraft,

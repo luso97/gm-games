@@ -837,6 +837,10 @@ export type Negotiation = {
 	pid: number;
 	tid: number;
 	resigning: boolean;
+	patience?: number;
+	contractValueArrays?: number[];
+	originalValueArrays?: number[];
+	offers?: number;
 };
 
 export type Option = {

@@ -6,11 +6,15 @@ import { Mood, RatingsStatsPopover } from "../components";
 import { ProgressBarText } from "../components";
 import { isSport } from "../../common";
 import { useState } from "react";
+import { idb } from "src/worker/db";
 
 // Show the negotiations list if there are more ongoing negotiations
-const redirectNegotiationOrRoster = async (cancelled: boolean) => {
+const redirectNegotiationOrRoster = async (
+	cancelled: boolean,
+	negotiations = false,
+) => {
 	const count = await toWorker("main", "countNegotiations", undefined);
-	if (count > 0) {
+	if (count > 0 && !negotiations) {
 		realtimeUpdate([], helpers.leagueUrl(["negotiation"]));
 	} else if (cancelled || isSport("football")) {
 		// After signing player in football, go back to free agents screen, cause you probably need more
@@ -20,9 +24,9 @@ const redirectNegotiationOrRoster = async (cancelled: boolean) => {
 	}
 };
 
-const cancel = async (pid: number) => {
+const cancel = async (pid: number, negotiations = false) => {
 	await toWorker("main", "cancelContractNegotiation", pid);
-	redirectNegotiationOrRoster(true);
+	redirectNegotiationOrRoster(true, negotiations);
 };
 
 const sign = async (pid: number, amount: number, exp: number) => {
@@ -51,6 +55,7 @@ const Negotiation = ({
 	salaryCapType,
 	maximumMinimum,
 	negotiationsBoolean,
+	negotiation,
 }: View<"negotiation">) => {
 	useTitleBar({ title: `Contract Negotiation - ${player.name}` });
 
@@ -92,32 +97,72 @@ const Negotiation = ({
 		);
 	}
 
-	const contractValueArrays: number[] = contractOptions.map(
-		(contract, index) => contract.amount,
-	);
+	let offers: number = negotiation.offers || 0;
+
+	let contractValueArrays: number[] =
+		negotiation.contractValueArrays ||
+		contractOptions.map(
+			contract => contract.amount * (1 + Math.random() * 0.2),
+		);
+
+	const originalValueArrays =
+		negotiation.originalValueArrays || contractValueArrays;
 
 	const makeOffer = async (pid: number) => {
+		console.log({
+			...negotiation,
+			patience: valueOffered.patience,
+			originalValueArrays: originalValueArrays,
+			contractValueArrays: contractValueArrays,
+			offers: offers,
+		});
+
+		//idb.cache.negotiations.cache.fill()
+		offers++;
 		const goodOffer =
 			valueOffered.value / (contractValueArrays[valueOffered.years - 1] * 1000);
 		const season = contractOptions[0].exp - contractOptions[0].years;
-
+		var patienceTemp = 1.0;
 		if (goodOffer > 1.0) {
 			sign(pid, valueOffered.value / 1000, season + valueOffered.years);
 		} else {
+			contractValueArrays = contractValueArrays.map((value, index) =>
+				Math.max(
+					originalValueArrays[index] * 0.95,
+					value * 0.9 + Math.random() * 0.1,
+				),
+			);
+			patienceTemp = valueOffered.patience - offers * (1.0 - goodOffer);
 			offer({
 				...valueOffered,
-				patience: valueOffered.patience - (1.0 - goodOffer),
+				patience: patienceTemp,
 			});
 		}
-
-		if (valueOffered.patience <= 0) {
-			cancel(pid);
+		toWorker("main", "updateContractNegotiation", {
+			...negotiation,
+			patience: patienceTemp,
+			originalValueArrays: originalValueArrays,
+			contractValueArrays: contractValueArrays,
+			offers: offers,
+		});
+		if (patienceTemp <= 0) {
+			offer({
+				...valueOffered,
+				patience: 0,
+			});
+			const errorMsg = "Player ended negotiations because lacking progress";
+			logEvent({
+				type: "error",
+				text: errorMsg,
+				saveToDb: false,
+			});
+			await cancel(pid, true);
 		}
 	};
 	const firstOffer = {
 		years: 2,
 		value: (maximumMinimum.maximum - maximumMinimum.minimum) / 2,
-		patience: 1,
+		patience: negotiation.patience || 1,
 	};
 
 	const [valueOffered, offer] = useState(firstOffer);
@@ -260,7 +305,7 @@ const Negotiation = ({
 			)}
 			<button
 				className="btn btn-danger mt-3"
-				onClick={() => cancel(player.pid)}
+				onClick={() => cancel(player.pid, negotiationsBoolean)}
 			>
 				Can't reach a deal? End negotiation
 			</button>

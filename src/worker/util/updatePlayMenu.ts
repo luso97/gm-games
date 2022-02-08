@@ -309,7 +309,11 @@ const updatePlayMenu = async () => {
 		keys = ["stop"];
 	}
 
-	if (negotiationInProgress && g.get("phase") !== PHASE.RESIGN_PLAYERS) {
+	if (
+		negotiationInProgress &&
+		!g.get("negotiations") &&
+		g.get("phase") !== PHASE.RESIGN_PLAYERS
+	) {
 		keys = ["contractNegotiation"];
 	}
 

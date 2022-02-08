@@ -74,7 +74,9 @@ const generateContractOptions = (contract: PlayerContract, ovr: number) => {
 		) {
 			return false;
 		}
-
+		if (g.get("negotiations")) {
+			return true;
+		}
 		return contractOption.amount * 1000 <= g.get("maxContract");
 	});
 };
@@ -181,6 +183,7 @@ const updateNegotiation = async (
 			salaryCap: g.get("salaryCap") / 1000,
 			maximumMinimum,
 			negotiationsBoolean,
+			negotiation,
 		};
 	}
 };
